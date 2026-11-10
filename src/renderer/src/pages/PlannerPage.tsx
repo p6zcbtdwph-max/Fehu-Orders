@@ -4,6 +4,7 @@ import { BookmarkPlus, FlaskConical, RefreshCw, Send, Star, Trash2 } from 'lucid
 import { buildLadder, MAX_STEPS, parseWeights, type LadderInput, type PriceSpacing, type Side, type SizeCurve } from '@shared/ladder'
 import type { PairDto, SendResult, TemplateDto } from '@shared/ipc'
 import KpiStrip from '../components/ui/KpiStrip'
+import PairPicker from '../components/PairPicker'
 import SectionCard from '../components/ui/SectionCard'
 import Segmented from '../components/ui/Segmented'
 import Modal from '../components/ui/Modal'
@@ -245,10 +246,7 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed 
           <div>
             <span className="label">Handelspaar</span>
             <span className="flex gap-2">
-              <select className="select w-full" value={pairId} onChange={(e) => { setPairId(e.target.value); setResult(null) }}>
-                {watched.length > 0 && <optgroup label="Watchlist">{watched.map((p) => <option key={`w${p.id}`} value={p.id}>{p.name}</option>)}</optgroup>}
-                <optgroup label="Alle Paare">{pairs.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</optgroup>
-              </select>
+              <PairPicker pairs={pairs} value={pairId} watchlist={watchlist} onChange={(id) => { setPairId(id); setResult(null) }} />
               {pair && (
                 <button type="button" className="btn btn-ghost btn-icon flex-shrink-0" aria-pressed={watchlist.includes(pair.name)} onClick={() => toggleWatch(pair.name)}
                   aria-label={watchlist.includes(pair.name) ? 'Von der Watchlist nehmen' : 'Auf die Watchlist'} title={watchlist.includes(pair.name) ? 'Von der Watchlist nehmen' : 'Auf die Watchlist'}>
