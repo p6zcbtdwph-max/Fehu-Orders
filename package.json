@@ -10,7 +10,8 @@
     "test": "vitest run",
     "lint": "eslint . --ext .ts,.tsx",
     "build": "npm run typecheck && electron-vite build",
-    "dist": "npm run build && electron-builder --mac"
+    "dist": "npm run build && electron-builder --mac",
+    "build:mac": "npm run build && electron-builder --mac --dir"
   },
   "build": {
     "appId": "com.fehufinance.orders",
@@ -22,7 +23,7 @@
       "out/**/*"
     ],
     "mac": {
-      "icon": "resources/icon.icns",
+      "icon": "resources/icon.png",
       "category": "public.app-category.finance",
       "identity": null
     },
