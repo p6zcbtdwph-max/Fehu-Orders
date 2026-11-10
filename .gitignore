@@ -1,0 +1,57 @@
+# Dependencies
+node_modules/
+
+# Build output
+out/
+dist/
+
+# Database (persönliche Daten — nicht ins Repo!)
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+npm-debug.log*
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Claude Code
+.claude/
+
+# Env / Secrets
+.env
+.env.local
+.env.*.local
+
+# electron-builder cache
+/dist-builder/
+Logo/
+PROJEKT.md
+
+# Build-Artefakte
+tsconfig.web.tsbuildinfo
+
+# Lokale Hilfsskripte (nicht für andere Nutzer relevant)
+fix-icon-cache.command
+
+# Capacitor iOS
+ios/App/Pods/
+ios/.DS_Store
+ios/App/App.xcworkspace/xcuserdata/
+ios/App/DerivedData/
+.superpowers/
+ui-check/
+
+# Aussortiertes zum Prüfen
+_aufraeumen/
+layout-probe/

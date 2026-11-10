@@ -1,0 +1,62 @@
+{
+  "name": "fehu-orders",
+  "version": "0.1.0",
+  "description": "Fehu Orders: gestaffelte Krypto-Orders planen und an Kraken senden",
+  "main": "./out/main/index.js",
+  "private": true,
+  "scripts": {
+    "dev": "electron-vite dev",
+    "typecheck": "tsc -b --noEmit",
+    "test": "vitest run",
+    "lint": "eslint . --ext .ts,.tsx",
+    "build": "npm run typecheck && electron-vite build",
+    "dist": "npm run build && electron-builder --mac"
+  },
+  "build": {
+    "appId": "com.fehufinance.orders",
+    "productName": "Fehu Orders",
+    "directories": {
+      "buildResources": "resources"
+    },
+    "files": [
+      "out/**/*"
+    ],
+    "mac": {
+      "icon": "resources/icon.icns",
+      "category": "public.app-category.finance",
+      "identity": null
+    },
+    "dmg": {
+      "writeUpdateInfo": false
+    }
+  },
+  "dependencies": {
+    "lucide-react": "^1.20.0",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "react-is": "^19.3.1",
+    "recharts": "^3.8.1"
+  },
+  "devDependencies": {
+    "@electron-toolkit/eslint-config-prettier": "^2.0.0",
+    "@electron-toolkit/eslint-config-ts": "^2.0.0",
+    "@types/node": "^20.14.8",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.19",
+    "electron": "^42.11.18",
+    "electron-builder": "^26.18.0",
+    "electron-vite": "^2.3.0",
+    "eslint": "^8.57.1",
+    "eslint-plugin-react-hooks": "^4.6.2",
+    "postcss": "^8.4.38",
+    "tailwindcss": "^3.4.4",
+    "typescript": "^5.5.2",
+    "vite": "^5.3.1",
+    "vitest": "^4.1.11"
+  },
+  "overrides": {
+    "node-abi": "^3.100.0"
+  }
+}
