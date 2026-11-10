@@ -8,6 +8,10 @@ Mac-App, um viele gestaffelte Limit-Orders auf einmal zu planen und an Kraken zu
 - Preisabstände: gleiche Euro-Schritte oder gleiche Prozent-Schritte (logarithmisch)
 - Mengenverteilung: gleich, linear, logarithmisch, exponentiell (mit einstellbarem Verhältnis letzte zu erster Stufe), Fibonacci oder eigene Prozente je Stufe
 - Vorlagen: Pläne unter einem Namen speichern und wieder laden
+- Watchlist: Paare mit dem Stern merken, sie stehen oben als Schnellauswahl
+- Anzeige in Euro oder Dollar (Umschalter unten links, Kurs EUR/USD von Kraken). Orders laufen immer in Euro.
+- Betrag zum Investieren oben im Planer
+- „Davon jetzt senden“: nur die ersten N Stufen nah am Kurs senden, den Rest später unter „Offene Orders“ mit „Rest senden“ (gleiche Plan-Nummer, „Plan stornieren“ erfasst alles)
 - Kurs-Chart (30 Tage, 90 Tage, 1 Jahr) mit den geplanten Stufen als Linien
 - Gebühren (Maker/Taker von Kraken) und verfügbares Guthaben vor dem Senden; bei zu wenig Guthaben ist Senden gesperrt
 - Gewinnstaffel: für einen Kaufplan mit Ausführungen schlägt die App eine Verkaufsstaffel 10–50 % über dem Durchschnittspreis vor

@@ -20,6 +20,14 @@ export interface SendRequest {
   levels: LadderLevel[]
   validate: boolean
   postOnly: boolean
+  /** Nur die ersten N gültigen Stufen (nah am Kurs) senden, der Rest kann später folgen */
+  sendCount?: number
+}
+
+export interface SettingsDto {
+  maxPlanEur: number
+  watchlist: string[]
+  currency: 'EUR' | 'USD'
 }
 
 export interface SendResult {
@@ -50,6 +58,9 @@ export interface PlanDto {
   sent: number
   failed: number
   totalCost: number
+  levels?: LadderLevel[]
+  sentIndices?: number[]
+  postOnly?: boolean
 }
 
 export interface TemplateDto {
@@ -84,8 +95,10 @@ export interface Api {
   cancelPlan(userref: number): Promise<number>
   cancelOrder(txid: string): Promise<void>
   plans(): Promise<PlanDto[]>
-  settings(): Promise<{ maxPlanEur: number }>
-  saveSettings(s: { maxPlanEur: number }): Promise<void>
+  settings(): Promise<SettingsDto>
+  saveSettings(s: Partial<SettingsDto>): Promise<SettingsDto>
+  usdRate(): Promise<number>
+  sendRest(userref: number, validate: boolean): Promise<SendResult>
   ohlc(pairId: string, interval: number): Promise<[number, number][]>
   fees(pairId: string): Promise<{ maker: number; taker: number }>
   available(): Promise<Record<string, number>>

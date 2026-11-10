@@ -5,7 +5,7 @@ import { app, safeStorage } from 'electron'
 import { existsSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Credentials } from './kraken'
-import type { LadderInput, Side } from '../shared/ladder'
+import type { LadderInput, LadderLevel, Side } from '../shared/ladder'
 
 const file = (name: string) => join(app.getPath('userData'), name)
 
@@ -32,7 +32,13 @@ export function clearCredentials(): void {
 export interface Settings {
   /** Obergrenze pro Plan in EUR, schützt vor Tippfehlern */
   maxPlanEur: number
+  /** Handelspaare (Anzeigename wie BTC/EUR), die oben als Schnellauswahl stehen */
+  watchlist: string[]
+  /** Anzeigewährung. Orders laufen immer in der Kurswährung des Paars (EUR). */
+  currency: 'EUR' | 'USD'
 }
+
+export const DEFAULT_SETTINGS: Settings = { maxPlanEur: 500, watchlist: ['BTC/EUR', 'ETH/EUR'], currency: 'EUR' }
 
 export interface PlanRecord {
   userref: number
@@ -44,6 +50,11 @@ export interface PlanRecord {
   sent: number
   failed: number
   totalCost: number
+  /** Alle gültigen Stufen des Plans, auch die noch nicht gesendeten */
+  levels?: LadderLevel[]
+  /** Indizes der Stufen, die schon an Kraken gingen */
+  sentIndices?: number[]
+  postOnly?: boolean
 }
 
 function readJson<T>(name: string, fallback: T): T {
@@ -55,11 +66,13 @@ function readJson<T>(name: string, fallback: T): T {
 }
 
 export function getSettings(): Settings {
-  return readJson('settings.json', { maxPlanEur: 500 })
+  return readJson('settings.json', DEFAULT_SETTINGS)
 }
 
-export function saveSettings(s: Settings): void {
+export function saveSettings(patch: Partial<Settings>): Settings {
+  const s = { ...getSettings(), ...patch }
   writeFileSync(file('settings.json'), JSON.stringify(s, null, 2))
+  return s
 }
 
 export function getPlans(): PlanRecord[] {
@@ -68,6 +81,10 @@ export function getPlans(): PlanRecord[] {
 
 export function addPlan(p: PlanRecord): void {
   writeFileSync(file('plans.json'), JSON.stringify({ plans: [p, ...getPlans()].slice(0, 200) }, null, 2))
+}
+
+export function updatePlan(userref: number, change: (p: PlanRecord) => PlanRecord): void {
+  writeFileSync(file('plans.json'), JSON.stringify({ plans: getPlans().map((p) => (p.userref === userref ? change(p) : p)) }, null, 2))
 }
 
 /** Plan-Kennung für Krakens userref (positive 32-Bit-Zahl), aus der Zeit abgeleitet */

@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import Segmented from './components/ui/Segmented'
+import { MoneyProvider, type Currency } from './money'
 import { KeyRound, ListOrdered, Settings, SlidersHorizontal } from 'lucide-react'
 import logoUrl from './assets/logo.png'
 import PlannerPage, { type Prefill } from './pages/PlannerPage'
@@ -20,6 +22,26 @@ export default function App(): JSX.Element {
   const [page, setPage] = useState<PageId>('planner')
   const [hasKey, setHasKey] = useState<boolean | null>(null)
   const [prefill, setPrefill] = useState<Prefill | null>(null)
+  const [currency, setCurrencyState] = useState<Currency>('EUR')
+  const [rate, setRate] = useState<number | null>(null)
+
+  useEffect(() => {
+    window.api.settings().then((s) => setCurrencyState(s.currency ?? 'EUR'))
+  }, [])
+
+  // Wechselkurs nur laden, solange Dollar gewählt ist, und jede Minute auffrischen
+  useEffect(() => {
+    if (currency !== 'USD') return
+    const load = () => window.api.usdRate().then(setRate).catch(() => setRate(null))
+    load()
+    const t = setInterval(load, 60_000)
+    return () => clearInterval(t)
+  }, [currency])
+
+  const setCurrency = (c: Currency) => {
+    setCurrencyState(c)
+    window.api.saveSettings({ currency: c })
+  }
 
   const refreshKey = () => window.api.keyStatus().then((s) => setHasKey(s.hasKey))
   useEffect(() => {
@@ -27,6 +49,7 @@ export default function App(): JSX.Element {
   }, [])
 
   return (
+    <MoneyProvider value={{ currency, rate, setCurrency }}>
     <div className="flex h-screen overflow-hidden bg-canvas">
       <aside className="flex w-60 flex-shrink-0 flex-col border-r border-line bg-surface/80" style={drag}>
         <div className="px-4 pb-3 pt-11">
@@ -53,7 +76,12 @@ export default function App(): JSX.Element {
             )
           })}
         </nav>
-        <div className="border-t border-line px-4 py-3 text-xs text-ink-muted" style={noDrag}>
+        <div className="space-y-2 border-t border-line px-4 py-3 text-xs text-ink-muted" style={noDrag}>
+          <div className="flex items-center justify-between gap-2">
+            <span>Anzeige</span>
+            <Segmented<Currency> value={currency} onChange={setCurrency} aria-label="Anzeigewährung" options={[{ id: 'EUR', label: '€ EUR' }, { id: 'USD', label: '$ USD' }]} />
+          </div>
+          {currency === 'USD' && <p>{rate ? `1 € = ${rate.toFixed(4).replace('.', ',')} $ · Orders laufen in Euro` : 'Kurs EUR/USD wird geladen …'}</p>}
           <span className="flex items-center gap-2">
             <KeyRound size={14} className={hasKey ? 'text-success-fg' : 'text-warning-fg'} />
             {hasKey === null ? '…' : hasKey ? 'Kraken verbunden' : 'Kein API-Schlüssel'}
@@ -67,5 +95,6 @@ export default function App(): JSX.Element {
         {page === 'settings' && <SettingsPage hasKey={!!hasKey} onKeyChanged={refreshKey} />}
       </main>
     </div>
+    </MoneyProvider>
   )
 }
