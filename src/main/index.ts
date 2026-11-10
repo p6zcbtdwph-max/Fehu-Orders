@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain, Notification, safeStorage, shell } from 'e
 import { join } from 'node:path'
 import { Kraken, type PairInfo } from './kraken'
 import {
-  addPlan, clearCredentials, deleteTemplate, getNotified, getPlans, getSettings, getTemplates, loadCredentials, newUserref, saveCredentials, saveSettings, saveTemplate, setNotified,
+  addPlan, clearCredentials, deleteTemplate, getNotified, getPlans, getSettings, getTemplates, loadCredentials, newUserref, saveCredentials, saveSettings, saveTemplate, setNotified, updatePlan, type Settings,
 } from './store'
 import type { PlanStatusDto, SendRequest, SendResult, TemplateDto } from '../shared/ipc'
 import { planStatus, type OrderSnapshot } from '../shared/plan-status'
@@ -55,7 +55,21 @@ handle('balances', () => client().balances())
 handle('orders:open', () => client().openOrders())
 handle('plans', () => getPlans())
 handle('settings', () => getSettings())
-handle('settings:save', (s: { maxPlanEur: number }) => saveSettings({ maxPlanEur: Math.max(1, Number(s.maxPlanEur) || 1) }))
+handle('settings:save', (s: Partial<Settings>) => {
+  const patch: Partial<Settings> = {}
+  if (s.maxPlanEur !== undefined) patch.maxPlanEur = Math.max(1, Number(s.maxPlanEur) || 1)
+  if (Array.isArray(s.watchlist)) patch.watchlist = s.watchlist.filter((x) => typeof x === 'string').slice(0, 50)
+  if (s.currency === 'EUR' || s.currency === 'USD') patch.currency = s.currency
+  return saveSettings(patch)
+})
+// Wechselkurs für die Dollar-Anzeige (1 EUR = x USD), eine Minute zwischengespeichert
+let usdCache: { at: number; rate: number } | null = null
+handle('usdRate', async () => {
+  if (usdCache && Date.now() - usdCache.at < 60_000) return usdCache.rate
+  const rate = await client().lastPrice('EURUSD')
+  usdCache = { at: Date.now(), rate }
+  return rate
+})
 handle('plan:cancel', (userref: number) => client().cancelPlan(userref))
 handle('order:cancel', (txid: string) => client().cancelOrder(txid))
 
@@ -124,21 +138,50 @@ async function pollFills(): Promise<void> {
   mainWindow?.webContents.send('fills')
 }
 
-handle('send', async (req: SendRequest): Promise<SendResult> => {
-  const levels = req.levels.filter((l) => !l.problem)
-  if (!levels.length) throw new Error('Keine gültigen Stufen.')
-  // Zweite Sicherung im Hauptprozess: Obergrenze pro Plan
+/** Zweite Sicherung im Hauptprozess: Obergrenze pro Sendung */
+function checkLimit(levels: { price: number; volume: number }[]): number {
   const total = levels.reduce((a, l) => a + l.price * l.volume, 0)
   const { maxPlanEur } = getSettings()
-  if (total > maxPlanEur) throw new Error(`Der Plan hat einen Gegenwert von ${total.toFixed(2)} €. Deine Obergrenze ist ${maxPlanEur} €. Du kannst sie in den Einstellungen ändern.`)
+  if (total > maxPlanEur) throw new Error(`Diese Sendung hat einen Gegenwert von ${total.toFixed(2)} €. Deine Obergrenze ist ${maxPlanEur} €. Du kannst sie in den Einstellungen ändern.`)
+  return total
+}
+
+handle('send', async (req: SendRequest): Promise<SendResult> => {
+  const valid = req.levels.filter((l) => !l.problem)
+  if (!valid.length) throw new Error('Keine gültigen Stufen.')
+  const count = req.sendCount ? Math.max(1, Math.min(valid.length, Math.floor(req.sendCount))) : valid.length
+  const levels = valid.slice(0, count)
+  const total = checkLimit(levels)
   const userref = newUserref()
   const orders = await client().placeLadder(req.pairId, req.side, levels, { validate: req.validate, userref, postOnly: req.postOnly })
   if (!req.validate) {
-    const sent = orders.filter((o) => o.txid).length
-    if (sent > 0)
-      addPlan({ userref, createdAt: new Date().toISOString(), pairId: req.pairId, pairName: req.pairName, side: req.side, input: req.input, sent, failed: orders.length - sent, totalCost: total })
+    const ok = orders.filter((o) => o.txid)
+    if (ok.length > 0)
+      addPlan({
+        userref, createdAt: new Date().toISOString(), pairId: req.pairId, pairName: req.pairName, side: req.side, input: req.input,
+        sent: ok.length, failed: orders.length - ok.length, totalCost: total, levels: valid, sentIndices: ok.map((o) => o.index), postOnly: req.postOnly,
+      })
   }
   return { userref, validate: req.validate, orders }
+})
+
+/** Restliche Stufen eines Plans nachschicken (gleiche userref, damit „Plan stornieren“ alles erfasst) */
+handle('plan:rest', async (userref: number, validate: boolean): Promise<SendResult> => {
+  const plan = getPlans().find((p) => p.userref === userref)
+  if (!plan?.levels) throw new Error('Für diesen Plan sind keine Stufen gespeichert.')
+  const sent = new Set(plan.sentIndices ?? [])
+  const rest = plan.levels.filter((l) => !sent.has(l.index))
+  if (!rest.length) throw new Error('Alle Stufen dieses Plans sind schon gesendet.')
+  const total = checkLimit(rest)
+  const orders = await client().placeLadder(plan.pairId, plan.side, rest, { validate, userref, postOnly: plan.postOnly ?? true })
+  if (!validate) {
+    const ok = orders.filter((o) => o.txid)
+    updatePlan(userref, (p) => ({
+      ...p, sent: p.sent + ok.length, failed: p.failed + orders.length - ok.length, totalCost: p.totalCost + (ok.length ? total : 0),
+      sentIndices: [...(p.sentIndices ?? []), ...ok.map((o) => o.index)],
+    }))
+  }
+  return { userref, validate, orders }
 })
 
 app.whenReady().then(() => {

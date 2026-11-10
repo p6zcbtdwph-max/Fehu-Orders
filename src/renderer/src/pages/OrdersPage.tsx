@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react'
-import { RefreshCw, TrendingUp, X } from 'lucide-react'
+import { Fragment, useEffect, useState } from 'react'
+import { RefreshCw, Send, TrendingUp, X } from 'lucide-react'
 import type { OpenOrderDto, PlanDto, PlanStatusDto } from '@shared/ipc'
 import { profitLadderSuggestion } from '@shared/plan-status'
 import type { Prefill } from './PlannerPage'
 import SectionCard from '../components/ui/SectionCard'
 import Modal from '../components/ui/Modal'
-import { eur, num } from '../format'
+import { num } from '../format'
+import { useMoney } from '../money'
 
 export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; onPlanSell: (p: Prefill) => void }): JSX.Element {
   const [orders, setOrders] = useState<OpenOrderDto[] | null>(null)
@@ -15,6 +16,9 @@ export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; on
   const [cancelPlan, setCancelPlan] = useState<PlanDto | null>(null)
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState<Record<number, PlanStatusDto>>({})
+  const { eur, fmtPrice, sym } = useMoney()
+  const [restPlan, setRestPlan] = useState<PlanDto | null>(null)
+  const [restMsg, setRestMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
   async function load() {
     setError(null)
@@ -65,6 +69,34 @@ export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; on
     load()
   }
 
+  const restLevels = (p: PlanDto) => {
+    const sent = new Set(p.sentIndices ?? [])
+    return (p.levels ?? []).filter((l) => !sent.has(l.index))
+  }
+
+  async function sendRest(p: PlanDto, validate: boolean) {
+    setBusy(true)
+    setRestMsg(null)
+    try {
+      const r = await window.api.sendRest(p.userref, validate)
+      const failed = r.orders.filter((o) => o.error)
+      const ok = r.orders.length - failed.length
+      setRestMsg(failed.length
+        ? { ok: false, text: `${validate ? 'Probelauf' : 'Senden'}: ${failed.length} von ${r.orders.length} Orders abgelehnt. Grund: ${failed[0].error}` }
+        : { ok: true, text: validate ? `Probelauf erfolgreich: Kraken würde alle ${ok} Orders annehmen.` : `${ok} weitere Orders angelegt.` })
+      if (!validate) {
+        setRestPlan(null)
+        load()
+      }
+    } catch (e) {
+      setRestMsg({ ok: false, text: (e as Error).message })
+    }
+    setBusy(false)
+  }
+
+  const hasActions = (p: PlanDto, st: PlanStatusDto | undefined, open: number) =>
+    restLevels(p).length > 0 || (p.side === 'buy' && !!st && st.filledVolume > 0) || open > 0
+
   const openByPlan = (ref: number) => orders?.filter((o) => o.userref === ref).length ?? 0
 
   return (
@@ -78,6 +110,7 @@ export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; on
       </header>
       {!hasKey && <p className="notice notice-info mb-4">Hinterlege zuerst unter Einstellungen einen Kraken-API-Schlüssel.</p>}
       {error && <p className="notice notice-danger mb-4">{error}</p>}
+      {restMsg && !restPlan && <p className={`notice mb-4 ${restMsg.ok ? 'notice-success' : 'notice-danger'}`}>{restMsg.text}</p>}
 
       <div className="space-y-4">
         {Object.keys(balances).length > 0 && (
@@ -92,32 +125,42 @@ export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; on
           {plans.length === 0 ? <p className="text-sm text-ink-muted">Noch keine Pläne gesendet.</p> : (
             <div className="overflow-x-auto">
               <table className="data-table">
-                <thead><tr><th>Datum</th><th>Paar</th><th>Richtung</th><th className="num">Gesendet</th><th className="num">Noch offen</th><th className="num">Ausgeführt</th><th className="num">Ø Preis</th><th className="num">Gegenwert</th><th /></tr></thead>
+                <thead><tr><th>Datum</th><th>Plan</th><th className="num">Gesendet</th><th className="num">Noch offen</th><th className="num">Ausgeführt</th><th className="num">Ø Preis</th><th className="num">Gegenwert</th></tr></thead>
                 <tbody>
                   {plans.map((p) => {
                     const open = openByPlan(p.userref)
                     const st = status[p.userref]
                     return (
-                      <tr key={p.userref}>
-                        <td className="tabular-nums">{new Date(p.createdAt).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })}</td>
-                        <td>{p.pairName}</td>
-                        <td>{p.side === 'buy' ? 'Kauf' : 'Verkauf'}</td>
-                        <td className="num">{p.sent}</td>
+                      <Fragment key={p.userref}>
+                      <tr className={hasActions(p, st, open) ? '[&>td]:border-b-0' : ''}>
+                        <td className="whitespace-nowrap tabular-nums">{new Date(p.createdAt).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })}</td>
+                        <td className="whitespace-nowrap">{p.pairName} <span className="text-ink-muted">{p.side === 'buy' ? 'Kauf' : 'Verkauf'}</span></td>
+                        <td className="num">{p.levels ? `${p.sent} / ${p.levels.length}` : p.sent}</td>
                         <td className="num">{orders ? open : '–'}</td>
                         <td className="num">
                           {st ? <span className={st.filled + st.partial > 0 ? 'text-success-fg' : ''}>{st.filled}{st.partial ? ` + ${st.partial} teilw.` : ''}</span> : '–'}
                         </td>
-                        <td className="num">{st && st.averagePrice ? num(st.averagePrice, 2) : '–'}</td>
+                        <td className="num">{st && st.averagePrice ? `${fmtPrice(st.averagePrice, 2)} ${sym}` : '–'}</td>
                         <td className="num">{eur(p.totalCost)}</td>
-                        <td className="text-right">
-                          <span className="inline-flex gap-2">
-                            {p.side === 'buy' && st && st.filledVolume > 0 && (
-                              <button type="button" className="btn btn-secondary btn-sm" onClick={() => sellLadder(p, st)} title="Verkaufsstaffel 10–50 % über deinem Kaufpreis vorschlagen"><TrendingUp size={14} /> Gewinnstaffel</button>
-                            )}
-                            {open > 0 && <button type="button" className="btn btn-outline btn-sm" onClick={() => setCancelPlan(p)}>Plan stornieren</button>}
-                          </span>
-                        </td>
                       </tr>
+                      {hasActions(p, st, open) && (
+                        <tr>
+                          <td colSpan={7} className="pt-0">
+                            <span className="inline-flex gap-2">
+                              {restLevels(p).length > 0 && (
+                                <button type="button" className="btn btn-secondary btn-sm whitespace-nowrap" onClick={() => { setRestMsg(null); setRestPlan(p) }} title="Die noch nicht gesendeten Stufen dieses Plans an Kraken schicken">
+                                  <Send size={14} /> Rest senden ({restLevels(p).length})
+                                </button>
+                              )}
+                              {p.side === 'buy' && st && st.filledVolume > 0 && (
+                                <button type="button" className="btn btn-secondary btn-sm whitespace-nowrap" onClick={() => sellLadder(p, st)} title="Verkaufsstaffel 10–50 % über deinem Kaufpreis vorschlagen"><TrendingUp size={14} /> Gewinnstaffel</button>
+                              )}
+                              {open > 0 && <button type="button" className="btn btn-outline btn-sm whitespace-nowrap" onClick={() => setCancelPlan(p)}>Stornieren</button>}
+                            </span>
+                          </td>
+                        </tr>
+                      )}
+                      </Fragment>
                     )
                   })}
                 </tbody>
@@ -137,7 +180,7 @@ export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; on
                       <tr key={o.txid}>
                         <td>{o.pair}</td>
                         <td>{o.side === 'buy' ? 'Kauf' : 'Verkauf'}</td>
-                        <td className="num">{num(o.price, 8)}</td>
+                        <td className="num">{fmtPrice(o.price, 8)}</td>
                         <td className="num">{num(o.volume, 8)}</td>
                         <td className="num">{num(o.filled, 8)}</td>
                         <td className="tabular-nums text-ink-muted">{o.userref || '–'}</td>
@@ -151,6 +194,24 @@ export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; on
           </SectionCard>
         )}
       </div>
+
+      {restPlan && (
+        <Modal title="Restliche Stufen senden?" size="sm" onClose={() => !busy && setRestPlan(null)}
+          footer={<>
+            <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => sendRest(restPlan, true)}>Probelauf</button>
+            <button type="button" className="btn btn-primary" disabled={busy} onClick={() => sendRest(restPlan, false)}>{busy ? 'Sende …' : `${restLevels(restPlan).length} Orders senden`}</button>
+          </>}>
+          <div className="space-y-2 text-sm">
+            <p>
+              {restPlan.side === 'buy' ? 'Kaufen' : 'Verkaufen'} {restPlan.pairName}: {restLevels(restPlan).length} Stufen von{' '}
+              {fmtPrice(restLevels(restPlan)[0].price, 2)} bis {fmtPrice(restLevels(restPlan)[restLevels(restPlan).length - 1].price, 2)} {sym}.
+            </p>
+            <p>Gegenwert: <strong>{eur(restLevels(restPlan).reduce((a, l) => a + l.cost, 0))}</strong></p>
+            <p className="text-ink-muted">Die Stufen wurden beim Planen berechnet. Liegt der Kurs inzwischen woanders, prüfe sie vorher mit dem Probelauf.</p>
+            {restMsg && <p className={`notice ${restMsg.ok ? 'notice-success' : 'notice-danger'}`}>{restMsg.text}</p>}
+          </div>
+        </Modal>
+      )}
 
       {cancelPlan && (
         <Modal title="Plan stornieren?" size="sm" onClose={() => !busy && setCancelPlan(null)}

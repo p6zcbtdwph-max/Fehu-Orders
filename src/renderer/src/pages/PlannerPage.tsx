@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { BookmarkPlus, FlaskConical, RefreshCw, Send, Trash2 } from 'lucide-react'
+import { BookmarkPlus, FlaskConical, RefreshCw, Send, Star, Trash2 } from 'lucide-react'
 import { buildLadder, MAX_STEPS, parseWeights, type LadderInput, type PriceSpacing, type Side, type SizeCurve } from '@shared/ladder'
 import type { PairDto, SendResult, TemplateDto } from '@shared/ipc'
 import KpiStrip from '../components/ui/KpiStrip'
@@ -8,7 +8,8 @@ import SectionCard from '../components/ui/SectionCard'
 import Segmented from '../components/ui/Segmented'
 import Modal from '../components/ui/Modal'
 import { useChartTheme } from '../utils/chartTheme'
-import { eur, num, pct, price as fmtPrice } from '../format'
+import { num, pct } from '../format'
+import { useMoney } from '../money'
 
 const CURVES: { id: SizeCurve; label: string; title: string }[] = [
   { id: 'flat', label: 'Gleich', title: 'Jede Stufe gleich groß' },
@@ -56,6 +57,10 @@ function NumberField({ label, value, onChange, hint, step = 'any' }: { label: st
 
 export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed }: { hasKey: boolean; onNeedKey: () => void; prefill?: Prefill | null; onPrefillUsed?: () => void }): JSX.Element {
   const theme = useChartTheme()
+  const { eur, fmtPrice, sym, usdHint } = useMoney()
+  const [watchlist, setWatchlist] = useState<string[]>([])
+  /** Wie viele Stufen jetzt gesendet werden (leer = alle) */
+  const [sendCount, setSendCount] = useState<number | null>(null)
   const [pairs, setPairs] = useState<PairDto[]>([])
   const [pairId, setPairId] = useState<string>('')
   const [last, setLast] = useState<number | null>(null)
@@ -89,7 +94,14 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed 
       setPairId((cur) => cur || (ps.find((p) => p.name === 'BTC/EUR')?.id ?? ps[0]?.id ?? ''))
     }).catch((e) => setLoadError(e.message))
     window.api.templates().then(setTemplates)
+    window.api.settings().then((s) => setWatchlist(s.watchlist ?? []))
   }, [])
+
+  function toggleWatch(name: string) {
+    const next = watchlist.includes(name) ? watchlist.filter((x) => x !== name) : [...watchlist, name]
+    setWatchlist(next)
+    window.api.saveSettings({ watchlist: next })
+  }
 
   // Vorschlag von „Offene Orders“ (Gewinnstaffel) übernehmen
   useEffect(() => {
@@ -168,14 +180,22 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed 
   const quote = pair?.name.split('/')[1] ?? 'EUR'
   const base = pair?.name.split('/')[0] ?? ''
   const sendable = ladder?.levels.filter((l) => !l.problem) ?? []
+  // Nur die ersten N Stufen (nah am Kurs) gehen jetzt raus, der Rest bleibt im Plan
+  const nowCount = sendCount ? Math.min(sendCount, sendable.length) : sendable.length
+  const toSend = sendable.slice(0, nowCount)
+  const nowCost = toSend.reduce((a, l) => a + l.cost, 0)
+  const nowVolume = toSend.reduce((a, l) => a + l.volume, 0)
+  const partial = nowCount < sendable.length
+  const later = new Set(sendable.slice(nowCount).map((l) => l.index))
 
-  // Gebühren und Guthaben
+  // Gebühren und Guthaben (für das, was jetzt gesendet wird)
   const feePct = fees ? (postOnly ? fees.maker : fees.taker) : null
-  const feeEur = ladder && feePct !== null ? (ladder.totalCost * feePct) / 100 : null
+  const feeEur = ladder && feePct !== null ? (nowCost * feePct) / 100 : null
   const needAsset = pair ? (input.side === 'buy' ? pair.quote : pair.base) : ''
-  const need = ladder ? (input.side === 'buy' ? ladder.totalCost + (feeEur ?? 0) : ladder.totalVolume) : 0
+  const need = input.side === 'buy' ? nowCost + (feeEur ?? 0) : nowVolume
   const have = available && needAsset ? available[needAsset] ?? 0 : null
-  const shortfall = have !== null && ladder && ladder.totalCost > 0 && have + 1e-12 < need
+  const shortfall = have !== null && nowCost > 0 && have + 1e-12 < need
+  const watched = pairs.filter((p) => watchlist.includes(p.name))
 
   async function run(validate: boolean) {
     if (!pair || !ladder) return
@@ -183,7 +203,7 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed 
     setSendError(null)
     setResult(null)
     try {
-      setResult(await window.api.send({ pairId: pair.id, pairName: pair.name, side: input.side, input, levels: ladder.levels, validate, postOnly }))
+      setResult(await window.api.send({ pairId: pair.id, pairName: pair.name, side: input.side, input, levels: ladder.levels, validate, postOnly, sendCount: partial ? nowCount : undefined }))
     } catch (e) {
       setSendError((e as Error).message)
     } finally {
@@ -220,6 +240,43 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed 
         </p>
       )}
 
+      <section className="card mb-4 p-4">
+        <div className="grid grid-cols-1 items-start gap-4 @md:grid-cols-2 @xl:grid-cols-[1.2fr_1fr_1fr]">
+          <div>
+            <span className="label">Handelspaar</span>
+            <span className="flex gap-2">
+              <select className="select w-full" value={pairId} onChange={(e) => { setPairId(e.target.value); setResult(null) }}>
+                {watched.length > 0 && <optgroup label="Watchlist">{watched.map((p) => <option key={`w${p.id}`} value={p.id}>{p.name}</option>)}</optgroup>}
+                <optgroup label="Alle Paare">{pairs.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</optgroup>
+              </select>
+              {pair && (
+                <button type="button" className="btn btn-ghost btn-icon flex-shrink-0" aria-pressed={watchlist.includes(pair.name)} onClick={() => toggleWatch(pair.name)}
+                  aria-label={watchlist.includes(pair.name) ? 'Von der Watchlist nehmen' : 'Auf die Watchlist'} title={watchlist.includes(pair.name) ? 'Von der Watchlist nehmen' : 'Auf die Watchlist'}>
+                  <Star size={16} className={watchlist.includes(pair.name) ? 'fill-current text-accent-fg' : ''} />
+                </button>
+              )}
+            </span>
+            {watched.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {watched.map((p) => (
+                  <button key={p.id} type="button" className={`btn-chip ${p.id === pairId ? 'segmented-on' : ''}`} aria-pressed={p.id === pairId} onClick={() => { setPairId(p.id); setResult(null) }}>{p.name.split('/')[0]}</button>
+                ))}
+              </div>
+            )}
+            <span className="mt-1.5 flex items-center gap-2 text-xs text-ink-muted">
+              Aktueller Kurs: {last && pair ? `${fmtPrice(last, pair.priceDecimals)} ${sym}` : '…'}
+              <button type="button" className="btn-mini" onClick={() => loadPrice(false)} aria-label="Kurs neu laden" title="Kurs neu laden"><RefreshCw size={14} /></button>
+            </span>
+          </div>
+          <div>
+            <span className="label">Richtung</span>
+            <Segmented<Side> block size="md" value={input.side} onChange={(v) => set('side', v)} options={[{ id: 'buy', label: 'Kaufen' }, { id: 'sell', label: 'Verkaufen' }]} />
+          </div>
+          <NumberField label={input.side === 'buy' ? `Betrag zum Investieren (${quote})` : `Menge zum Verkaufen (${base})`} value={input.total} onChange={(v) => set('total', v)}
+            hint={input.side === 'buy' ? usdHint(input.total) || 'Wird auf alle Stufen verteilt.' : last ? `≈ ${eur(input.total * last)}` : undefined} />
+        </div>
+      </section>
+
       <div className="grid grid-cols-1 gap-4 @lg:grid-cols-[22rem_1fr]">
         <SectionCard title="Plan" action={<button type="button" className="btn btn-ghost btn-sm" onClick={() => setSaveAs(templateId ? templates.find((t) => t.id === templateId)?.name ?? '' : '')} title="Diesen Plan als Vorlage speichern"><BookmarkPlus size={14} /> Als Vorlage</button>}>
           <div className="space-y-4">
@@ -235,27 +292,15 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed 
                 </span>
               </label>
             )}
-            <label className="block">
-              <span className="label">Handelspaar</span>
-              <select className="select w-full" value={pairId} onChange={(e) => { setPairId(e.target.value); setResult(null) }}>
-                {pairs.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-              <span className="mt-1 flex items-center gap-2 text-xs text-ink-muted">
-                Aktueller Kurs: {last && pair ? `${fmtPrice(last, pair.priceDecimals)} ${quote}` : '…'}
-                <button type="button" className="btn-mini" onClick={() => loadPrice(false)} aria-label="Kurs neu laden" title="Kurs neu laden"><RefreshCw size={14} /></button>
-              </span>
-            </label>
-            <div>
-              <span className="label">Richtung</span>
-              <Segmented<Side> block size="md" value={input.side} onChange={(v) => set('side', v)} options={[{ id: 'buy', label: 'Kaufen' }, { id: 'sell', label: 'Verkaufen' }]} />
-            </div>
             <div className="grid grid-cols-2 gap-3">
-              <NumberField label="Erste Stufe" value={input.priceStart} onChange={(v) => set('priceStart', v)} hint={last ? pct(input.priceStart / last - 1) + ' zum Kurs' : undefined} />
-              <NumberField label="Letzte Stufe" value={input.priceEnd} onChange={(v) => set('priceEnd', v)} hint={last ? pct(input.priceEnd / last - 1) + ' zum Kurs' : undefined} />
+              <NumberField label={`Erste Stufe (${quote})`} value={input.priceStart} onChange={(v) => set('priceStart', v)} hint={last ? [pct(input.priceStart / last - 1) + ' zum Kurs', usdHint(input.priceStart)].filter(Boolean).join(' · ') : undefined} />
+              <NumberField label={`Letzte Stufe (${quote})`} value={input.priceEnd} onChange={(v) => set('priceEnd', v)} hint={last ? [pct(input.priceEnd / last - 1) + ' zum Kurs', usdHint(input.priceEnd)].filter(Boolean).join(' · ') : undefined} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <NumberField label="Anzahl Stufen" step="1" value={input.steps} onChange={(v) => set('steps', Math.round(v))} hint={`1 bis ${MAX_STEPS}`} />
-              <NumberField label={input.side === 'buy' ? `Gesamt in ${quote}` : `Gesamt in ${base}`} value={input.total} onChange={(v) => set('total', v)} />
+              <NumberField label="Davon jetzt senden" step="1" value={sendCount ?? sendable.length}
+                onChange={(v) => setSendCount(Number.isFinite(v) && v > 0 && Math.round(v) < sendable.length ? Math.round(v) : null)}
+                hint={partial ? `Die ${nowCount} Stufen nah am Kurs. Den Rest sendest du später unter „Offene Orders“.` : 'Alle Stufen'} />
             </div>
             <div>
               <span className="label">Preisabstände</span>
@@ -295,8 +340,8 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed 
         <div className="min-w-0 space-y-4">
           {ladder && (
             <KpiStrip items={[
-              { label: 'Stufen', value: `${sendable.length} / ${input.steps}`, tone: sendable.length < input.steps ? 'warning' : 'default' },
-              { label: 'Gegenwert', value: eur(ladder.totalCost), hint: feeEur !== null ? `+ ca. ${eur(feeEur)} Gebühr (${num(feePct ?? 0, 2)} %)` : undefined },
+              { label: 'Stufen', value: `${sendable.length} / ${input.steps}`, tone: sendable.length < input.steps ? 'warning' : 'default', hint: partial ? `${nowCount} jetzt, ${sendable.length - nowCount} später` : undefined },
+              { label: partial ? 'Gegenwert jetzt' : 'Gegenwert', value: eur(partial ? nowCost : ladder.totalCost), hint: feeEur !== null ? `+ ca. ${eur(feeEur)} Gebühr (${num(feePct ?? 0, 2)} %)` : partial ? `von ${eur(ladder.totalCost)} gesamt` : undefined },
               { label: `Menge ${base}`, value: num(ladder.totalVolume, pair?.volumeDecimals) },
               { label: 'Ø Preis bei voller Ausführung', value: ladder.averagePrice ? fmtPrice(ladder.averagePrice, pair?.priceDecimals ?? 2) : '–', hint: last && ladder.averagePrice ? pct(ladder.averagePrice / last - 1) + ' zum Kurs' : undefined },
             ]} />
@@ -310,7 +355,7 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed 
             </p>
           )}
           {!shortfall && have !== null && ladder && ladder.totalCost > 0 && (
-            <p className="text-xs text-ink-muted">Verfügbar: {input.side === 'buy' ? eur(have) : `${num(have, pair?.volumeDecimals)} ${base}`}. Reicht für diesen Plan.</p>
+            <p className="text-xs text-ink-muted">Verfügbar: {input.side === 'buy' ? eur(have) : `${num(have, pair?.volumeDecimals)} ${base}`}. Reicht für {partial ? 'diese Sendung' : 'diesen Plan'}.</p>
           )}
           {sendError && <p className="notice notice-danger">{sendError}</p>}
           {result && (
@@ -338,13 +383,13 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed 
                     <Tooltip {...theme.tooltip} labelFormatter={(v) => new Date(Number(v)).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })}
                       formatter={(v) => [fmtPrice(Number(v), pair?.priceDecimals ?? 2), 'Kurs']} />
                     {sendable.map((l) => (
-                      <ReferenceLine key={l.index} y={l.price} stroke={input.side === 'buy' ? theme.status.good : theme.status.critical} strokeOpacity={0.35 + 0.65 * (l.share / Math.max(...sendable.map((x) => x.share)))} strokeDasharray="4 3" />
+                      <ReferenceLine key={l.index} y={l.price} stroke={input.side === 'buy' ? theme.status.good : theme.status.critical} strokeOpacity={later.has(l.index) ? 0.15 : 0.35 + 0.65 * (l.share / Math.max(...sendable.map((x) => x.share)))} strokeDasharray="4 3" />
                     ))}
                     <Line type="monotone" dataKey="c" stroke={theme.accent} {...theme.line} isAnimationActive={false} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
-              <p className="mt-2 text-xs text-ink-muted">Gestrichelte Linien sind deine Stufen. Je kräftiger die Linie, desto größer die Stufe.</p>
+              <p className="mt-2 text-xs text-ink-muted">Gestrichelte Linien sind deine Stufen. Je kräftiger die Linie, desto größer die Stufe.{partial && ' Blasse Linien sind die Stufen für später.'}</p>
             </SectionCard>
           )}
 
@@ -355,7 +400,7 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed 
                   <BarChart data={ladder.levels.map((l) => ({ preis: l.price, betrag: Math.round(l.cost * 100) / 100, problem: !!l.problem }))}>
                     <CartesianGrid {...theme.grid} />
                     <XAxis dataKey="preis" {...theme.axis} tickFormatter={(v) => fmtPrice(v, 0)} />
-                    <YAxis {...theme.axis} tickFormatter={(v) => `${v} €`} width={60} />
+                    <YAxis {...theme.axis} tickFormatter={(v) => eur(Number(v)).replace(/,00(?= )/, '')} width={70} />
                     <Tooltip {...theme.tooltip} formatter={(v) => [eur(Number(v)), 'Gegenwert']} labelFormatter={(v) => `Preis ${fmtPrice(Number(v), pair?.priceDecimals ?? 2)}`} />
                     <Bar dataKey="betrag" fill={theme.accent} radius={theme.bar.radius} />
                   </BarChart>
@@ -386,6 +431,7 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed 
                             {l.problem ? <span className="text-warning-fg">{l.problem}</span>
                               : r?.error ? <span className="text-danger-fg">{r.error}</span>
                               : r ? <span className="text-success-fg">{result?.validate ? 'geprüft' : 'angelegt'}</span>
+                              : later.has(l.index) ? <span className="text-ink-faint">später</span>
                               : <span className="text-ink-muted">bereit</span>}
                           </td>
                         </tr>
@@ -418,11 +464,12 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed 
         <Modal title="Orders wirklich senden?" size="sm" onClose={() => !busy && setConfirm(false)}
           footer={<>
             <button type="button" className="btn btn-secondary" disabled={!!busy} onClick={() => setConfirm(false)}>Abbrechen</button>
-            <button type="button" className="btn btn-primary" disabled={!!busy} onClick={() => run(false)}>{busy ? 'Sende …' : `${sendable.length} Orders senden`}</button>
+            <button type="button" className="btn btn-primary" disabled={!!busy} onClick={() => run(false)}>{busy ? 'Sende …' : `${nowCount} Orders senden`}</button>
           </>}>
           <div className="space-y-2 text-sm">
-            <p><strong>{input.side === 'buy' ? 'Kaufen' : 'Verkaufen'}</strong> {pair.name} in {sendable.length} Stufen von {fmtPrice(input.priceStart, pair.priceDecimals)} bis {fmtPrice(input.priceEnd, pair.priceDecimals)} {quote}.</p>
-            <p>Gegenwert zusammen: <strong>{eur(ladder.totalCost)}</strong>{feeEur !== null && <> plus ca. {eur(feeEur)} Gebühren</>}</p>
+            <p><strong>{input.side === 'buy' ? 'Kaufen' : 'Verkaufen'}</strong> {pair.name} in {nowCount} Stufen von {fmtPrice(toSend[0]?.price ?? input.priceStart, pair.priceDecimals)} bis {fmtPrice(toSend[toSend.length - 1]?.price ?? input.priceEnd, pair.priceDecimals)} {sym}.</p>
+            <p>Gegenwert jetzt: <strong>{eur(nowCost)}</strong>{feeEur !== null && <> plus ca. {eur(feeEur)} Gebühren</>}</p>
+            {partial && <p className="text-ink-muted">Die restlichen {sendable.length - nowCount} Stufen bleiben im Plan. Du kannst sie später unter „Offene Orders“ mit „Rest senden“ nachschicken.</p>}
             <p className="text-ink-muted">Die Orders werden echt bei Kraken angelegt. Du kannst sie unter „Offene Orders“ jederzeit stornieren, solange sie noch nicht ausgeführt sind.</p>
           </div>
         </Modal>
