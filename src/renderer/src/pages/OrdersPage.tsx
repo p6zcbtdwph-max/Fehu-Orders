@@ -1,17 +1,20 @@
 import { useEffect, useState } from 'react'
-import { RefreshCw, X } from 'lucide-react'
-import type { OpenOrderDto, PlanDto } from '@shared/ipc'
+import { RefreshCw, TrendingUp, X } from 'lucide-react'
+import type { OpenOrderDto, PlanDto, PlanStatusDto } from '@shared/ipc'
+import { profitLadderSuggestion } from '@shared/plan-status'
+import type { Prefill } from './PlannerPage'
 import SectionCard from '../components/ui/SectionCard'
 import Modal from '../components/ui/Modal'
 import { eur, num } from '../format'
 
-export default function OrdersPage({ hasKey }: { hasKey: boolean }): JSX.Element {
+export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; onPlanSell: (p: Prefill) => void }): JSX.Element {
   const [orders, setOrders] = useState<OpenOrderDto[] | null>(null)
   const [plans, setPlans] = useState<PlanDto[]>([])
   const [balances, setBalances] = useState<Record<string, number>>({})
   const [error, setError] = useState<string | null>(null)
   const [cancelPlan, setCancelPlan] = useState<PlanDto | null>(null)
   const [busy, setBusy] = useState(false)
+  const [status, setStatus] = useState<Record<number, PlanStatusDto>>({})
 
   async function load() {
     setError(null)
@@ -21,13 +24,25 @@ export default function OrdersPage({ hasKey }: { hasKey: boolean }): JSX.Element
       const [o, b] = await Promise.all([window.api.openOrders(), window.api.balances()])
       setOrders(o)
       setBalances(b)
+      const st = await window.api.planStatus()
+      setStatus(Object.fromEntries(st.map((x) => [x.userref, x])))
     } catch (e) {
       setError((e as Error).message)
     }
   }
   useEffect(() => {
     load()
+    // neue Ausführungen (Meldung aus dem Hauptprozess) sofort anzeigen
+    return window.api.onFills(() => load())
   }, [hasKey])
+
+  function sellLadder(p: PlanDto, st: PlanStatusDto) {
+    const s = profitLadderSuggestion(st.averagePrice, st.filledVolume)
+    onPlanSell({
+      pairId: p.pairId,
+      input: { ...p.input, side: 'sell', priceStart: +s.priceStart.toPrecision(6), priceEnd: +s.priceEnd.toPrecision(6), total: s.total, curve: 'linear', ratio: 2, customWeights: undefined },
+    })
+  }
 
   async function doCancelPlan(p: PlanDto) {
     setBusy(true)
@@ -77,10 +92,11 @@ export default function OrdersPage({ hasKey }: { hasKey: boolean }): JSX.Element
           {plans.length === 0 ? <p className="text-sm text-ink-muted">Noch keine Pläne gesendet.</p> : (
             <div className="overflow-x-auto">
               <table className="data-table">
-                <thead><tr><th>Datum</th><th>Paar</th><th>Richtung</th><th className="num">Gesendet</th><th className="num">Noch offen</th><th className="num">Gegenwert</th><th /></tr></thead>
+                <thead><tr><th>Datum</th><th>Paar</th><th>Richtung</th><th className="num">Gesendet</th><th className="num">Noch offen</th><th className="num">Ausgeführt</th><th className="num">Ø Preis</th><th className="num">Gegenwert</th><th /></tr></thead>
                 <tbody>
                   {plans.map((p) => {
                     const open = openByPlan(p.userref)
+                    const st = status[p.userref]
                     return (
                       <tr key={p.userref}>
                         <td className="tabular-nums">{new Date(p.createdAt).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })}</td>
@@ -88,8 +104,19 @@ export default function OrdersPage({ hasKey }: { hasKey: boolean }): JSX.Element
                         <td>{p.side === 'buy' ? 'Kauf' : 'Verkauf'}</td>
                         <td className="num">{p.sent}</td>
                         <td className="num">{orders ? open : '–'}</td>
+                        <td className="num">
+                          {st ? <span className={st.filled + st.partial > 0 ? 'text-success-fg' : ''}>{st.filled}{st.partial ? ` + ${st.partial} teilw.` : ''}</span> : '–'}
+                        </td>
+                        <td className="num">{st && st.averagePrice ? num(st.averagePrice, 2) : '–'}</td>
                         <td className="num">{eur(p.totalCost)}</td>
-                        <td className="text-right">{open > 0 && <button type="button" className="btn btn-outline btn-sm" onClick={() => setCancelPlan(p)}>Plan stornieren</button>}</td>
+                        <td className="text-right">
+                          <span className="inline-flex gap-2">
+                            {p.side === 'buy' && st && st.filledVolume > 0 && (
+                              <button type="button" className="btn btn-secondary btn-sm" onClick={() => sellLadder(p, st)} title="Verkaufsstaffel 10–50 % über deinem Kaufpreis vorschlagen"><TrendingUp size={14} /> Gewinnstaffel</button>
+                            )}
+                            {open > 0 && <button type="button" className="btn btn-outline btn-sm" onClick={() => setCancelPlan(p)}>Plan stornieren</button>}
+                          </span>
+                        </td>
                       </tr>
                     )
                   })}

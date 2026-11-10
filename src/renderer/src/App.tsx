@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { KeyRound, ListOrdered, Settings, SlidersHorizontal } from 'lucide-react'
 import logoUrl from './assets/logo.png'
-import PlannerPage from './pages/PlannerPage'
+import PlannerPage, { type Prefill } from './pages/PlannerPage'
 import OrdersPage from './pages/OrdersPage'
 import SettingsPage from './pages/SettingsPage'
 
@@ -19,6 +19,7 @@ const noDrag = { WebkitAppRegion: 'no-drag' } as React.CSSProperties
 export default function App(): JSX.Element {
   const [page, setPage] = useState<PageId>('planner')
   const [hasKey, setHasKey] = useState<boolean | null>(null)
+  const [prefill, setPrefill] = useState<Prefill | null>(null)
 
   const refreshKey = () => window.api.keyStatus().then((s) => setHasKey(s.hasKey))
   useEffect(() => {
@@ -61,8 +62,8 @@ export default function App(): JSX.Element {
       </aside>
       <main className="relative flex-1 overflow-y-auto">
         <div className="h-8 w-full" style={drag} />
-        {page === 'planner' && <PlannerPage hasKey={!!hasKey} onNeedKey={() => setPage('settings')} />}
-        {page === 'orders' && <OrdersPage hasKey={!!hasKey} />}
+        {page === 'planner' && <PlannerPage hasKey={!!hasKey} onNeedKey={() => setPage('settings')} prefill={prefill} onPrefillUsed={() => setPrefill(null)} />}
+        {page === 'orders' && <OrdersPage hasKey={!!hasKey} onPlanSell={(p) => { setPrefill(p); setPage('planner') }} />}
         {page === 'settings' && <SettingsPage hasKey={!!hasKey} onKeyChanged={refreshKey} />}
       </main>
     </div>

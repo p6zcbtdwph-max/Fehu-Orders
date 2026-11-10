@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildLadder, priceAt, weight, type LadderInput, type PairRules } from './ladder'
+import { buildLadder, fibonacci, parseWeights, priceAt, weight, type LadderInput, type PairRules } from './ladder'
 
 const BTC_EUR: PairRules = { priceDecimals: 1, volumeDecimals: 8, orderMin: 0.00005, costMin: 0.5 }
 const base: LadderInput = { side: 'buy', priceStart: 60000, priceEnd: 50000, steps: 5, total: 1000, spacing: 'linear', curve: 'flat', ratio: 3 }
@@ -56,4 +56,23 @@ describe('buildLadder', () => {
     const l = buildLadder({ ...base, priceStart: 1.0, priceEnd: 0.99, steps: 10, total: 100 }, { ...BTC_EUR, priceDecimals: 2 })
     expect(l.valid).toBe(false)
   })
+})
+
+describe('Fibonacci und eigene Verteilung', () => {
+  it('Fibonacci-Folge', () => expect([0, 1, 2, 3, 4, 5].map(fibonacci)).toEqual([1, 1, 2, 3, 5, 8]))
+  it('Fibonacci verteilt 1:1:2:3:5', () => {
+    const l = buildLadder({ ...base, curve: 'fib' }, BTC_EUR)
+    expect(l.levels.map((x) => Math.round(x.share * 12))).toEqual([1, 1, 2, 3, 5])
+  })
+  it('eigene Prozente werden normiert', () => {
+    const l = buildLadder({ ...base, curve: 'custom', customWeights: [10, 10, 20, 30, 30] }, BTC_EUR)
+    expect(l.valid).toBe(true)
+    expect(l.levels[4].share).toBeCloseTo(0.3)
+  })
+  it('falsche Anzahl Prozente wird gemeldet', () => {
+    const l = buildLadder({ ...base, curve: 'custom', customWeights: [50, 50] }, BTC_EUR)
+    expect(l.valid).toBe(false)
+    expect(l.errors[0]).toMatch(/genau 5/)
+  })
+  it('liest Prozente aus Text', () => expect(parseWeights('10, 20;30 40%  x')).toEqual([10, 20, 30, 40]))
 })

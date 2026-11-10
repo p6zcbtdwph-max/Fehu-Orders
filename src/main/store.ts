@@ -74,3 +74,33 @@ export function addPlan(p: PlanRecord): void {
 export function newUserref(): number {
   return Math.floor(Date.now() / 1000) % 2_000_000_000
 }
+
+export interface Template {
+  id: string
+  name: string
+  pairName: string
+  input: LadderInput
+  postOnly: boolean
+}
+
+export function getTemplates(): Template[] {
+  return readJson<{ templates: Template[] }>('templates.json', { templates: [] }).templates
+}
+
+export function saveTemplate(t: Template): void {
+  const rest = getTemplates().filter((x) => x.id !== t.id && x.name !== t.name)
+  writeFileSync(file('templates.json'), JSON.stringify({ templates: [t, ...rest] }, null, 2))
+}
+
+export function deleteTemplate(id: string): void {
+  writeFileSync(file('templates.json'), JSON.stringify({ templates: getTemplates().filter((x) => x.id !== id) }, null, 2))
+}
+
+/** txids, über deren Ausführung schon benachrichtigt wurde */
+export function getNotified(): string[] {
+  return readJson<{ txids: string[] }>('notified.json', { txids: [] }).txids
+}
+
+export function setNotified(txids: string[]): void {
+  writeFileSync(file('notified.json'), JSON.stringify({ txids: txids.slice(-5000) }))
+}
