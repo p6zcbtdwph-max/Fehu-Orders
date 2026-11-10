@@ -1,3 +1,4 @@
+import { api } from '../api'
 import { useEffect, useState } from 'react'
 import { ShieldCheck } from 'lucide-react'
 import SectionCard from '../components/ui/SectionCard'
@@ -11,14 +12,14 @@ export default function SettingsPage({ hasKey, onKeyChanged }: { hasKey: boolean
   const [savedMax, setSavedMax] = useState(false)
 
   useEffect(() => {
-    window.api.settings().then((s) => setMaxPlan(s.maxPlanEur))
+    api().settings().then((s) => setMaxPlan(s.maxPlanEur))
   }, [])
 
   async function save() {
     setBusy(true)
     setMsg(null)
     try {
-      await window.api.saveKey(key, secret)
+      await api().saveKey(key, secret)
       setKey('')
       setSecret('')
       setMsg({ ok: true, text: 'Schlüssel geprüft und verschlüsselt gespeichert.' })
@@ -30,7 +31,7 @@ export default function SettingsPage({ hasKey, onKeyChanged }: { hasKey: boolean
   }
 
   async function clear() {
-    await window.api.clearKey()
+    await api().clearKey()
     setMsg({ ok: true, text: 'Schlüssel gelöscht.' })
     onKeyChanged()
   }
@@ -43,7 +44,7 @@ export default function SettingsPage({ hasKey, onKeyChanged }: { hasKey: boolean
         </div>
       </header>
       <div className="space-y-4">
-        <SectionCard title="Kraken-API-Schlüssel">
+        <div data-guide="key"><SectionCard title="Kraken-API-Schlüssel">
           <div className="space-y-3 text-sm">
             <p className="text-ink-muted">
               Lege den Schlüssel bei Kraken unter Einstellungen › API an. Nötig sind nur <strong>Guthaben abfragen</strong>, <strong>Offene Orders abfragen</strong>,{' '}
@@ -59,7 +60,7 @@ export default function SettingsPage({ hasKey, onKeyChanged }: { hasKey: boolean
               {hasKey && <button type="button" className="btn btn-outline" onClick={clear}>Schlüssel löschen</button>}
             </div>
           </div>
-        </SectionCard>
+        </SectionCard></div>
 
         <SectionCard title="Sicherheit">
           <div className="space-y-3 text-sm">
@@ -68,7 +69,7 @@ export default function SettingsPage({ hasKey, onKeyChanged }: { hasKey: boolean
               <input className="input w-full tabular-nums" inputMode="decimal" value={maxPlan} onChange={(e) => { setMaxPlan(Number(e.target.value.replace(',', '.')) || 0); setSavedMax(false) }} />
               <span className="mt-1 block text-xs text-ink-muted">Ein Plan mit höherem Gegenwert wird nicht gesendet. Schützt vor Tippfehlern.</span>
             </label>
-            <button type="button" className="btn btn-secondary" onClick={() => window.api.saveSettings({ maxPlanEur: maxPlan }).then(() => setSavedMax(true))}>{savedMax ? 'Gespeichert' : 'Speichern'}</button>
+            <button type="button" className="btn btn-secondary" onClick={() => api().saveSettings({ maxPlanEur: maxPlan }).then(() => setSavedMax(true))}>{savedMax ? 'Gespeichert' : 'Speichern'}</button>
           </div>
         </SectionCard>
       </div>

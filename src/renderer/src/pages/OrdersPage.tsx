@@ -1,3 +1,4 @@
+import { api } from '../api'
 import { Fragment, useEffect, useState } from 'react'
 import { RefreshCw, Send, TrendingUp, X } from 'lucide-react'
 import type { OpenOrderDto, PlanDto, PlanStatusDto } from '@shared/ipc'
@@ -22,13 +23,13 @@ export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; on
 
   async function load() {
     setError(null)
-    window.api.plans().then(setPlans)
+    api().plans().then(setPlans)
     if (!hasKey) return
     try {
-      const [o, b] = await Promise.all([window.api.openOrders(), window.api.balances()])
+      const [o, b] = await Promise.all([api().openOrders(), api().balances()])
       setOrders(o)
       setBalances(b)
-      const st = await window.api.planStatus()
+      const st = await api().planStatus()
       setStatus(Object.fromEntries(st.map((x) => [x.userref, x])))
     } catch (e) {
       setError((e as Error).message)
@@ -37,7 +38,7 @@ export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; on
   useEffect(() => {
     load()
     // neue Ausführungen (Meldung aus dem Hauptprozess) sofort anzeigen
-    return window.api.onFills(() => load())
+    return api().onFills(() => load())
   }, [hasKey])
 
   function sellLadder(p: PlanDto, st: PlanStatusDto) {
@@ -51,7 +52,7 @@ export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; on
   async function doCancelPlan(p: PlanDto) {
     setBusy(true)
     try {
-      await window.api.cancelPlan(p.userref)
+      await api().cancelPlan(p.userref)
     } catch (e) {
       setError((e as Error).message)
     }
@@ -62,7 +63,7 @@ export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; on
 
   async function cancelOne(txid: string) {
     try {
-      await window.api.cancelOrder(txid)
+      await api().cancelOrder(txid)
     } catch (e) {
       setError((e as Error).message)
     }
@@ -78,7 +79,7 @@ export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; on
     setBusy(true)
     setRestMsg(null)
     try {
-      const r = await window.api.sendRest(p.userref, validate)
+      const r = await api().sendRest(p.userref, validate)
       const failed = r.orders.filter((o) => o.error)
       const ok = r.orders.length - failed.length
       setRestMsg(failed.length
@@ -121,7 +122,7 @@ export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; on
           </SectionCard>
         )}
 
-        <SectionCard title="Pläne">
+        <div data-guide="plans"><SectionCard title="Pläne">
           {plans.length === 0 ? <p className="text-sm text-ink-muted">Noch keine Pläne gesendet.</p> : (
             <div className="overflow-x-auto">
               <table className="data-table">
@@ -167,7 +168,7 @@ export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; on
               </table>
             </div>
           )}
-        </SectionCard>
+        </SectionCard></div>
 
         {orders && (
           <SectionCard title={`Alle offenen Orders (${orders.length})`}>

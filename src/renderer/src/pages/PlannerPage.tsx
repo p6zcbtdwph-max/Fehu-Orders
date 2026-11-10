@@ -1,3 +1,4 @@
+import { api } from '../api'
 import { useEffect, useMemo, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { BookmarkPlus, FlaskConical, RefreshCw, Send, Star, Trash2 } from 'lucide-react'
@@ -90,18 +91,18 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed 
   }
 
   useEffect(() => {
-    window.api.pairs().then((ps) => {
+    api().pairs().then((ps) => {
       setPairs(ps)
       setPairId((cur) => cur || (ps.find((p) => p.name === 'BTC/EUR')?.id ?? ps[0]?.id ?? ''))
     }).catch((e) => setLoadError(e.message))
-    window.api.templates().then(setTemplates)
-    window.api.settings().then((s) => setWatchlist(s.watchlist ?? []))
+    api().templates().then(setTemplates)
+    api().settings().then((s) => setWatchlist(s.watchlist ?? []))
   }, [])
 
   function toggleWatch(name: string) {
     const next = watchlist.includes(name) ? watchlist.filter((x) => x !== name) : [...watchlist, name]
     setWatchlist(next)
-    window.api.saveSettings({ watchlist: next })
+    api().saveSettings({ watchlist: next })
   }
 
   // Vorschlag von „Offene Orders“ (Gewinnstaffel) übernehmen
@@ -117,15 +118,15 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed 
   // Guthaben und Gebühren nur mit Schlüssel
   useEffect(() => {
     if (!hasKey || !pairId) return
-    window.api.fees(pairId).then(setFees).catch(() => setFees(null))
-    window.api.available().then(setAvailable).catch(() => setAvailable(null))
+    api().fees(pairId).then(setFees).catch(() => setFees(null))
+    api().available().then(setAvailable).catch(() => setAvailable(null))
   }, [hasKey, pairId, result])
 
   useEffect(() => {
     if (!pairId) return
     const r = RANGES.find((x) => x.id === range)!
     const since = Date.now() / 1000 - r.days * 86400
-    window.api.ohlc(pairId, r.interval).then((c) => setCandles(c.filter(([t]) => t >= since))).catch(() => setCandles([]))
+    api().ohlc(pairId, r.interval).then((c) => setCandles(c.filter(([t]) => t >= since))).catch(() => setCandles([]))
   }, [pairId, range])
 
   function applyTemplate(id: string) {
@@ -144,22 +145,22 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed 
   async function storeTemplate(name: string) {
     if (!pair || !name.trim()) return
     const t: TemplateDto = { id: String(Date.now()), name: name.trim(), pairName: pair.name, input, postOnly }
-    await window.api.saveTemplate(t)
-    setTemplates(await window.api.templates())
+    await api().saveTemplate(t)
+    setTemplates(await api().templates())
     setTemplateId(t.id)
     setSaveAs(null)
   }
 
   async function removeTemplate() {
     if (!templateId) return
-    await window.api.deleteTemplate(templateId)
-    setTemplates(await window.api.templates())
+    await api().deleteTemplate(templateId)
+    setTemplates(await api().templates())
     setTemplateId('')
   }
 
   const loadPrice = (startFromPrice = true) => {
     if (!pairId) return
-    window.api.price(pairId).then((p) => {
+    api().price(pairId).then((p) => {
       setLast(p)
       if (startFromPrice && !keepPrices) {
         // Vorschlag: Kauf 2–20 % unter dem Kurs, Verkauf 5–40 % darüber
@@ -204,7 +205,7 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed 
     setSendError(null)
     setResult(null)
     try {
-      setResult(await window.api.send({ pairId: pair.id, pairName: pair.name, side: input.side, input, levels: ladder.levels, validate, postOnly, sendCount: partial ? nowCount : undefined }))
+      setResult(await api().send({ pairId: pair.id, pairName: pair.name, side: input.side, input, levels: ladder.levels, validate, postOnly, sendCount: partial ? nowCount : undefined }))
     } catch (e) {
       setSendError((e as Error).message)
     } finally {
@@ -223,7 +224,7 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed 
           <h1 className="page-title">Planer</h1>
           <p className="page-subtitle">Viele Limit-Orders auf einmal planen, prüfen und an Kraken senden.</p>
         </div>
-        <div className="ml-auto flex flex-shrink-0 items-center gap-2">
+        <div className="ml-auto flex flex-shrink-0 items-center gap-2" data-guide="actions">
           <button type="button" className="btn btn-secondary" disabled={!hasKey || !ladder?.valid || !!busy} onClick={() => run(true)} title="Kraken prüft alle Orders, legt aber nichts an">
             <FlaskConical size={16} /> {busy === 'validate' ? 'Prüfe …' : 'Probelauf'}
           </button>
@@ -241,7 +242,7 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed 
         </p>
       )}
 
-      <section className="card mb-4 p-4">
+      <section className="card mb-4 p-4" data-guide="pair">
         <div className="grid grid-cols-1 items-start gap-4 @md:grid-cols-2 @xl:grid-cols-[1.2fr_1fr_1fr]">
           <div>
             <span className="label">Handelspaar</span>
@@ -276,7 +277,7 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed 
       </section>
 
       <div className="grid grid-cols-1 gap-4 @lg:grid-cols-[22rem_1fr]">
-        <SectionCard title="Plan" action={<button type="button" className="btn btn-ghost btn-sm" onClick={() => setSaveAs(templateId ? templates.find((t) => t.id === templateId)?.name ?? '' : '')} title="Diesen Plan als Vorlage speichern"><BookmarkPlus size={14} /> Als Vorlage</button>}>
+        <div data-guide="plan" className="min-w-0"><SectionCard title="Plan" action={<button type="button" className="btn btn-ghost btn-sm" onClick={() => setSaveAs(templateId ? templates.find((t) => t.id === templateId)?.name ?? '' : '')} title="Diesen Plan als Vorlage speichern"><BookmarkPlus size={14} /> Als Vorlage</button>}>
           <div className="space-y-4">
             {templates.length > 0 && (
               <label className="block">
@@ -333,9 +334,9 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed 
               </span>
             </label>
           </div>
-        </SectionCard>
+        </SectionCard></div>
 
-        <div className="min-w-0 space-y-4">
+        <div className="min-w-0 space-y-4" data-guide="result">
           {ladder && (
             <KpiStrip items={[
               { label: 'Stufen', value: `${sendable.length} / ${input.steps}`, tone: sendable.length < input.steps ? 'warning' : 'default', hint: partial ? `${nowCount} jetzt, ${sendable.length - nowCount} später` : undefined },

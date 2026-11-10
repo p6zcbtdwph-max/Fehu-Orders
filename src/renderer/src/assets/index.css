@@ -675,3 +675,11 @@ p, li, dd, blockquote { hyphens: auto; }
   .chart-md { height: 240px; }
   .chart-lg { height: 320px; }
 }
+
+/* Einführung: hervorgehobener Bereich */
+.guide-target {
+  outline: 3px solid rgb(194 141 54 / 0.9);
+  outline-offset: 4px;
+  border-radius: 0.875rem;
+  transition: outline-color 200ms;
+}
