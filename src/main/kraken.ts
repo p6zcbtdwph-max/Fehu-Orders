@@ -29,6 +29,19 @@ export interface SentOrder {
   error?: string
 }
 
+export interface ClosedOrder {
+  txid: string
+  status: string
+  side: Side
+  volume: number
+  filled: number
+  cost: number
+  fee: number
+  /** Durchschnittlicher Ausführungspreis */
+  price: number
+  userref: number
+}
+
 type FetchLike = (url: string, init?: { method?: string; headers?: Record<string, string>; body?: string }) => Promise<{ json(): Promise<any> }>
 
 export class KrakenError extends Error {}
@@ -133,7 +146,7 @@ export class Kraken {
     return Object.fromEntries(Object.entries<string>(result).map(([k, v]) => [k, Number(v)]).filter(([, v]) => (v as number) > 0))
   }
 
-  async openOrders(userref?: number): Promise<{ txid: string; pair: string; side: Side; price: number; volume: number; filled: number; userref: number }[]> {
+  async openOrders(userref?: number): Promise<{ txid: string; pair: string; side: Side; price: number; volume: number; filled: number; cost: number; fee: number; userref: number }[]> {
     const result = await this.privatePost('OpenOrders', userref !== undefined ? { userref } : {})
     return Object.entries<any>(result.open ?? {}).map(([txid, o]) => ({
       txid,
@@ -142,6 +155,8 @@ export class Kraken {
       price: Number(o.descr.price),
       volume: Number(o.vol),
       filled: Number(o.vol_exec),
+      cost: Number(o.cost ?? 0),
+      fee: Number(o.fee ?? 0),
       userref: o.userref ?? 0,
     }))
   }
@@ -190,6 +205,43 @@ export class Kraken {
       if (i + BATCH_MAX < levels.length) await this.pause(1000)
     }
     return out
+  }
+
+  /** Kerzen für den Kurs-Chart: interval in Minuten (60, 240, 1440). Liefert [Zeit in s, Schlusskurs]. */
+  async ohlc(pairId: string, interval: number): Promise<[number, number][]> {
+    const result = await this.publicGet('OHLC', { pair: pairId, interval: String(interval) })
+    const key = Object.keys(result).find((k) => k !== 'last')
+    return (key ? result[key] : []).map((c: any[]) => [Number(c[0]), Number(c[4])])
+  }
+
+  /** Gebühren in Prozent für dieses Paar (Maker = Limit im Orderbuch, Taker = sofort ausgeführt) */
+  async fees(pairId: string): Promise<{ maker: number; taker: number }> {
+    const r = await this.privatePost('TradeVolume', { pair: pairId })
+    const taker = Number(Object.values<any>(r.fees ?? {})[0]?.fee ?? 0.4)
+    const maker = Number(Object.values<any>(r.fees_maker ?? {})[0]?.fee ?? taker)
+    return { maker, taker }
+  }
+
+  /** Verfügbares Guthaben je Asset (Bestand minus das, was in offenen Orders gebunden ist) */
+  async available(): Promise<Record<string, number>> {
+    const r = await this.privatePost('BalanceEx')
+    return Object.fromEntries(Object.entries<any>(r).map(([k, v]) => [k, Number(v.balance) + Number(v.credit ?? 0) - Number(v.credit_used ?? 0) - Number(v.hold_trade ?? 0)]))
+  }
+
+  /** Geschlossene Orders eines Plans (ausgeführt, storniert oder abgelaufen) */
+  async closedOrders(userref: number): Promise<ClosedOrder[]> {
+    const r = await this.privatePost('ClosedOrders', { userref })
+    return Object.entries<any>(r.closed ?? {}).map(([txid, o]) => ({
+      txid,
+      status: o.status,
+      side: o.descr.type,
+      volume: Number(o.vol),
+      filled: Number(o.vol_exec),
+      cost: Number(o.cost),
+      fee: Number(o.fee),
+      price: Number(o.price) || Number(o.descr.price),
+      userref: o.userref ?? 0,
+    }))
   }
 
   /** Storniert alle offenen Orders eines Plans (Kraken akzeptiert userref statt txid) */

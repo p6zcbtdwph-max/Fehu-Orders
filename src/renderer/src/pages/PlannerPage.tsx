@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { FlaskConical, RefreshCw, Send } from 'lucide-react'
-import { buildLadder, MAX_STEPS, type LadderInput, type PriceSpacing, type Side, type SizeCurve } from '@shared/ladder'
-import type { PairDto, SendResult } from '@shared/ipc'
+import { Bar, BarChart, CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { BookmarkPlus, FlaskConical, RefreshCw, Send, Trash2 } from 'lucide-react'
+import { buildLadder, MAX_STEPS, parseWeights, type LadderInput, type PriceSpacing, type Side, type SizeCurve } from '@shared/ladder'
+import type { PairDto, SendResult, TemplateDto } from '@shared/ipc'
 import KpiStrip from '../components/ui/KpiStrip'
 import SectionCard from '../components/ui/SectionCard'
 import Segmented from '../components/ui/Segmented'
@@ -15,7 +15,20 @@ const CURVES: { id: SizeCurve; label: string; title: string }[] = [
   { id: 'linear', label: 'Linear', title: 'Wächst gleichmäßig von Stufe zu Stufe' },
   { id: 'log', label: 'Logarithmisch', title: 'Wächst am Anfang schnell, dann flacher' },
   { id: 'exp', label: 'Exponentiell', title: 'Wächst am Anfang langsam, am Ende stark' },
+  { id: 'fib', label: 'Fibonacci', title: 'Stufen im Verhältnis 1, 1, 2, 3, 5, 8 … (jede Stufe so groß wie die beiden davor)' },
+  { id: 'custom', label: 'Eigene Prozente', title: 'Du gibst für jede Stufe selbst den Anteil vor' },
 ]
+
+const RANGES: { id: number; label: string; interval: number; days: number }[] = [
+  { id: 30, label: '30 T', interval: 60, days: 30 },
+  { id: 90, label: '90 T', interval: 240, days: 90 },
+  { id: 365, label: '1 J', interval: 1440, days: 365 },
+]
+
+export interface Prefill {
+  pairId: string
+  input: LadderInput
+}
 
 const SPACINGS: { id: PriceSpacing; label: string; title: string }[] = [
   { id: 'linear', label: 'Gleiche €-Abstände', title: 'Zwischen zwei Stufen liegt immer derselbe Betrag' },
@@ -41,7 +54,7 @@ function NumberField({ label, value, onChange, hint, step = 'any' }: { label: st
   )
 }
 
-export default function PlannerPage({ hasKey, onNeedKey }: { hasKey: boolean; onNeedKey: () => void }): JSX.Element {
+export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed }: { hasKey: boolean; onNeedKey: () => void; prefill?: Prefill | null; onPrefillUsed?: () => void }): JSX.Element {
   const theme = useChartTheme()
   const [pairs, setPairs] = useState<PairDto[]>([])
   const [pairId, setPairId] = useState<string>('')
@@ -53,6 +66,16 @@ export default function PlannerPage({ hasKey, onNeedKey }: { hasKey: boolean; on
   const [confirm, setConfirm] = useState(false)
   const [result, setResult] = useState<SendResult | null>(null)
   const [sendError, setSendError] = useState<string | null>(null)
+  const [customText, setCustomText] = useState('')
+  const [templates, setTemplates] = useState<TemplateDto[]>([])
+  const [templateId, setTemplateId] = useState('')
+  const [saveAs, setSaveAs] = useState<string | null>(null)
+  const [range, setRange] = useState(90)
+  const [candles, setCandles] = useState<[number, number][]>([])
+  const [fees, setFees] = useState<{ maker: number; taker: number } | null>(null)
+  const [available, setAvailable] = useState<Record<string, number> | null>(null)
+  // Beim Laden einer Vorlage oder eines Vorschlags den Kurs nicht überschreiben
+  const [keepPrices, setKeepPrices] = useState(false)
 
   const pair = pairs.find((p) => p.id === pairId)
   const set = <K extends keyof LadderInput>(k: K, v: LadderInput[K]) => {
@@ -63,26 +86,96 @@ export default function PlannerPage({ hasKey, onNeedKey }: { hasKey: boolean; on
   useEffect(() => {
     window.api.pairs().then((ps) => {
       setPairs(ps)
-      setPairId(ps.find((p) => p.name === 'BTC/EUR')?.id ?? ps[0]?.id ?? '')
+      setPairId((cur) => cur || (ps.find((p) => p.name === 'BTC/EUR')?.id ?? ps[0]?.id ?? ''))
     }).catch((e) => setLoadError(e.message))
+    window.api.templates().then(setTemplates)
   }, [])
+
+  // Vorschlag von „Offene Orders“ (Gewinnstaffel) übernehmen
+  useEffect(() => {
+    if (!prefill) return
+    setKeepPrices(true)
+    setPairId(prefill.pairId)
+    setInput(prefill.input)
+    setResult(null)
+    onPrefillUsed?.()
+  }, [prefill])
+
+  // Guthaben und Gebühren nur mit Schlüssel
+  useEffect(() => {
+    if (!hasKey || !pairId) return
+    window.api.fees(pairId).then(setFees).catch(() => setFees(null))
+    window.api.available().then(setAvailable).catch(() => setAvailable(null))
+  }, [hasKey, pairId, result])
+
+  useEffect(() => {
+    if (!pairId) return
+    const r = RANGES.find((x) => x.id === range)!
+    const since = Date.now() / 1000 - r.days * 86400
+    window.api.ohlc(pairId, r.interval).then((c) => setCandles(c.filter(([t]) => t >= since))).catch(() => setCandles([]))
+  }, [pairId, range])
+
+  function applyTemplate(id: string) {
+    setTemplateId(id)
+    const t = templates.find((x) => x.id === id)
+    if (!t) return
+    const p = pairs.find((x) => x.name === t.pairName)
+    setKeepPrices(true)
+    if (p) setPairId(p.id)
+    setInput(t.input)
+    setPostOnly(t.postOnly)
+    setCustomText((t.input.customWeights ?? []).join(', '))
+    setResult(null)
+  }
+
+  async function storeTemplate(name: string) {
+    if (!pair || !name.trim()) return
+    const t: TemplateDto = { id: String(Date.now()), name: name.trim(), pairName: pair.name, input, postOnly }
+    await window.api.saveTemplate(t)
+    setTemplates(await window.api.templates())
+    setTemplateId(t.id)
+    setSaveAs(null)
+  }
+
+  async function removeTemplate() {
+    if (!templateId) return
+    await window.api.deleteTemplate(templateId)
+    setTemplates(await window.api.templates())
+    setTemplateId('')
+  }
 
   const loadPrice = (startFromPrice = true) => {
     if (!pairId) return
     window.api.price(pairId).then((p) => {
       setLast(p)
-      if (startFromPrice) {
+      if (startFromPrice && !keepPrices) {
         // Vorschlag: Kauf 2–20 % unter dem Kurs, Verkauf 5–40 % darüber
         setInput((s) => s.side === 'buy' ? { ...s, priceStart: +(p * 0.98).toPrecision(6), priceEnd: +(p * 0.8).toPrecision(6) } : { ...s, priceStart: +(p * 1.05).toPrecision(6), priceEnd: +(p * 1.4).toPrecision(6) })
       }
     }).catch((e) => setLoadError(e.message))
   }
   useEffect(() => loadPrice(true), [pairId, input.side])
+  // nach dem ersten Kursabruf dürfen Richtungswechsel die Preise wieder vorschlagen
+  useEffect(() => {
+    if (keepPrices) {
+      const t = setTimeout(() => setKeepPrices(false), 500)
+      return () => clearTimeout(t)
+    }
+    return undefined
+  }, [keepPrices])
 
   const ladder = useMemo(() => (pair ? buildLadder(input, pair) : null), [input, pair])
   const quote = pair?.name.split('/')[1] ?? 'EUR'
   const base = pair?.name.split('/')[0] ?? ''
   const sendable = ladder?.levels.filter((l) => !l.problem) ?? []
+
+  // Gebühren und Guthaben
+  const feePct = fees ? (postOnly ? fees.maker : fees.taker) : null
+  const feeEur = ladder && feePct !== null ? (ladder.totalCost * feePct) / 100 : null
+  const needAsset = pair ? (input.side === 'buy' ? pair.quote : pair.base) : ''
+  const need = ladder ? (input.side === 'buy' ? ladder.totalCost + (feeEur ?? 0) : ladder.totalVolume) : 0
+  const have = available && needAsset ? available[needAsset] ?? 0 : null
+  const shortfall = have !== null && ladder && ladder.totalCost > 0 && have + 1e-12 < need
 
   async function run(validate: boolean) {
     if (!pair || !ladder) return
@@ -113,7 +206,7 @@ export default function PlannerPage({ hasKey, onNeedKey }: { hasKey: boolean; on
           <button type="button" className="btn btn-secondary" disabled={!hasKey || !ladder?.valid || !!busy} onClick={() => run(true)} title="Kraken prüft alle Orders, legt aber nichts an">
             <FlaskConical size={16} /> {busy === 'validate' ? 'Prüfe …' : 'Probelauf'}
           </button>
-          <button type="button" data-primary-action className="btn btn-primary" disabled={!hasKey || !ladder?.valid || !!busy} onClick={() => setConfirm(true)}>
+          <button type="button" data-primary-action className="btn btn-primary" disabled={!hasKey || !ladder?.valid || !!busy || !!shortfall} onClick={() => setConfirm(true)}>
             <Send size={16} /> An Kraken senden
           </button>
         </div>
@@ -128,8 +221,20 @@ export default function PlannerPage({ hasKey, onNeedKey }: { hasKey: boolean; on
       )}
 
       <div className="grid grid-cols-1 gap-4 @lg:grid-cols-[22rem_1fr]">
-        <SectionCard title="Plan">
+        <SectionCard title="Plan" action={<button type="button" className="btn btn-ghost btn-sm" onClick={() => setSaveAs(templateId ? templates.find((t) => t.id === templateId)?.name ?? '' : '')} title="Diesen Plan als Vorlage speichern"><BookmarkPlus size={14} /> Als Vorlage</button>}>
           <div className="space-y-4">
+            {templates.length > 0 && (
+              <label className="block">
+                <span className="label">Vorlage</span>
+                <span className="flex gap-2">
+                  <select className="select w-full" value={templateId} onChange={(e) => applyTemplate(e.target.value)}>
+                    <option value="">Keine Vorlage</option>
+                    {templates.map((t) => <option key={t.id} value={t.id}>{t.name} · {t.pairName}</option>)}
+                  </select>
+                  {templateId && <button type="button" className="btn btn-ghost btn-icon flex-shrink-0" onClick={removeTemplate} aria-label="Vorlage löschen" title="Vorlage löschen"><Trash2 size={16} /></button>}
+                </span>
+              </label>
+            )}
             <label className="block">
               <span className="label">Handelspaar</span>
               <select className="select w-full" value={pairId} onChange={(e) => { setPairId(e.target.value); setResult(null) }}>
@@ -163,7 +268,17 @@ export default function PlannerPage({ hasKey, onNeedKey }: { hasKey: boolean; on
               </select>
               <span className="mt-1 block text-xs text-ink-muted">{CURVES.find((c) => c.id === input.curve)?.title}</span>
             </div>
-            {input.curve !== 'flat' && (
+            {input.curve === 'custom' && (
+              <label className="block">
+                <span className="label">Anteil je Stufe in %</span>
+                <input className="input w-full tabular-nums" value={customText} placeholder="z. B. 10, 15, 20, 25, 30"
+                  onChange={(e) => { setCustomText(e.target.value); set('customWeights', parseWeights(e.target.value)) }} />
+                <span className="mt-1 block text-xs text-ink-muted">
+                  {input.steps} Werte, getrennt mit Komma. Summe {num((input.customWeights ?? []).reduce((a, b) => a + b, 0), 1)} % (wird auf 100 % umgerechnet).
+                </span>
+              </label>
+            )}
+            {['linear', 'log', 'exp'].includes(input.curve) && (
               <NumberField label="Letzte Stufe im Verhältnis zur ersten" value={input.ratio} onChange={(v) => set('ratio', v)}
                 hint={input.ratio >= 1 ? `Die letzte Stufe ist ${num(input.ratio, 2)}× so groß wie die erste.` : 'Unter 1: die Stufen werden kleiner.'} />
             )}
@@ -181,13 +296,21 @@ export default function PlannerPage({ hasKey, onNeedKey }: { hasKey: boolean; on
           {ladder && (
             <KpiStrip items={[
               { label: 'Stufen', value: `${sendable.length} / ${input.steps}`, tone: sendable.length < input.steps ? 'warning' : 'default' },
-              { label: 'Gegenwert', value: eur(ladder.totalCost) },
+              { label: 'Gegenwert', value: eur(ladder.totalCost), hint: feeEur !== null ? `+ ca. ${eur(feeEur)} Gebühr (${num(feePct ?? 0, 2)} %)` : undefined },
               { label: `Menge ${base}`, value: num(ladder.totalVolume, pair?.volumeDecimals) },
               { label: 'Ø Preis bei voller Ausführung', value: ladder.averagePrice ? fmtPrice(ladder.averagePrice, pair?.priceDecimals ?? 2) : '–', hint: last && ladder.averagePrice ? pct(ladder.averagePrice / last - 1) + ' zum Kurs' : undefined },
             ]} />
           )}
           {ladder && ladder.errors.length > 0 && (
             <div className="notice notice-warning space-y-1">{ladder.errors.map((e) => <p key={e}>{e}</p>)}</div>
+          )}
+          {shortfall && (
+            <p className="notice notice-danger">
+              Nicht genug verfügbares Guthaben: Du brauchst {input.side === 'buy' ? eur(need) : `${num(need, pair?.volumeDecimals)} ${base}`}, verfügbar sind {input.side === 'buy' ? eur(have ?? 0) : `${num(have ?? 0, pair?.volumeDecimals)} ${base}`}. Guthaben in offenen Orders ist schon abgezogen.
+            </p>
+          )}
+          {!shortfall && have !== null && ladder && ladder.totalCost > 0 && (
+            <p className="text-xs text-ink-muted">Verfügbar: {input.side === 'buy' ? eur(have) : `${num(have, pair?.volumeDecimals)} ${base}`}. Reicht für diesen Plan.</p>
           )}
           {sendError && <p className="notice notice-danger">{sendError}</p>}
           {result && (
@@ -197,6 +320,32 @@ export default function PlannerPage({ hasKey, onNeedKey }: { hasKey: boolean; on
                 : `${ok} Orders angelegt${failed.length ? `, ${failed.length} fehlgeschlagen` : ''}. Plan-Nummer ${result.userref}.`}
               {failed.length > 0 && <p className="mt-1 text-xs">Grund: {failed[0].error}</p>}
             </div>
+          )}
+
+          {candles.length > 1 && ladder && (
+            <SectionCard title="Kurs und Stufen" action={<Segmented<number> value={range} onChange={setRange} options={RANGES.map((r) => ({ id: r.id, label: r.label }))} />}>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={candles.map(([t, c]) => ({ t: t * 1000, c }))}>
+                    <CartesianGrid {...theme.grid} />
+                    <XAxis dataKey="t" type="number" scale="time" domain={['dataMin', 'dataMax']} {...theme.axis}
+                      tickFormatter={(v) => new Date(v).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })} />
+                    <YAxis {...theme.axis} width={70} tickFormatter={(v) => fmtPrice(v, 0)}
+                      domain={[
+                        (min: number) => Math.min(min, ...sendable.map((l) => l.price)) * 0.98,
+                        (max: number) => Math.max(max, ...sendable.map((l) => l.price)) * 1.02,
+                      ]} />
+                    <Tooltip {...theme.tooltip} labelFormatter={(v) => new Date(Number(v)).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })}
+                      formatter={(v) => [fmtPrice(Number(v), pair?.priceDecimals ?? 2), 'Kurs']} />
+                    {sendable.map((l) => (
+                      <ReferenceLine key={l.index} y={l.price} stroke={input.side === 'buy' ? theme.status.good : theme.status.critical} strokeOpacity={0.35 + 0.65 * (l.share / Math.max(...sendable.map((x) => x.share)))} strokeDasharray="4 3" />
+                    ))}
+                    <Line type="monotone" dataKey="c" stroke={theme.accent} {...theme.line} isAnimationActive={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+              <p className="mt-2 text-xs text-ink-muted">Gestrichelte Linien sind deine Stufen. Je kräftiger die Linie, desto größer die Stufe.</p>
+            </SectionCard>
           )}
 
           {ladder && ladder.levels.length > 0 && (
@@ -250,6 +399,21 @@ export default function PlannerPage({ hasKey, onNeedKey }: { hasKey: boolean; on
         </div>
       </div>
 
+      {saveAs !== null && (
+        <Modal title="Als Vorlage speichern" size="sm" onClose={() => setSaveAs(null)}
+          footer={<>
+            <button type="button" className="btn btn-secondary" onClick={() => setSaveAs(null)}>Abbrechen</button>
+            <button type="button" className="btn btn-primary" disabled={!saveAs.trim()} onClick={() => storeTemplate(saveAs)}>Speichern</button>
+          </>}>
+          <label className="block">
+            <span className="label">Name</span>
+            <input className="input w-full" autoFocus value={saveAs} placeholder="z. B. BTC Dip 10 Stufen log" onChange={(e) => setSaveAs(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && storeTemplate(saveAs)} />
+          </label>
+          <p className="mt-2 text-xs text-ink-muted">Gespeichert werden Paar, Richtung, Preise, Stufen, Betrag und Verteilung. Ein gleichnamiger Plan wird ersetzt.</p>
+        </Modal>
+      )}
+
       {confirm && ladder && pair && (
         <Modal title="Orders wirklich senden?" size="sm" onClose={() => !busy && setConfirm(false)}
           footer={<>
@@ -258,7 +422,7 @@ export default function PlannerPage({ hasKey, onNeedKey }: { hasKey: boolean; on
           </>}>
           <div className="space-y-2 text-sm">
             <p><strong>{input.side === 'buy' ? 'Kaufen' : 'Verkaufen'}</strong> {pair.name} in {sendable.length} Stufen von {fmtPrice(input.priceStart, pair.priceDecimals)} bis {fmtPrice(input.priceEnd, pair.priceDecimals)} {quote}.</p>
-            <p>Gegenwert zusammen: <strong>{eur(ladder.totalCost)}</strong></p>
+            <p>Gegenwert zusammen: <strong>{eur(ladder.totalCost)}</strong>{feeEur !== null && <> plus ca. {eur(feeEur)} Gebühren</>}</p>
             <p className="text-ink-muted">Die Orders werden echt bei Kraken angelegt. Du kannst sie unter „Offene Orders“ jederzeit stornieren, solange sie noch nicht ausgeführt sind.</p>
           </div>
         </Modal>

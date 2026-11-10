@@ -35,6 +35,8 @@ export interface OpenOrderDto {
   price: number
   volume: number
   filled: number
+  cost: number
+  fee: number
   userref: number
 }
 
@@ -48,6 +50,26 @@ export interface PlanDto {
   sent: number
   failed: number
   totalCost: number
+}
+
+export interface TemplateDto {
+  id: string
+  name: string
+  pairName: string
+  input: LadderInput
+  postOnly: boolean
+}
+
+export interface PlanStatusDto {
+  userref: number
+  open: number
+  filled: number
+  partial: number
+  canceled: number
+  filledVolume: number
+  filledCost: number
+  fees: number
+  averagePrice: number
 }
 
 export interface Api {
@@ -64,4 +86,12 @@ export interface Api {
   plans(): Promise<PlanDto[]>
   settings(): Promise<{ maxPlanEur: number }>
   saveSettings(s: { maxPlanEur: number }): Promise<void>
+  ohlc(pairId: string, interval: number): Promise<[number, number][]>
+  fees(pairId: string): Promise<{ maker: number; taker: number }>
+  available(): Promise<Record<string, number>>
+  templates(): Promise<TemplateDto[]>
+  saveTemplate(t: TemplateDto): Promise<void>
+  deleteTemplate(id: string): Promise<void>
+  planStatus(): Promise<PlanStatusDto[]>
+  onFills(cb: () => void): () => void
 }

@@ -61,3 +61,25 @@ describe('placeLadder', () => {
     await expect(k.balances()).rejects.toThrow('Kein API-Schlüssel')
   })
 })
+
+describe('neue Abfragen', () => {
+  it('ohlc liefert Zeit und Schlusskurs', async () => {
+    const { http } = fakeHttp(() => ({ error: [], result: { XXBTZEUR: [[1700000000, '1', '2', '0.5', '1.5', '1.2', '10', 5]], last: 1 } }))
+    expect(await new Kraken(null, http).ohlc('XXBTZEUR', 1440)).toEqual([[1700000000, 1.5]])
+  })
+  it('available zieht gebundenes Guthaben ab', async () => {
+    const { http } = fakeHttp(() => ({ error: [], result: { ZEUR: { balance: '100.5', hold_trade: '40.5' } } }))
+    expect(await new Kraken({ key: 'k', secret: 'cw==' }, http).available()).toEqual({ ZEUR: 60 })
+  })
+  it('fees liest Maker und Taker', async () => {
+    const { http, calls } = fakeHttp(() => ({ error: [], result: { fees: { XXBTZEUR: { fee: '0.40' } }, fees_maker: { XXBTZEUR: { fee: '0.25' } } } }))
+    expect(await new Kraken({ key: 'k', secret: 'cw==' }, http).fees('XXBTZEUR')).toEqual({ maker: 0.25, taker: 0.4 })
+    expect(calls[0].body).toContain('pair=XXBTZEUR')
+  })
+  it('closedOrders filtert nach userref und liest den Ausführungspreis', async () => {
+    const { http, calls } = fakeHttp(() => ({ error: [], result: { closed: { T1: { status: 'closed', vol: '1', vol_exec: '1', cost: '90', fee: '0.2', price: '90', userref: 7, descr: { type: 'buy', price: '90' } } } } }))
+    const r = await new Kraken({ key: 'k', secret: 'cw==' }, http).closedOrders(7)
+    expect(calls[0].body).toContain('userref=7')
+    expect(r[0]).toMatchObject({ txid: 'T1', status: 'closed', filled: 1, cost: 90, price: 90, userref: 7 })
+  })
+})

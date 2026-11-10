@@ -21,6 +21,18 @@ const api: Api = {
   plans: () => call('plans'),
   settings: () => call('settings'),
   saveSettings: (s) => call('settings:save', s),
+  ohlc: (pairId, interval) => call('ohlc', pairId, interval),
+  fees: (pairId) => call('fees', pairId),
+  available: () => call('available'),
+  templates: () => call('templates'),
+  saveTemplate: (t) => call('template:save', t),
+  deleteTemplate: (id) => call('template:delete', id),
+  planStatus: () => call('plans:status'),
+  onFills: (cb) => {
+    const h = () => cb()
+    ipcRenderer.on('fills', h)
+    return () => ipcRenderer.removeListener('fills', h)
+  },
 }
 
 contextBridge.exposeInMainWorld('api', api)

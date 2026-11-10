@@ -6,7 +6,7 @@ export type Side = 'buy' | 'sell'
 /** Abstand der Preise: gleiche Euro-Schritte oder gleiche Prozent-Schritte */
 export type PriceSpacing = 'linear' | 'geometric'
 /** Wie sich die Menge über die Stufen verteilt */
-export type SizeCurve = 'flat' | 'linear' | 'log' | 'exp'
+export type SizeCurve = 'flat' | 'linear' | 'log' | 'exp' | 'fib' | 'custom'
 
 export interface PairRules {
   /** Nachkommastellen beim Preis */
@@ -32,6 +32,8 @@ export interface LadderInput {
   curve: SizeCurve
   /** Verhältnis letzte Stufe zu erster Stufe bei linear/log/exp (z. B. 3 = letzte Stufe dreimal so groß) */
   ratio: number
+  /** Nur bei curve 'custom': Anteil je Stufe in Prozent (wird auf 100 % normiert) */
+  customWeights?: number[]
 }
 
 export interface LadderLevel {
@@ -63,9 +65,27 @@ function position(i: number, steps: number): number {
   return steps === 1 ? 0 : i / (steps - 1)
 }
 
-/** Gewicht einer Stufe. Bei ratio 1 sind alle Kurven gleichmäßig. */
+/** Fibonacci-Zahlen 1, 1, 2, 3, 5, 8 … für Stufe i */
+export function fibonacci(i: number): number {
+  let a = 1
+  let b = 1
+  for (let k = 0; k < i; k++) [a, b] = [b, a + b]
+  return a
+}
+
+/** Prozentliste aus Text wie "10, 20; 30 40" */
+export function parseWeights(text: string): number[] {
+  return text
+    .split(/[\s,;]+/)
+    .map((x) => Number(x.replace('%', '')))
+    .filter((x) => Number.isFinite(x) && x > 0)
+}
+
+/** Gewicht einer Stufe. Bei ratio 1 sind alle Kurven gleichmäßig. fib und custom werden in buildLadder behandelt. */
 export function weight(curve: SizeCurve, t: number, ratio: number): number {
   switch (curve) {
+    case 'fib':
+    case 'custom':
     case 'flat':
       return 1
     case 'linear':
@@ -98,6 +118,10 @@ export function validateInput(input: LadderInput): string[] {
   if (steps > MAX_STEPS) e.push(`Höchstens ${MAX_STEPS} Stufen.`)
   if (!(total > 0)) e.push(side === 'buy' ? 'Der Gesamtbetrag muss größer als 0 sein.' : 'Die Gesamtmenge muss größer als 0 sein.')
   if (!(ratio > 0)) e.push('Das Verhältnis muss größer als 0 sein.')
+  if (input.curve === 'custom') {
+    const w = input.customWeights ?? []
+    if (w.length !== steps) e.push(`Bei eigener Verteilung braucht es genau ${steps} Prozentwerte (jetzt ${w.length}).`)
+  }
   if (priceStart > 0 && priceEnd > 0 && steps > 1) {
     if (side === 'buy' && priceEnd > priceStart) e.push('Beim Kauf liegt die letzte Stufe unter der ersten (tiefer kaufen).')
     if (side === 'sell' && priceEnd < priceStart) e.push('Beim Verkauf liegt die letzte Stufe über der ersten (höher verkaufen).')
@@ -110,7 +134,12 @@ export function buildLadder(input: LadderInput, rules: PairRules): Ladder {
   if (errors.length) return { levels: [], totalVolume: 0, totalCost: 0, averagePrice: 0, valid: false, errors }
 
   const { side, steps, total, spacing, curve, ratio, priceStart, priceEnd } = input
-  const weights = Array.from({ length: steps }, (_, i) => weight(curve, position(i, steps), ratio))
+  const weights =
+    curve === 'fib'
+      ? Array.from({ length: steps }, (_, i) => fibonacci(i))
+      : curve === 'custom'
+        ? (input.customWeights ?? []).slice(0, steps)
+        : Array.from({ length: steps }, (_, i) => weight(curve, position(i, steps), ratio))
   const sum = weights.reduce((a, b) => a + b, 0)
 
   const levels: LadderLevel[] = weights.map((w, i) => {

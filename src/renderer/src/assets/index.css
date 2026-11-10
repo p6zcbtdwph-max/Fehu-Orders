@@ -651,7 +651,7 @@ p, li, dd, blockquote { hyphens: auto; }
   .data-table tbody tr:last-child td { @apply border-b-0; }
   .data-table tbody tr:hover td { @apply bg-sunken-soft; }
   .data-table tr.is-clickable { @apply cursor-pointer; }
-  .data-table .num { @apply text-right tabular-nums; }
+  .data-table .num { @apply whitespace-nowrap text-right tabular-nums; }
   .data-table tfoot td, .data-table tr.is-total td { @apply border-t border-line font-semibold; }
   .data-table-sort { @apply -mx-1 inline-flex items-center gap-1 rounded-md px-1 hover:text-ink; }
   .data-table th.num .data-table-sort { @apply flex-row-reverse; }

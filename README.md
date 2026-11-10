@@ -6,7 +6,12 @@ Mac-App, um viele gestaffelte Limit-Orders auf einmal zu planen und an Kraken zu
 
 - Handelspaar wählen (alle EUR-Paare von Kraken), Kauf oder Verkauf, Preisbereich, Anzahl Stufen (1–200) und Gesamtbetrag
 - Preisabstände: gleiche Euro-Schritte oder gleiche Prozent-Schritte (logarithmisch)
-- Mengenverteilung: gleich, linear, logarithmisch oder exponentiell, mit einstellbarem Verhältnis letzte zu erster Stufe
+- Mengenverteilung: gleich, linear, logarithmisch, exponentiell (mit einstellbarem Verhältnis letzte zu erster Stufe), Fibonacci oder eigene Prozente je Stufe
+- Vorlagen: Pläne unter einem Namen speichern und wieder laden
+- Kurs-Chart (30 Tage, 90 Tage, 1 Jahr) mit den geplanten Stufen als Linien
+- Gebühren (Maker/Taker von Kraken) und verfügbares Guthaben vor dem Senden; bei zu wenig Guthaben ist Senden gesperrt
+- Gewinnstaffel: für einen Kaufplan mit Ausführungen schlägt die App eine Verkaufsstaffel 10–50 % über dem Durchschnittspreis vor
+- Ausführungen: die App prüft jede Minute die Pläne der letzten 90 Tage, zeigt Ausgeführt und Ø Preis und meldet neue Ausführungen als macOS-Mitteilung
 - Vorschau als Diagramm und Tabelle, Stufen unter Krakens Mindestgröße werden markiert
 - **Probelauf:** Kraken prüft alle Orders (`validate`), legt aber nichts an. Kraken hat für Spot keine Spielgeld-Umgebung, deshalb ist das der sichere Test.
 - Echt senden in Paketen zu 15 Orders, Post-only als Standard
