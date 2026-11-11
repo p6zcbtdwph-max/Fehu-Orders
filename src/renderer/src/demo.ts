@@ -82,7 +82,7 @@ export function createDemoApi(): Api {
   const wait = <T,>(v: T, ms = 150) => new Promise<T>((r) => setTimeout(() => r(v), ms))
 
   return {
-    keyStatus: () => wait({ hasKey: true, encryption: true }, 0),
+    keyStatus: () => wait({ hasKey: true, encryption: true, touchId: true }, 0),
     saveKey: async () => { throw new Error('Im Demo-Modus brauchst du keinen Schlüssel. Beende zuerst die Demo.') },
     verifyKey: () => wait(demoChecks.map((c) => ({ ...c })), 600),
     clearKey: async () => {},

@@ -1,7 +1,7 @@
 import { api } from '../api'
 import { useEffect, useMemo, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { AlertTriangle, Bell, BookmarkPlus, ClipboardList, GraduationCap, FlaskConical, RefreshCw, Send, Star, Trash2 } from 'lucide-react'
+import { AlertTriangle, Bell, BookmarkPlus, ClipboardList, GraduationCap, FlaskConical, Info, RefreshCw, Send, Star, Trash2 } from 'lucide-react'
 import { buildLadder, MAX_STEPS, parseWeights, type LadderInput, type PriceSpacing, type Side, type SizeCurve } from '@shared/ladder'
 import type { DraftDto, PairDto, SendResult, TemplateDto } from '@shared/ipc'
 import { firstTestInput, wrongSide } from '@shared/safety'
@@ -442,11 +442,20 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
           )}
           {shortfall && (
             <p className="notice notice-danger">
-              Nicht genug verfügbares Guthaben: Du brauchst {input.side === 'buy' ? eur(need) : `${num(need, pair?.volumeDecimals)} ${base}`}, verfügbar sind {input.side === 'buy' ? eur(have ?? 0) : `${num(have ?? 0, pair?.volumeDecimals)} ${base}`}. Guthaben in offenen Orders ist schon abgezogen.
+              Nicht genug verfügbares Guthaben: Du brauchst {input.side === 'buy' ? eur(need) : `${num(need, pair?.volumeDecimals)} ${base}`}, verfügbar sind {input.side === 'buy' ? eur(have ?? 0) : `${num(have ?? 0, pair?.volumeDecimals)} ${base}`}. Guthaben in offenen Orders ist schon abgezogen, denn jede offene Order sperrt ihren Betrag.
             </p>
           )}
           {!shortfall && have !== null && ladder && ladder.totalCost > 0 && (
             <p className="text-xs text-ink-muted">Verfügbar: {input.side === 'buy' ? eur(have) : `${num(have, pair?.volumeDecimals)} ${base}`}. Reicht für {partial ? 'diese Sendung' : 'diesen Plan'}.</p>
+          )}
+          {ladder && ladder.totalCost > 0 && (
+            <p className="notice notice-info flex items-start gap-2 text-xs">
+              <Info size={14} className="mt-0.5 flex-shrink-0" />
+              <span>
+                <strong>Jede Order braucht echtes Guthaben.</strong> Kraken sperrt beim Senden den vollen Betrag aller gesendeten Stufen ({input.side === 'buy' ? 'beim Kaufen Euro' : `beim Verkaufen ${base}`}), auch für Stufen weit weg vom Kurs, die vielleicht nie ausgeführt werden. Das Geld bleibt gesperrt, bis die Order ausgeführt oder storniert ist, und steht so lange nicht für andere Orders bereit. Mehr Orders als Guthaben geht nicht.{' '}
+                {partial ? `Mit „Davon jetzt senden“ sperrst du nur ${eur(nowCost)} für die ${nowCount} Stufen nah am Kurs.` : 'Tipp: Mit „Davon jetzt senden“ sperrst du erst einmal nur die Stufen nah am Kurs, oder du speicherst den Plan als Entwurf. Entwürfe sperren kein Geld.'}
+              </span>
+            </p>
           )}
           {wrong.length > 0 && (
             <p className="notice notice-danger flex items-start gap-2">
@@ -634,7 +643,9 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
             <p>Gegenwert jetzt: <strong>{eur(nowCost)}</strong>{feeEur !== null && <> plus ca. {eur(feeEur)} Gebühren</>}</p>
             {wrong.length > 0 && <p className="notice notice-danger">Achtung: {wrong.length} {wrong.length === 1 ? 'Stufe liegt' : 'Stufen liegen'} auf der falschen Seite des Kurses ({fmtPrice(last ?? 0, pair.priceDecimals)} {sym}) und {postOnly ? 'werden sofort wieder storniert' : 'würden sofort ausgeführt'}.</p>}
             {partial && <p className="text-ink-muted">Die restlichen {sendable.length - nowCount} Stufen bleiben im Plan. Du kannst sie später unter „Offene Orders“ mit „Rest senden“ nachschicken.</p>}
-            <p className="text-ink-muted">Die Orders werden echt bei Kraken angelegt. Du kannst sie unter „Offene Orders“ jederzeit stornieren, solange sie noch nicht ausgeführt sind.</p>
+            <p>Kraken sperrt dafür jetzt <strong>{input.side === 'buy' ? eur(nowCost) : `${num(toSend.reduce((a, l) => a + l.volume, 0), pair.volumeDecimals)} ${base}`}</strong> von deinem Guthaben, bis die Orders ausgeführt oder storniert sind.</p>
+            <p className="text-ink-muted">Die Orders werden echt bei Kraken angelegt. Du kannst sie unter „Offene Orders“ jederzeit stornieren, solange sie noch nicht ausgeführt sind. Dann ist das Geld sofort wieder frei.</p>
+            <p className="text-xs text-ink-muted">Hat dein Mac Touch ID, fragt er nach dem Klick noch nach deinem Finger.</p>
           </div>
         </Modal>
       )}
