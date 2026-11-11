@@ -34,6 +34,9 @@ Mac-App, um viele gestaffelte Limit-Orders auf einmal zu planen und an Kraken zu
 
 ## Sicherheit
 
+- Fenster in der Electron-Sandbox, Content-Security-Policy im Build, Navigation auf fremde Seiten und Webviews gesperrt, alle Berechtigungsanfragen (Kamera, Mikrofon …) abgelehnt, Befehle nur vom eigenen App-Fenster angenommen
+- **Datensicherung** unter Einstellungen: Pläne, Entwürfe, Vorlagen, Einstellungen und Protokoll in eine JSON-Datei sichern und wiederherstellen. Der Schlüssel ist nie enthalten; vor dem Wiederherstellen wird der alte Stand automatisch im App-Ordner gesichert.
+
 - Der API-Schlüssel wird mit Electron `safeStorage` verschlüsselt, der Generalschlüssel liegt im macOS-Schlüsselbund (wie beim Lifemanager). Datei: `~/Library/Application Support/fehu-orders/kraken-key.bin`.
 - Der Schlüssel verlässt nie den Hauptprozess, das Fenster spricht nicht selbst mit dem Netz.
 - Obergrenze pro Sendung in EUR (Standard 50 €), geprüft im Hauptprozess.

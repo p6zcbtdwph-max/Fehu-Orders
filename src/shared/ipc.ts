@@ -1,5 +1,6 @@
 // Gemeinsame Typen für Fenster und Hauptprozess
 import type { LadderInput, LadderLevel, Side } from './ladder'
+import type { BackupSummary } from './backup'
 
 export interface PairDto {
   id: string
@@ -122,7 +123,7 @@ export interface DraftDto {
 /** Ein Eintrag im Protokoll */
 export interface LogEntry {
   at: string
-  /** send, validate, rest, cancel-plan, cancel-order, cancel-all, key-save, key-clear, alarm */
+  /** send, validate, rest, cancel-plan, cancel-order, cancel-all, key-save, key-clear, alarm, restore */
   action: string
   pair?: string
   side?: Side
@@ -170,6 +171,12 @@ export interface Api {
   /** Krakens Systemstatus (online, maintenance, cancel_only …) */
   systemStatus(): Promise<string>
   log(): Promise<LogEntry[]>
+  /** Sicherung speichern (Dialog). null = abgebrochen */
+  backupExport(): Promise<(BackupSummary & { path: string }) | null>
+  /** Sicherung auswählen und prüfen, ändert noch nichts. null = abgebrochen */
+  backupPick(): Promise<BackupSummary | null>
+  /** Ausgewählte Sicherung einspielen. Liefert den Pfad der automatischen Sicherung des alten Stands. */
+  backupRestore(): Promise<string>
   plans(): Promise<PlanDto[]>
   settings(): Promise<SettingsDto>
   saveSettings(s: Partial<SettingsDto>): Promise<SettingsDto>

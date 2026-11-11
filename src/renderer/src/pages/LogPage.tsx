@@ -18,6 +18,7 @@ export const ACTION_LABEL: Record<string, string> = {
   'key-save': 'Schlüssel gespeichert',
   'key-clear': 'Schlüssel gelöscht',
   alarm: 'Kursalarm',
+  restore: 'Sicherung eingespielt',
 }
 
 const fmtTime = (iso: string) => new Date(iso).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'medium' })

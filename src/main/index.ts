@@ -1,8 +1,10 @@
-import { app, BrowserWindow, ipcMain, Notification, safeStorage, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Notification, safeStorage, session, shell } from 'electron'
+import { readFileSync, writeFileSync } from 'node:fs'
+import { parseBackup, summarize } from '../shared/backup'
 import { join } from 'node:path'
 import { Kraken, type PairInfo } from './kraken'
 import {
-  addLog, addPlan, clearCredentials, getLog, markAlarmFired, deleteDraft, deleteTemplate, getDrafts, markDraftReleased, saveDraft, getNotified, getPlans, getSettings, getTemplates, loadCredentials, newUserref, saveCredentials, saveSettings, saveTemplate, setNotified, updatePlan, type Settings,
+  addLog, addPlan, clearCredentials, exportAll, importAll, getLog, markAlarmFired, deleteDraft, deleteTemplate, getDrafts, markDraftReleased, saveDraft, getNotified, getPlans, getSettings, getTemplates, loadCredentials, newUserref, saveCredentials, saveSettings, saveTemplate, setNotified, updatePlan, type Settings,
 } from './store'
 import type { DraftDto, LogEntry, PlanStatusDto, SaveKeyResult, SendRequest, SendResult, TemplateDto } from '../shared/ipc'
 import { alarmHit, checkKeyFormat, priceGuard } from '../shared/safety'
@@ -24,11 +26,16 @@ function createWindow(): void {
     minHeight: 680,
     title: 'Fehu Orders',
     titleBarStyle: 'hiddenInset',
-    webPreferences: { preload: join(__dirname, '../preload/index.js'), sandbox: false, contextIsolation: true, nodeIntegration: false },
+    webPreferences: { preload: join(__dirname, '../preload/index.js'), sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true },
   }))
   win.on('closed', () => {
     if (mainWindow === win) mainWindow = null
   })
+  // Das Fenster zeigt nur die App selbst. Jeder Versuch, woandershin zu navigieren, wird blockiert.
+  win.webContents.on('will-navigate', (e, url) => {
+    if (!isOwnUrl(url) && !url.startsWith('blob:')) e.preventDefault()
+  })
+  win.webContents.on('will-attach-webview', (e) => e.preventDefault())
   // Links öffnen im Browser, nicht in der App
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('https://')) shell.openExternal(url)
@@ -38,9 +45,18 @@ function createWindow(): void {
   else win.loadFile(join(__dirname, '../renderer/index.html'))
 }
 
+/** Gehört eine Adresse zur App selbst (gebaute Datei oder Entwicklungs-Server)? */
+function isOwnUrl(url: string): boolean {
+  const dev = process.env['ELECTRON_RENDERER_URL']
+  if (dev) return url.startsWith(new URL(dev).origin)
+  return url.startsWith('file://')
+}
+
 function handle(channel: string, fn: (...args: any[]) => any): void {
   // Fehler als einfache Meldung weitergeben, ohne Stacktrace oder Schlüssel
-  ipcMain.handle(channel, async (_e, ...args) => {
+  ipcMain.handle(channel, async (e, ...args) => {
+    // Nur das eigene App-Fenster darf Befehle schicken
+    if (!e.senderFrame || !isOwnUrl(e.senderFrame.url)) return { ok: false, error: 'Nicht erlaubt.' }
     try {
       return { ok: true, value: await fn(...args) }
     } catch (e) {
@@ -112,6 +128,33 @@ handle('order:cancel', (txid: string) => logged({ action: 'cancel-order', messag
 handle('orders:cancelAll', () => logged({ action: 'cancel-all' }, () => client().cancelAll(), (n) => ({ count: n, message: `Notbremse: ${n} Orders storniert` })))
 handle('system:status', () => client().systemStatus())
 handle('log', () => getLog())
+
+// Datensicherung: alles außer dem Schlüssel in eine Datei
+handle('backup:export', async () => {
+  const name = `fehu-orders-sicherung-${new Date().toISOString().slice(0, 10)}.json`
+  const r = await dialog.showSaveDialog({ title: 'Fehu Orders sichern', defaultPath: join(app.getPath('documents'), name), filters: [{ name: 'Fehu-Orders-Sicherung', extensions: ['json'] }] })
+  if (r.canceled || !r.filePath) return null
+  const data = exportAll()
+  writeFileSync(r.filePath, JSON.stringify(data, null, 2))
+  return { path: r.filePath, ...summarize(data) }
+})
+// Schritt 1: Datei wählen und prüfen (noch nichts ändern)
+let pendingRestore: ReturnType<typeof parseBackup> | null = null
+handle('backup:pick', async () => {
+  const r = await dialog.showOpenDialog({ title: 'Sicherung wiederherstellen', properties: ['openFile'], filters: [{ name: 'Fehu-Orders-Sicherung', extensions: ['json'] }] })
+  if (r.canceled || !r.filePaths[0]) return null
+  pendingRestore = parseBackup(readFileSync(r.filePaths[0], 'utf8'))
+  return summarize(pendingRestore)
+})
+// Schritt 2: nach Bestätigung einspielen
+handle('backup:restore', () => {
+  if (!pendingRestore) throw new Error('Bitte zuerst eine Sicherung auswählen.')
+  const safety = importAll(pendingRestore)
+  pendingRestore = null
+  statusCache = null
+  addLog({ action: 'restore', success: true, message: 'Sicherung wiederhergestellt' })
+  return safety
+})
 
 handle('ohlc', (pairId: string, interval: number) => client().ohlc(pairId, interval))
 handle('fees', (pairId: string) => client().fees(pairId))
@@ -312,6 +355,8 @@ async function pollAlarms(): Promise<void> {
 }
 
 app.whenReady().then(() => {
+  // Das Fenster braucht keine Kamera, kein Mikrofon, keinen Standort usw.
+  session.defaultSession.setPermissionRequestHandler((_wc, _perm, cb) => cb(false))
   createWindow()
   setTimeout(pollFills, 10_000)
   setInterval(pollFills, 60_000)

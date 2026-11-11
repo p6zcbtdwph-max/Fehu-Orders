@@ -134,6 +134,9 @@ export function createDemoApi(): Api {
     },
     systemStatus: () => wait('online'),
     log: () => wait(log.map((e) => ({ ...e }))),
+    backupExport: async () => { throw new Error('Im Demo-Modus gibt es nichts zu sichern. Beende zuerst die Demo.') },
+    backupPick: async () => { throw new Error('Im Demo-Modus kannst du keine Sicherung einspielen. Beende zuerst die Demo.') },
+    backupRestore: async () => { throw new Error('Im Demo-Modus nicht möglich.') },
     async cancelOrder(txid) {
       orders = orders.filter((o) => o.txid !== txid)
       await wait(null)
