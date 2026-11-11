@@ -2,14 +2,19 @@ import { app, BrowserWindow, ipcMain, Notification, safeStorage, shell } from 'e
 import { join } from 'node:path'
 import { Kraken, type PairInfo } from './kraken'
 import {
-  addPlan, clearCredentials, deleteTemplate, getNotified, getPlans, getSettings, getTemplates, loadCredentials, newUserref, saveCredentials, saveSettings, saveTemplate, setNotified, updatePlan, type Settings,
+  addPlan, clearCredentials, deleteDraft, deleteTemplate, getDrafts, markDraftReleased, saveDraft, getNotified, getPlans, getSettings, getTemplates, loadCredentials, newUserref, saveCredentials, saveSettings, saveTemplate, setNotified, updatePlan, type Settings,
 } from './store'
-import type { PlanStatusDto, SendRequest, SendResult, TemplateDto } from '../shared/ipc'
+import type { DraftDto, PlanStatusDto, SaveKeyResult, SendRequest, SendResult, TemplateDto } from '../shared/ipc'
+import { checkKeyFormat } from '../shared/safety'
 import { planStatus, type OrderSnapshot } from '../shared/plan-status'
 
 let pairCache: PairInfo[] | null = null
 let mainWindow: BrowserWindow | null = null
-const client = () => new Kraken(loadCredentials())
+// Eine gemeinsame Verbindung, damit alle privaten Anfragen nacheinander laufen
+// (Kraken lehnt Zeitstempel ab, die nicht in steigender Reihenfolge ankommen)
+let shared: Kraken | null = null
+const client = () => (shared ??= new Kraken(loadCredentials()))
+const resetClient = () => { shared = null }
 
 function createWindow(): void {
   const win = (mainWindow = new BrowserWindow({
@@ -42,15 +47,27 @@ function handle(channel: string, fn: (...args: any[]) => any): void {
 }
 
 handle('key:status', () => ({ hasKey: loadCredentials() !== null, encryption: safeStorage.isEncryptionAvailable() }))
-handle('key:save', async (key: string, secret: string) => {
-  const creds = { key: key.trim(), secret: secret.trim() }
-  // erst prüfen, dann speichern
-  await new Kraken(creds).balances()
-  saveCredentials(creds)
+handle('key:save', async (key: string, secret: string): Promise<SaveKeyResult> => {
+  const creds = { key: String(key).trim(), secret: String(secret).trim() }
+  const format = checkKeyFormat(creds.key, creds.secret)
+  if (format.length) throw new Error(format.join(' '))
+  // erst alle Rechte prüfen, dann speichern. Ein Schlüssel mit Auszahlungsrecht wird nicht gespeichert.
+  const checks = await new Kraken(creds).checkPermissions()
+  const saved = checks.every((c) => c.ok)
+  if (saved) {
+    saveCredentials(creds)
+    resetClient()
+  }
+  return { saved, checks }
 })
-handle('key:clear', () => clearCredentials())
+handle('key:verify', () => client().checkPermissions())
+handle('key:clear', () => {
+  clearCredentials()
+  resetClient()
+})
 handle('pairs', async () => (pairCache ??= await client().pairs()))
 handle('price', (pairId: string) => client().lastPrice(pairId))
+handle('prices', (pairIds: string[]) => client().lastPrices(pairIds.filter((x) => typeof x === 'string').slice(0, 50)))
 handle('balances', () => client().balances())
 handle('orders:open', () => client().openOrders())
 handle('plans', () => getPlans())
@@ -80,6 +97,9 @@ handle('templates', () => getTemplates())
 handle('template:save', (t: TemplateDto) => saveTemplate(t))
 handle('template:delete', (id: string) => deleteTemplate(id))
 handle('plans:status', () => computeStatuses())
+handle('drafts', () => getDrafts())
+handle('draft:save', (d: DraftDto) => saveDraft(d))
+handle('draft:delete', (id: string) => deleteDraft(id))
 
 /** Pläne, deren Status abgefragt wird: die letzten 90 Tage, höchstens 20 */
 function activePlans() {
@@ -94,10 +114,13 @@ async function computeStatuses(): Promise<PlanStatusDto[]> {
   const k = client()
   const plans = activePlans()
   const open = plans.length ? await k.openOrders() : []
+  // eine Abfrage für alle Pläne statt einer pro Plan (Krakens Anfrage-Grenze)
+  const since = plans.length ? Math.min(...plans.map((p) => Date.parse(p.createdAt))) / 1000 - 60 : 0
+  const allClosed = plans.length ? await k.closedOrdersSince(since) : []
   const value: PlanStatusDto[] = []
   const executed = new Map<number, string[]>()
   for (const p of plans) {
-    const closed = await k.closedOrders(p.userref)
+    const closed = allClosed.filter((o) => o.userref === p.userref)
     const snaps: OrderSnapshot[] = [
       ...open.filter((o) => o.userref === p.userref).map((o) => ({ txid: o.txid, status: 'open', volume: o.volume, filled: o.filled, cost: o.cost, fee: o.fee, price: o.price })),
       ...closed.map((o) => ({ txid: o.txid, status: o.status, volume: o.volume, filled: o.filled, cost: o.cost, fee: o.fee, price: o.price })),
@@ -156,11 +179,15 @@ handle('send', async (req: SendRequest): Promise<SendResult> => {
   const orders = await client().placeLadder(req.pairId, req.side, levels, { validate: req.validate, userref, postOnly: req.postOnly })
   if (!req.validate) {
     const ok = orders.filter((o) => o.txid)
-    if (ok.length > 0)
+    // Unklare Orders (Verbindung abgebrochen) gelten als gesendet, damit „Rest senden“ sie nicht doppelt schickt
+    const maybe = orders.filter((o) => o.uncertain)
+    if (ok.length + maybe.length > 0) {
       addPlan({
         userref, createdAt: new Date().toISOString(), pairId: req.pairId, pairName: req.pairName, side: req.side, input: req.input,
-        sent: ok.length, failed: orders.length - ok.length, totalCost: total, levels: valid, sentIndices: ok.map((o) => o.index), postOnly: req.postOnly,
+        sent: ok.length, failed: orders.length - ok.length, totalCost: total, levels: valid, sentIndices: [...ok, ...maybe].map((o) => o.index), postOnly: req.postOnly,
       })
+      if (req.draftId) markDraftReleased(req.draftId, userref)
+    }
   }
   return { userref, validate: req.validate, orders }
 })
@@ -176,9 +203,10 @@ handle('plan:rest', async (userref: number, validate: boolean): Promise<SendResu
   const orders = await client().placeLadder(plan.pairId, plan.side, rest, { validate, userref, postOnly: plan.postOnly ?? true })
   if (!validate) {
     const ok = orders.filter((o) => o.txid)
+    const maybe = orders.filter((o) => o.uncertain)
     updatePlan(userref, (p) => ({
       ...p, sent: p.sent + ok.length, failed: p.failed + orders.length - ok.length, totalCost: p.totalCost + (ok.length ? total : 0),
-      sentIndices: [...(p.sentIndices ?? []), ...ok.map((o) => o.index)],
+      sentIndices: [...(p.sentIndices ?? []), ...ok.map((o) => o.index), ...maybe.map((o) => o.index)],
     }))
   }
   return { userref, validate, orders }

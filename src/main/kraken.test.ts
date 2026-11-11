@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { Kraken, sign } from './kraken'
+import { Kraken, plain, sign } from './kraken'
 import type { LadderLevel } from '../shared/ladder'
 
 describe('sign', () => {
@@ -20,7 +20,8 @@ function fakeHttp(reply: (url: string, body: any) => any) {
   const http = async (url: string, init?: any) => {
     const body = init?.body?.startsWith('{') ? JSON.parse(init.body) : init?.body
     calls.push({ url, body, headers: init?.headers })
-    return { json: async () => reply(url, body) }
+    const r = reply(url, body)
+    return { status: 200, text: async () => (typeof r === 'string' ? r : JSON.stringify(r)) }
   }
   return { http, calls }
 }
@@ -81,5 +82,139 @@ describe('neue Abfragen', () => {
     const r = await new Kraken({ key: 'k', secret: 'cw==' }, http).closedOrders(7)
     expect(calls[0].body).toContain('userref=7')
     expect(r[0]).toMatchObject({ txid: 'T1', status: 'closed', filled: 1, cost: 90, price: 90, userref: 7 })
+  })
+})
+
+describe('Verbindung', () => {
+  it('schickt gleichzeitige private Anfragen nacheinander mit steigendem Zeitstempel', async () => {
+    let active = 0
+    let maxActive = 0
+    const nonces: number[] = []
+    const http = async (_url: string, init?: any) => {
+      active++
+      maxActive = Math.max(maxActive, active)
+      nonces.push(Number(new URLSearchParams(init.body).get('nonce')))
+      await new Promise((r) => setTimeout(r, 5))
+      active--
+      return { status: 200, text: async () => JSON.stringify({ error: [], result: {} }) }
+    }
+    const k = new Kraken({ key: 'k', secret: 'cw==' }, http, async () => {})
+    await Promise.all([k.balances(), k.openOrders(), k.available(), k.balances()])
+    expect(maxActive).toBe(1)
+    expect(nonces).toEqual([...nonces].sort((a, b) => a - b))
+    expect(new Set(nonces).size).toBe(4)
+  })
+
+  it('meldet Wartungsseiten (HTML) verständlich', async () => {
+    const http = async () => ({ status: 503, text: async () => '<html>maintenance</html>' })
+    await expect(new Kraken(null, http).lastPrice('XXBTZEUR')).rejects.toThrow(/Wartung \(Fehler 503\)/)
+  })
+
+  it('meldet fehlendes Netz verständlich', async () => {
+    const http = async () => { throw new TypeError('fetch failed') }
+    await expect(new Kraken(null, http).lastPrice('XXBTZEUR')).rejects.toThrow(/Keine Verbindung zu Kraken/)
+  })
+
+  it('wiederholt reine Abfragen, wenn Kraken bremst', async () => {
+    let n = 0
+    const pauses: number[] = []
+    const { http, calls } = fakeHttp(() => (++n < 3 ? { error: ['EAPI:Rate limit exceeded'] } : { error: [], result: { ZEUR: '5' } }))
+    const k = new Kraken({ key: 'k', secret: 'cw==' }, http, async (ms) => { pauses.push(ms) })
+    expect(await k.balances()).toEqual({ ZEUR: 5 })
+    expect(calls).toHaveLength(3)
+    expect(pauses).toEqual([3000, 6000])
+  })
+
+  it('wiederholt Orders nie automatisch', async () => {
+    const { http, calls } = fakeHttp(() => ({ error: ['EAPI:Rate limit exceeded'] }))
+    const k = new Kraken({ key: 'k', secret: 'cw==' }, http, async () => {})
+    const res = await k.placeLadder('XXBTZEUR', 'buy', levels(3), { validate: false, userref: 1 })
+    expect(calls).toHaveLength(1)
+    expect(res.every((r) => r.error && !r.txid)).toBe(true)
+  })
+})
+
+describe('Verbindungsabbruch beim Senden', () => {
+  it('sucht danach die angelegten Orders über userref, Preis und Menge', async () => {
+    const http = async (url: string, init?: any) => {
+      if (url.endsWith('AddOrderBatch')) throw new TypeError('socket hang up')
+      const r = url.endsWith('OpenOrders')
+        ? { open: { TX1: { descr: { pair: 'XBTEUR', type: 'buy', price: '100' }, vol: '0.1', vol_exec: '0', userref: 9 } } }
+        : { closed: { TX2: { status: 'closed', descr: { type: 'buy', price: '99' }, vol: '0.1', vol_exec: '0.1', cost: '9.9', fee: '0', price: '99', userref: 9 } } }
+      expect(init.body).toContain('userref=9')
+      return { status: 200, text: async () => JSON.stringify({ error: [], result: r }) }
+    }
+    const k = new Kraken({ key: 'k', secret: 'cw==' }, http, async () => {})
+    const res = await k.placeLadder('XXBTZEUR', 'buy', levels(3), { validate: false, userref: 9 })
+    expect(res.map((r) => r.txid)).toEqual(['TX1', 'TX2', undefined])
+    expect(res[2].error).toMatch(/nicht angelegt/)
+    expect(res.some((r) => r.uncertain)).toBe(false)
+  })
+
+  it('markiert Orders als unklar, wenn auch das Nachsehen scheitert', async () => {
+    const http = async () => { throw new TypeError('fetch failed') }
+    const k = new Kraken({ key: 'k', secret: 'cw==' }, http, async () => {})
+    const res = await k.placeLadder('XXBTZEUR', 'buy', levels(17), { validate: false, userref: 9 })
+    expect(res.slice(0, 15).every((r) => r.uncertain)).toBe(true)
+    expect(res[16].error).toMatch(/Nicht gesendet/)
+    expect(res[16].uncertain).toBeUndefined()
+  })
+
+  it('setzt beim echten Senden eine Frist (deadline), beim Probelauf nicht', async () => {
+    const { http, calls } = fakeHttp((_u, b) => ({ error: [], result: { orders: b.orders.map(() => ({ txid: 'T' })) } }))
+    const k = new Kraken({ key: 'k', secret: 'cw==' }, http, async () => {})
+    await k.placeLadder('XXBTZEUR', 'buy', levels(2), { validate: false, userref: 1 })
+    await k.placeLadder('XXBTZEUR', 'buy', levels(2), { validate: true, userref: 1 })
+    expect(Date.parse(calls[0].body.deadline)).toBeGreaterThan(Date.now())
+    expect(calls[1].body.deadline).toBeUndefined()
+  })
+})
+
+describe('plain', () => {
+  it('schreibt sehr kleine Zahlen ohne Exponent', () => {
+    expect(plain(5e-7)).toBe('0.0000005')
+    expect(plain(0.30000000000000004)).toBe('0.3')
+    expect(plain(100)).toBe('100')
+  })
+})
+
+describe('closedOrdersSince', () => {
+  it('holt alle Seiten', async () => {
+    const page = (from: number, n: number) => Object.fromEntries(Array.from({ length: n }, (_, i) => [`T${from + i}`, { status: 'closed', descr: { type: 'buy', price: '1' }, vol: '1', vol_exec: '1', cost: '1', fee: '0', price: '1', userref: 1 }]))
+    const { http, calls } = fakeHttp((_u, b) => {
+      const ofs = Number(new URLSearchParams(b).get('ofs'))
+      return { error: [], result: { closed: page(ofs, ofs === 0 ? 50 : 20), count: 70 } }
+    })
+    const r = await new Kraken({ key: 'k', secret: 'cw==' }, http).closedOrdersSince(1700000000)
+    expect(r).toHaveLength(70)
+    expect(calls).toHaveLength(2)
+    expect(calls[0].body).toContain('start=1700000000')
+  })
+})
+
+describe('checkPermissions', () => {
+  const reply = (denied: string[], withdrawAllowed = false) => (url: string) => {
+    const ep = url.split('/').pop()!
+    if (ep === 'WithdrawMethods') return withdrawAllowed ? { error: [], result: [] } : { error: ['EGeneral:Permission denied'] }
+    if (denied.includes(ep)) return { error: ['EGeneral:Permission denied'] }
+    if (ep === 'CancelOrder') return { error: ['EOrder:Unknown order'] }
+    return { error: [], result: {} }
+  }
+  it('alles richtig eingestellt', async () => {
+    const { http } = fakeHttp(reply([]))
+    const r = await new Kraken({ key: 'k', secret: 'cw==' }, http).checkPermissions()
+    expect(r.every((c) => c.ok)).toBe(true)
+  })
+  it('erkennt fehlendes Order-Recht und erlaubte Auszahlungen', async () => {
+    const { http } = fakeHttp(reply(['AddOrder'], true))
+    const r = await new Kraken({ key: 'k', secret: 'cw==' }, http).checkPermissions()
+    expect(r.find((c) => c.id === 'create')?.ok).toBe(false)
+    expect(r.find((c) => c.id === 'withdraw')?.ok).toBe(false)
+    expect(r.find((c) => c.id === 'cancel')?.ok).toBe(true)
+  })
+  it('ein falscher Schlüssel bricht sofort ab', async () => {
+    const { http, calls } = fakeHttp(() => ({ error: ['EAPI:Invalid key'] }))
+    await expect(new Kraken({ key: 'k', secret: 'cw==' }, http).checkPermissions()).rejects.toThrow(/ungültig/)
+    expect(calls).toHaveLength(1)
   })
 })

@@ -6,6 +6,7 @@ import { existsSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Credentials } from './kraken'
 import type { LadderInput, LadderLevel, Side } from '../shared/ladder'
+import type { DraftDto } from '../shared/ipc'
 
 const file = (name: string) => join(app.getPath('userData'), name)
 
@@ -120,4 +121,29 @@ export function getNotified(): string[] {
 
 export function setNotified(txids: string[]): void {
   writeFileSync(file('notified.json'), JSON.stringify({ txids: txids.slice(-5000) }))
+}
+
+/** Entwürfe: Order-Gruppen, die erst nach Freigabe an Kraken gehen */
+export function getDrafts(): DraftDto[] {
+  return readJson<{ drafts: DraftDto[] }>('drafts.json', { drafts: [] }).drafts
+}
+
+function writeDrafts(drafts: DraftDto[]): void {
+  writeFileSync(file('drafts.json'), JSON.stringify({ drafts: drafts.slice(0, 300) }, null, 2))
+}
+
+export function saveDraft(d: DraftDto): void {
+  const all = getDrafts()
+  const i = all.findIndex((x) => x.id === d.id)
+  if (i >= 0) all[i] = d
+  else all.unshift(d)
+  writeDrafts(all)
+}
+
+export function deleteDraft(id: string): void {
+  writeDrafts(getDrafts().filter((x) => x.id !== id))
+}
+
+export function markDraftReleased(id: string, userref: number): void {
+  writeDrafts(getDrafts().map((d) => (d.id === id ? { ...d, status: 'released', releasedAt: new Date().toISOString(), userref } : d)))
 }

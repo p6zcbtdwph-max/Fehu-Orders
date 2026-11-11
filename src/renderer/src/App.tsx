@@ -3,17 +3,21 @@ import Guide, { GUIDE_STEPS } from './components/Guide'
 import { useEffect, useState } from 'react'
 import Segmented from './components/ui/Segmented'
 import { MoneyProvider, type Currency } from './money'
-import { GraduationCap, KeyRound, ListOrdered, PlayCircle, Settings, SlidersHorizontal } from 'lucide-react'
+import { ClipboardList, GraduationCap, KeyRound, ListOrdered, PlayCircle, Settings, SlidersHorizontal } from 'lucide-react'
 import logoUrl from './assets/logo.png'
 import PlannerPage, { type Prefill } from './pages/PlannerPage'
 import OrdersPage from './pages/OrdersPage'
 import SettingsPage from './pages/SettingsPage'
+import KeyPage from './pages/KeyPage'
+import DraftsPage from './pages/DraftsPage'
 
-type PageId = 'planner' | 'orders' | 'settings'
+type PageId = 'planner' | 'drafts' | 'orders' | 'key' | 'settings'
 
 const NAV: { id: PageId; label: string; icon: typeof ListOrdered }[] = [
   { id: 'planner', label: 'Planer', icon: SlidersHorizontal },
+  { id: 'drafts', label: 'Entwürfe', icon: ClipboardList },
   { id: 'orders', label: 'Offene Orders', icon: ListOrdered },
+  { id: 'key', label: 'Schlüssel', icon: KeyRound },
   { id: 'settings', label: 'Einstellungen', icon: Settings },
 ]
 
@@ -131,9 +135,12 @@ export default function App(): JSX.Element {
           </div>
         )}
         <div key={demo ? 'demo' : 'live'} className="contents">
-        {page === 'planner' && <PlannerPage hasKey={!!hasKey} onNeedKey={() => setPage('settings')} prefill={prefill} onPrefillUsed={() => setPrefill(null)} />}
+        {page === 'planner' && <PlannerPage hasKey={!!hasKey} onNeedKey={() => setPage('key')} prefill={prefill} onPrefillUsed={() => setPrefill(null)} onOpenDrafts={() => setPage('drafts')} />}
+        {page === 'drafts' && <DraftsPage hasKey={!!hasKey} onNeedKey={() => setPage('key')}
+          onEdit={(d) => { setPrefill({ pairId: d.pairId, input: d.input, postOnly: d.postOnly, sendCount: d.sendCount, draft: d }); setPage('planner') }} />}
         {page === 'orders' && <OrdersPage hasKey={!!hasKey} onPlanSell={(p) => { setPrefill(p); setPage('planner') }} />}
-        {page === 'settings' && <SettingsPage hasKey={!!hasKey} onKeyChanged={refreshKey} />}
+        {page === 'key' && <KeyPage hasKey={!!hasKey} onKeyChanged={refreshKey} />}
+        {page === 'settings' && <SettingsPage hasKey={!!hasKey} onOpenKey={() => setPage('key')} />}
         </div>
       </main>
       {guideStep !== null && (

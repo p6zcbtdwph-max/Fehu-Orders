@@ -19,6 +19,9 @@ Mac-App, um viele gestaffelte Limit-Orders auf einmal zu planen und an Kraken zu
 - Vorschau als Diagramm und Tabelle, Stufen unter Krakens Mindestgröße werden markiert
 - **Probelauf:** Kraken prüft alle Orders (`validate`), legt aber nichts an. Kraken hat für Spot keine Spielgeld-Umgebung, deshalb ist das der sichere Test.
 - Echt senden in Paketen zu 15 Orders, Post-only als Standard
+- **Entwürfe:** Order-Gruppen mit „Als Entwurf“ zwischenspeichern, nach Szenario (z. B. „Crash“) gruppieren und erst mit „Freigeben“ an Kraken senden. Vor der Freigabe zeigt die App den aktuellen Kurs, Kursbewegung seit dem Speichern, Guthaben und Stufen auf der falschen Kursseite.
+- **Schlüssel:** eigener Reiter mit Schritt-für-Schritt-Anleitung, Formatprüfung (vertauscht, unvollständig) und Rechte-Prüfung. Schlüssel mit Auszahlungsrecht werden nicht gespeichert.
+- Warnung, wenn Kauf-Stufen über bzw. Verkauf-Stufen unter dem aktuellen Kurs liegen
 - Offene Orders, Guthaben, gesendete Pläne und „Plan stornieren“ (alle Orders eines Plans tragen dieselbe `userref`)
 
 ## Sicherheit
@@ -27,6 +30,15 @@ Mac-App, um viele gestaffelte Limit-Orders auf einmal zu planen und an Kraken zu
 - Der Schlüssel verlässt nie den Hauptprozess, das Fenster spricht nicht selbst mit dem Netz.
 - Obergrenze pro Plan in EUR (Standard 500 €), geprüft im Hauptprozess.
 - Kraken-Schlüssel nur mit: Guthaben abfragen, Offene/geschlossene Orders abfragen, Orders erstellen und ändern, Orders stornieren. **Keine Auszahlungen.**
+
+## Kraken-Anbindung
+
+- Eine gemeinsame Verbindung, private Anfragen laufen nacheinander (Nonce immer steigend)
+- Zeitlimit 15 s für Abfragen, 30 s für Orders; Orders tragen Krakens `deadline`
+- Bricht die Verbindung beim Senden ab, sucht die App die Orders über `userref`, Preis und Menge. Unklare Orders gelten als gesendet, damit nichts doppelt rausgeht.
+- Reine Abfragen werden bei „Rate limit“ oder Überlastung bis zu zweimal mit Pause wiederholt, Orders nie
+- Status aller Pläne mit einer `ClosedOrders`-Abfrage (seitenweise) statt einer pro Plan
+- Netz- und Wartungsfehler als verständliche deutsche Meldungen; Preise und Mengen ohne Exponent-Schreibweise
 
 ## Entwicklung
 

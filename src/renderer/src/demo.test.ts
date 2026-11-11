@@ -27,3 +27,17 @@ describe('Demo-Modus', () => {
     expect(c[719][1]).toBeCloseTo(80000, 0)
   })
 })
+
+describe('Entwürfe im Demo-Modus', () => {
+  it('Freigabe sendet den Entwurf und markiert ihn als freigegeben', async () => {
+    const api = createDemoApi()
+    const d = (await api.drafts()).find((x) => x.status === 'draft')!
+    const pair = (await api.pairs()).find((p) => p.id === d.pairId)!
+    const { levels } = buildLadder(d.input, pair)
+    const r = await api.send({ pairId: pair.id, pairName: pair.name, side: d.side, input: d.input, levels, validate: false, postOnly: d.postOnly, draftId: d.id })
+    const after = (await api.drafts()).find((x) => x.id === d.id)!
+    expect(after.status).toBe('released')
+    expect(after.userref).toBe(r.userref)
+    expect(await api.prices([d.pairId])).toEqual({ [d.pairId]: 80000 })
+  })
+})

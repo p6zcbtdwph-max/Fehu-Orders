@@ -1,6 +1,6 @@
 // Demo-Modus: dieselbe Schnittstelle wie die echte App, aber nur mit Beispieldaten im Speicher.
 // Hier gibt es keinen Netzwerkzugriff, es kann also keine echte Order entstehen.
-import type { Api, OpenOrderDto, PairDto, PlanDto, PlanStatusDto, SendResult, SettingsDto, TemplateDto } from '@shared/ipc'
+import type { Api, DraftDto, KeyCheck, OpenOrderDto, PairDto, PlanDto, PlanStatusDto, SendResult, SettingsDto, TemplateDto } from '@shared/ipc'
 
 const P = (id: string, name: string, base: string, priceDecimals: number, orderMin: number, price: number) =>
   ({ pair: { id, name, base, quote: 'ZEUR', priceDecimals, volumeDecimals: 8, orderMin, costMin: 0.5 } as PairDto, price })
@@ -30,6 +30,26 @@ export function createDemoApi(): Api {
       input: { side: 'buy', priceStart: 78000, priceEnd: 64000, steps: 10, total: 300, spacing: 'linear', curve: 'linear', ratio: 3 } },
   ]
   let orders: OpenOrderDto[] = []
+  const now = new Date().toISOString()
+  let drafts: DraftDto[] = [
+    { id: 'demo-d1', name: 'BTC Crash-Kauf', scenario: 'Crash', note: 'Nur freigeben, wenn BTC deutlich fällt.', createdAt: now, updatedAt: now,
+      pairId: 'XXBTZEUR', pairName: 'BTC/EUR', side: 'buy', postOnly: true, priceAtSave: 80000, status: 'draft',
+      input: { side: 'buy', priceStart: 70000, priceEnd: 55000, steps: 8, total: 400, spacing: 'geometric', curve: 'exp', ratio: 3 } },
+    { id: 'demo-d2', name: 'ETH Crash-Kauf', scenario: 'Crash', createdAt: now, updatedAt: now,
+      pairId: 'XETHZEUR', pairName: 'ETH/EUR', side: 'buy', postOnly: true, priceAtSave: 3000, status: 'draft',
+      input: { side: 'buy', priceStart: 2600, priceEnd: 2000, steps: 6, total: 300, spacing: 'linear', curve: 'linear', ratio: 2 } },
+    { id: 'demo-d3', name: 'SOL Gewinne mitnehmen', scenario: 'Bullrun', createdAt: now, updatedAt: now,
+      pairId: 'SOLEUR', pairName: 'SOL/EUR', side: 'sell', postOnly: true, priceAtSave: 150, status: 'draft',
+      input: { side: 'sell', priceStart: 180, priceEnd: 260, steps: 5, total: 3, spacing: 'linear', curve: 'flat', ratio: 1 } },
+  ]
+  const demoChecks: KeyCheck[] = [
+    { id: 'funds', label: 'Guthaben abfragen', krakenLabel: 'Query Funds', required: true, ok: true },
+    { id: 'open', label: 'Offene Orders abfragen', krakenLabel: 'Query Open Orders & Trades', required: true, ok: true },
+    { id: 'closed', label: 'Geschlossene Orders abfragen', krakenLabel: 'Query Closed Orders & Trades', required: true, ok: true },
+    { id: 'create', label: 'Orders erstellen', krakenLabel: 'Create & Modify Orders', required: true, ok: true },
+    { id: 'cancel', label: 'Orders stornieren', krakenLabel: 'Cancel & Close Orders', required: true, ok: true },
+    { id: 'withdraw', label: 'Keine Auszahlungen', krakenLabel: 'Withdraw Funds', required: true, ok: true },
+  ]
   const plans: PlanDto[] = []
   const fills = new Map<number, PlanStatusDto>()
   let nextRef = 900001
@@ -62,9 +82,11 @@ export function createDemoApi(): Api {
   return {
     keyStatus: () => wait({ hasKey: true, encryption: true }, 0),
     saveKey: async () => { throw new Error('Im Demo-Modus brauchst du keinen Schlüssel. Beende zuerst die Demo.') },
+    verifyKey: () => wait(demoChecks.map((c) => ({ ...c })), 600),
     clearKey: async () => {},
     pairs: () => wait(MARKET.map((m) => m.pair)),
     price: (pairId) => wait(round(priceOf(pairId) * (1 + (Math.random() - 0.5) * 0.004), pairOf(pairId)?.priceDecimals ?? 2)),
+    prices: (ids) => wait(Object.fromEntries(ids.map((id) => [id, priceOf(id)]))),
     balances: () => wait({ ...balances }),
     openOrders: () => wait(orders.map((o) => ({ ...o }))),
     async send(req) {
@@ -75,6 +97,7 @@ export function createDemoApi(): Api {
         sent: chosen.length, failed: 0, totalCost: chosen.reduce((a, l) => a + l.cost, 0), levels: req.levels, sentIndices: chosen.map((l) => l.index), postOnly: req.postOnly }
       plans.unshift(plan)
       const placed = place(plan, plan.sentIndices!.map((i) => req.levels.findIndex((l) => l.index === i)))
+      if (req.draftId) drafts = drafts.map((d) => (d.id === req.draftId ? { ...d, status: 'released', releasedAt: new Date().toISOString(), userref: plan.userref } : d))
       return wait({ userref: plan.userref, validate: false, orders: placed }, 500)
     },
     async sendRest(userref, validate) {
@@ -129,6 +152,9 @@ export function createDemoApi(): Api {
         return f ? { ...f, open } : { userref: p.userref, open, filled: 0, partial: 0, canceled: p.sent - open, filledVolume: 0, filledCost: 0, fees: 0, averagePrice: 0 }
       }))
     },
+    drafts: () => wait(drafts.map((d) => ({ ...d }))),
+    async saveDraft(d) { drafts = drafts.some((x) => x.id === d.id) ? drafts.map((x) => (x.id === d.id ? d : x)) : [d, ...drafts] },
+    async deleteDraft(id) { drafts = drafts.filter((d) => d.id !== id) },
     onFills: () => () => {},
   }
 }

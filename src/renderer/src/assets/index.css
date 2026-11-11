@@ -683,3 +683,10 @@ p, li, dd, blockquote { hyphens: auto; }
   border-radius: 0.875rem;
   transition: outline-color 200ms;
 }
+
+@layer components {
+  /* Nummer eines Schritts in Anleitungen (Reiter „Schlüssel“) */
+  .step-num {
+    @apply flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-accent-soft text-xs font-semibold tabular-nums text-accent-fg;
+  }
+}

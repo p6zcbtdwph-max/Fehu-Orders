@@ -22,6 +22,8 @@ export interface SendRequest {
   postOnly: boolean
   /** Nur die ersten N gültigen Stufen (nah am Kurs) senden, der Rest kann später folgen */
   sendCount?: number
+  /** Wird ein Entwurf freigegeben, merkt sich die App dort die Plan-Nummer */
+  draftId?: string
 }
 
 export interface SettingsDto {
@@ -33,7 +35,7 @@ export interface SettingsDto {
 export interface SendResult {
   userref: number
   validate: boolean
-  orders: { index: number; price: number; volume: number; txid?: string; error?: string }[]
+  orders: { index: number; price: number; volume: number; txid?: string; error?: string; uncertain?: boolean }[]
 }
 
 export interface OpenOrderDto {
@@ -71,6 +73,47 @@ export interface TemplateDto {
   postOnly: boolean
 }
 
+/** Ergebnis der Rechte-Prüfung eines API-Schlüssels */
+export interface KeyCheck {
+  id: string
+  /** Deutsche Beschreibung */
+  label: string
+  /** So heißt das Häkchen bei Kraken */
+  krakenLabel: string
+  required: boolean
+  ok: boolean
+  detail?: string
+}
+
+export interface SaveKeyResult {
+  saved: boolean
+  checks: KeyCheck[]
+}
+
+/** Zwischengespeicherte Order-Gruppe, die erst nach Freigabe an Kraken geht */
+export interface DraftDto {
+  id: string
+  name: string
+  /** Szenario zum Gruppieren, z. B. „Crash unter 60.000 €“ */
+  scenario: string
+  note?: string
+  createdAt: string
+  updatedAt: string
+  pairId: string
+  pairName: string
+  side: Side
+  input: LadderInput
+  postOnly: boolean
+  /** Nur die ersten N Stufen senden, der Rest kommt später über „Rest senden“ */
+  sendCount?: number
+  /** Kurs beim Speichern */
+  priceAtSave?: number
+  status: 'draft' | 'released'
+  releasedAt?: string
+  /** Plan-Nummer nach der Freigabe */
+  userref?: number
+}
+
 export interface PlanStatusDto {
   userref: number
   open: number
@@ -85,10 +128,14 @@ export interface PlanStatusDto {
 
 export interface Api {
   keyStatus(): Promise<{ hasKey: boolean; encryption: boolean }>
-  saveKey(key: string, secret: string): Promise<void>
+  saveKey(key: string, secret: string): Promise<SaveKeyResult>
+  /** Rechte des gespeicherten Schlüssels erneut prüfen */
+  verifyKey(): Promise<KeyCheck[]>
   clearKey(): Promise<void>
   pairs(): Promise<PairDto[]>
   price(pairId: string): Promise<number>
+  /** Letzte Kurse mehrerer Paare auf einmal */
+  prices(pairIds: string[]): Promise<Record<string, number>>
   balances(): Promise<Record<string, number>>
   openOrders(): Promise<OpenOrderDto[]>
   send(req: SendRequest): Promise<SendResult>
@@ -106,5 +153,8 @@ export interface Api {
   saveTemplate(t: TemplateDto): Promise<void>
   deleteTemplate(id: string): Promise<void>
   planStatus(): Promise<PlanStatusDto[]>
+  drafts(): Promise<DraftDto[]>
+  saveDraft(d: DraftDto): Promise<void>
+  deleteDraft(id: string): Promise<void>
   onFills(cb: () => void): () => void
 }

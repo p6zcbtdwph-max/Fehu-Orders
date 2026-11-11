@@ -1,7 +1,7 @@
 import { useEffect, type ReactNode } from 'react'
 import { ArrowLeft, ArrowRight, GraduationCap, PlayCircle, X } from 'lucide-react'
 
-export type GuidePage = 'planner' | 'orders' | 'settings'
+export type GuidePage = 'planner' | 'drafts' | 'orders' | 'key' | 'settings'
 
 interface Step {
   title: string
@@ -19,7 +19,7 @@ export const GUIDE_STEPS: Step[] = [
       <>
         <p>Statt einer großen Order legst du hier <strong>viele kleine Limit-Orders</strong> auf einmal an, zum Beispiel alle paar Prozent tiefer ein Stück.</p>
         <p>Eine <strong>Limit-Order</strong> wird nur zu deinem Preis oder besser ausgeführt. Fällt der Kurs, wird Stufe für Stufe gekauft. Steigt er, wird verkauft.</p>
-        <p>In sechs kurzen Schritten zeigen wir dir, wo was ist.</p>
+        <p>In sieben kurzen Schritten zeigen wir dir, wo was ist.</p>
       </>
     ),
   },
@@ -62,7 +62,16 @@ export const GUIDE_STEPS: Step[] = [
     ),
   },
   {
-    page: 'orders', target: 'plans', title: '5. Pläne verfolgen',
+    page: 'drafts', target: 'drafts', title: '5. Entwürfe: erst planen, später freigeben',
+    body: (
+      <>
+        <p>Mit <strong>Als Entwurf</strong> im Planer speicherst du eine Order-Gruppe, ohne dass etwas an Kraken geht.</p>
+        <p>Unter <strong>Entwürfe</strong> stehen sie nach <strong>Szenario</strong> sortiert, zum Beispiel „Crash“ oder „Bullrun“. Erst mit <strong>Freigeben</strong> werden die Orders echt angelegt. Die App zeigt dir vorher, ob die Stufen zum aktuellen Kurs noch passen.</p>
+      </>
+    ),
+  },
+  {
+    page: 'orders', target: 'plans', title: '6. Pläne verfolgen',
     body: (
       <>
         <p>Unter <strong>Offene Orders</strong> stehen deine Pläne: wie viele Stufen offen und wie viele schon ausgeführt sind.</p>
@@ -72,11 +81,11 @@ export const GUIDE_STEPS: Step[] = [
     ),
   },
   {
-    page: 'settings', target: 'key', title: '6. Mit Kraken verbinden',
+    page: 'key', target: 'key', title: '7. Mit Kraken verbinden',
     body: (
       <>
         <p>Für echte Orders brauchst du einen <strong>API-Schlüssel</strong> von Kraken. Er erlaubt der App, in deinem Namen Orders anzulegen.</p>
-        <p>Erlaube nur Abfragen und Orders, <strong>niemals Auszahlungen</strong>. Der Schlüssel bleibt verschlüsselt im Schlüsselbund dieses Macs und wird nirgendwo anders hin geschickt.</p>
+        <p>Im Reiter <strong>Schlüssel</strong> zeigt dir eine Anleitung, welche Häkchen du bei Kraken setzt. Erlaube nur Abfragen und Orders, <strong>niemals Auszahlungen</strong>. Die App prüft das beim Speichern. Der Schlüssel bleibt verschlüsselt im Schlüsselbund dieses Macs und wird nirgendwo anders hin geschickt.</p>
       </>
     ),
   },
