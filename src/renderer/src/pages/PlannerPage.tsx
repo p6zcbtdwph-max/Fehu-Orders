@@ -1,9 +1,10 @@
 import { api } from '../api'
 import { useEffect, useMemo, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { BookmarkPlus, FlaskConical, RefreshCw, Send, Star, Trash2 } from 'lucide-react'
+import { AlertTriangle, BookmarkPlus, ClipboardList, FlaskConical, RefreshCw, Send, Star, Trash2 } from 'lucide-react'
 import { buildLadder, MAX_STEPS, parseWeights, type LadderInput, type PriceSpacing, type Side, type SizeCurve } from '@shared/ladder'
-import type { PairDto, SendResult, TemplateDto } from '@shared/ipc'
+import type { DraftDto, PairDto, SendResult, TemplateDto } from '@shared/ipc'
+import { wrongSide } from '@shared/safety'
 import KpiStrip from '../components/ui/KpiStrip'
 import PairPicker from '../components/PairPicker'
 import SectionCard from '../components/ui/SectionCard'
@@ -31,7 +32,14 @@ const RANGES: { id: number; label: string; interval: number; days: number }[] = 
 export interface Prefill {
   pairId: string
   input: LadderInput
+  postOnly?: boolean
+  sendCount?: number
+  /** Entwurf, der gerade bearbeitet wird */
+  draft?: DraftDto
 }
+
+/** Kurzer Vorschlag für den Namen eines Entwurfs */
+export const draftTitle = (pairName: string, input: LadderInput) => `${pairName.split('/')[0]} ${input.side === 'buy' ? 'Kauf' : 'Verkauf'} ${input.steps} Stufen`
 
 const SPACINGS: { id: PriceSpacing; label: string; title: string }[] = [
   { id: 'linear', label: 'Gleiche €-Abstände', title: 'Zwischen zwei Stufen liegt immer derselbe Betrag' },
@@ -57,7 +65,7 @@ function NumberField({ label, value, onChange, hint, step = 'any' }: { label: st
   )
 }
 
-export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed }: { hasKey: boolean; onNeedKey: () => void; prefill?: Prefill | null; onPrefillUsed?: () => void }): JSX.Element {
+export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed, onOpenDrafts }: { hasKey: boolean; onNeedKey: () => void; prefill?: Prefill | null; onPrefillUsed?: () => void; onOpenDrafts?: () => void }): JSX.Element {
   const theme = useChartTheme()
   const { eur, fmtPrice, sym, usdHint } = useMoney()
   const [watchlist, setWatchlist] = useState<string[]>([])
@@ -83,6 +91,11 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed 
   const [available, setAvailable] = useState<Record<string, number> | null>(null)
   // Beim Laden einer Vorlage oder eines Vorschlags den Kurs nicht überschreiben
   const [keepPrices, setKeepPrices] = useState(false)
+  /** Entwurf, der gerade bearbeitet wird */
+  const [draft, setDraft] = useState<DraftDto | null>(null)
+  const [draftForm, setDraftForm] = useState<{ name: string; scenario: string; note: string } | null>(null)
+  const [scenarios, setScenarios] = useState<string[]>([])
+  const [draftMsg, setDraftMsg] = useState<string | null>(null)
 
   const pair = pairs.find((p) => p.id === pairId)
   const set = <K extends keyof LadderInput>(k: K, v: LadderInput[K]) => {
@@ -111,6 +124,11 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed 
     setKeepPrices(true)
     setPairId(prefill.pairId)
     setInput(prefill.input)
+    if (prefill.postOnly !== undefined) setPostOnly(prefill.postOnly)
+    setSendCount(prefill.sendCount ?? null)
+    setCustomText((prefill.input.customWeights ?? []).join(', '))
+    setDraft(prefill.draft ?? null)
+    setDraftMsg(null)
     setResult(null)
     onPrefillUsed?.()
   }, [prefill])
@@ -198,6 +216,29 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed 
   const have = available && needAsset ? available[needAsset] ?? 0 : null
   const shortfall = have !== null && nowCost > 0 && have + 1e-12 < need
   const watched = pairs.filter((p) => watchlist.includes(p.name))
+  // Stufen auf der falschen Seite des Kurses würden sofort ausgeführt (oder mit Post-only sofort storniert)
+  const wrong = wrongSide(input.side, toSend.map((l) => l.price), last)
+
+  function openDraftForm() {
+    if (!pair) return
+    api().drafts().then((ds) => setScenarios([...new Set(ds.map((d) => d.scenario).filter(Boolean))])).catch(() => setScenarios([]))
+    setDraftForm({ name: draft?.name ?? draftTitle(pair.name, input), scenario: draft?.scenario ?? '', note: draft?.note ?? '' })
+  }
+
+  async function storeDraft(asNew: boolean) {
+    if (!pair || !draftForm) return
+    const nowIso = new Date().toISOString()
+    const base = !asNew && draft ? draft : null
+    const d: DraftDto = {
+      id: base?.id ?? `d${Date.now()}`, createdAt: base?.createdAt ?? nowIso, updatedAt: nowIso, status: 'draft',
+      name: draftForm.name.trim() || draftTitle(pair.name, input), scenario: draftForm.scenario.trim(), note: draftForm.note.trim() || undefined,
+      pairId: pair.id, pairName: pair.name, side: input.side, input, postOnly, sendCount: partial ? nowCount : undefined, priceAtSave: last ?? undefined,
+    }
+    await api().saveDraft(d)
+    setDraft(d)
+    setDraftForm(null)
+    setDraftMsg(`Entwurf „${d.name}“ gespeichert. Es wurde nichts an Kraken gesendet.`)
+  }
 
   async function run(validate: boolean) {
     if (!pair || !ladder) return
@@ -225,6 +266,9 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed 
           <p className="page-subtitle">Viele Limit-Orders auf einmal planen, prüfen und an Kraken senden.</p>
         </div>
         <div className="ml-auto flex flex-shrink-0 items-center gap-2" data-guide="actions">
+          <button type="button" className="btn btn-secondary" disabled={!ladder?.valid || !!busy} onClick={openDraftForm} title="Zwischenspeichern und später im Reiter „Entwürfe“ freigeben">
+            <ClipboardList size={16} /> Als Entwurf
+          </button>
           <button type="button" className="btn btn-secondary" disabled={!hasKey || !ladder?.valid || !!busy} onClick={() => run(true)} title="Kraken prüft alle Orders, legt aber nichts an">
             <FlaskConical size={16} /> {busy === 'validate' ? 'Prüfe …' : 'Probelauf'}
           </button>
@@ -234,7 +278,20 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed 
         </div>
       </header>
 
-      {loadError && <p className="notice notice-danger mb-4">Kraken ist nicht erreichbar: {loadError}</p>}
+      {loadError && <p className="notice notice-danger mb-4">{loadError}</p>}
+      {draft && (
+        <p className="notice notice-accent mb-4 flex flex-wrap items-center gap-x-3 gap-y-1">
+          <ClipboardList size={16} className="flex-shrink-0" />
+          <span className="flex-1">Du bearbeitest den Entwurf <strong>{draft.name}</strong>. Änderungen speicherst du mit „Als Entwurf“.</span>
+          <button type="button" className="btn-link" onClick={() => { setDraft(null); setDraftMsg(null) }}>Bearbeiten beenden</button>
+        </p>
+      )}
+      {draftMsg && (
+        <p className="notice notice-success mb-4 flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span className="flex-1">{draftMsg}</span>
+          {onOpenDrafts && <button type="button" className="btn-link" onClick={onOpenDrafts}>Zu den Entwürfen</button>}
+        </p>
+      )}
       {!hasKey && (
         <p className="notice notice-info mb-4">
           Planen geht auch ohne Schlüssel. Zum Prüfen und Senden brauchst du einen Kraken-API-Schlüssel.{' '}
@@ -356,12 +413,23 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed 
           {!shortfall && have !== null && ladder && ladder.totalCost > 0 && (
             <p className="text-xs text-ink-muted">Verfügbar: {input.side === 'buy' ? eur(have) : `${num(have, pair?.volumeDecimals)} ${base}`}. Reicht für {partial ? 'diese Sendung' : 'diesen Plan'}.</p>
           )}
+          {wrong.length > 0 && (
+            <p className="notice notice-danger flex items-start gap-2">
+              <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" />
+              <span>
+                {wrong.length === 1 ? '1 Stufe liegt' : `${wrong.length} Stufen liegen`} {input.side === 'buy' ? 'beim oder über dem' : 'beim oder unter dem'} aktuellen Kurs.{' '}
+                {postOnly ? 'Mit Post-only storniert Kraken diese Orders sofort wieder.' : 'Diese Orders würden sofort zum Marktpreis ausgeführt.'}{' '}
+                {input.side === 'buy' ? 'Beim Kaufen liegen alle Stufen unter dem Kurs.' : 'Beim Verkaufen liegen alle Stufen über dem Kurs.'}
+              </span>
+            </p>
+          )}
           {sendError && <p className="notice notice-danger">{sendError}</p>}
           {result && (
             <div className={`notice ${failed.length ? 'notice-warning' : 'notice-success'}`}>
               {result.validate
                 ? failed.length ? `Probelauf: ${failed.length} Orders würden abgelehnt.` : `Probelauf erfolgreich: Kraken würde alle ${ok} Orders annehmen. Es wurde nichts angelegt.`
                 : `${ok} Orders angelegt${failed.length ? `, ${failed.length} fehlgeschlagen` : ''}. Plan-Nummer ${result.userref}.`}
+              {result.orders.some((o) => o.uncertain) && <p className="mt-1 text-xs font-medium">Die Verbindung brach ab. Schau unter „Offene Orders“ nach, was wirklich angelegt wurde, bevor du noch einmal sendest.</p>}
               {failed.length > 0 && <p className="mt-1 text-xs">Grund: {failed[0].error}</p>}
             </div>
           )}
@@ -459,6 +527,33 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed 
         </Modal>
       )}
 
+      {draftForm && pair && (
+        <Modal title={draft ? 'Entwurf speichern' : 'Als Entwurf speichern'} size="sm" onClose={() => setDraftForm(null)}
+          footer={<>
+            <button type="button" className="btn btn-secondary" onClick={() => setDraftForm(null)}>Abbrechen</button>
+            {draft && <button type="button" className="btn btn-secondary" onClick={() => storeDraft(true)}>Als neuen Entwurf</button>}
+            <button type="button" className="btn btn-primary" onClick={() => storeDraft(false)}>{draft ? 'Entwurf aktualisieren' : 'Speichern'}</button>
+          </>}>
+          <div className="space-y-3 text-sm">
+            <label className="block">
+              <span className="label">Name</span>
+              <input className="input w-full" autoFocus value={draftForm.name} onChange={(e) => setDraftForm({ ...draftForm, name: e.target.value })} />
+            </label>
+            <label className="block">
+              <span className="label">Szenario (optional)</span>
+              <input className="input w-full" list="draft-scenarios" value={draftForm.scenario} placeholder="z. B. Crash, Bullrun, Nach dem Halving" onChange={(e) => setDraftForm({ ...draftForm, scenario: e.target.value })} />
+              <datalist id="draft-scenarios">{scenarios.map((x) => <option key={x} value={x} />)}</datalist>
+              <span className="mt-1 block text-xs text-ink-muted">Entwürfe mit gleichem Szenario stehen zusammen.</span>
+            </label>
+            <label className="block">
+              <span className="label">Notiz (optional)</span>
+              <input className="input w-full" value={draftForm.note} placeholder="z. B. nur freigeben, wenn BTC unter 60.000 € fällt" onChange={(e) => setDraftForm({ ...draftForm, note: e.target.value })} />
+            </label>
+            <p className="text-xs text-ink-muted">{input.side === 'buy' ? 'Kauf' : 'Verkauf'} {pair.name}, {nowCount} {partial ? `von ${sendable.length} ` : ''}Stufen, {eur(nowCost)}. Es geht nichts an Kraken. Freigeben kannst du den Entwurf im Reiter „Entwürfe“.</p>
+          </div>
+        </Modal>
+      )}
+
       {confirm && ladder && pair && (
         <Modal title="Orders wirklich senden?" size="sm" onClose={() => !busy && setConfirm(false)}
           footer={<>
@@ -468,6 +563,7 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed 
           <div className="space-y-2 text-sm">
             <p><strong>{input.side === 'buy' ? 'Kaufen' : 'Verkaufen'}</strong> {pair.name} in {nowCount} Stufen von {fmtPrice(toSend[0]?.price ?? input.priceStart, pair.priceDecimals)} bis {fmtPrice(toSend[toSend.length - 1]?.price ?? input.priceEnd, pair.priceDecimals)} {sym}.</p>
             <p>Gegenwert jetzt: <strong>{eur(nowCost)}</strong>{feeEur !== null && <> plus ca. {eur(feeEur)} Gebühren</>}</p>
+            {wrong.length > 0 && <p className="notice notice-danger">Achtung: {wrong.length} {wrong.length === 1 ? 'Stufe liegt' : 'Stufen liegen'} auf der falschen Seite des Kurses ({fmtPrice(last ?? 0, pair.priceDecimals)} {sym}) und {postOnly ? 'werden sofort wieder storniert' : 'würden sofort ausgeführt'}.</p>}
             {partial && <p className="text-ink-muted">Die restlichen {sendable.length - nowCount} Stufen bleiben im Plan. Du kannst sie später unter „Offene Orders“ mit „Rest senden“ nachschicken.</p>}
             <p className="text-ink-muted">Die Orders werden echt bei Kraken angelegt. Du kannst sie unter „Offene Orders“ jederzeit stornieren, solange sie noch nicht ausgeführt sind.</p>
           </div>

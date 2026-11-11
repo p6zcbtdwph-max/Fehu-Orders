@@ -10,9 +10,11 @@ async function call(channel: string, ...args: unknown[]): Promise<any> {
 const api: Api = {
   keyStatus: () => call('key:status'),
   saveKey: (key, secret) => call('key:save', key, secret),
+  verifyKey: () => call('key:verify'),
   clearKey: () => call('key:clear'),
   pairs: () => call('pairs'),
   price: (pairId) => call('price', pairId),
+  prices: (pairIds) => call('prices', pairIds),
   balances: () => call('balances'),
   openOrders: () => call('orders:open'),
   send: (req) => call('send', req),
@@ -30,6 +32,9 @@ const api: Api = {
   saveTemplate: (t) => call('template:save', t),
   deleteTemplate: (id) => call('template:delete', id),
   planStatus: () => call('plans:status'),
+  drafts: () => call('drafts'),
+  saveDraft: (d) => call('draft:save', d),
+  deleteDraft: (id) => call('draft:delete', id),
   onFills: (cb) => {
     const h = () => cb()
     ipcRenderer.on('fills', h)

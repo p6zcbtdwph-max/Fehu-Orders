@@ -85,6 +85,7 @@ export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; on
       setRestMsg(failed.length
         ? { ok: false, text: `${validate ? 'Probelauf' : 'Senden'}: ${failed.length} von ${r.orders.length} Orders abgelehnt. Grund: ${failed[0].error}` }
         : { ok: true, text: validate ? `Probelauf erfolgreich: Kraken würde alle ${ok} Orders annehmen.` : `${ok} weitere Orders angelegt.` })
+      if (r.orders.some((o) => o.uncertain)) setRestMsg({ ok: false, text: 'Die Verbindung brach beim Senden ab. Klicke auf „Aktualisieren“ und prüfe, was wirklich angelegt wurde, bevor du noch einmal sendest.' })
       if (!validate) {
         setRestPlan(null)
         load()
@@ -109,7 +110,7 @@ export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; on
         </div>
         <button type="button" className="btn btn-secondary ml-auto" onClick={load}><RefreshCw size={16} /> Aktualisieren</button>
       </header>
-      {!hasKey && <p className="notice notice-info mb-4">Hinterlege zuerst unter Einstellungen einen Kraken-API-Schlüssel.</p>}
+      {!hasKey && <p className="notice notice-info mb-4">Hinterlege zuerst im Reiter „Schlüssel“ einen Kraken-API-Schlüssel.</p>}
       {error && <p className="notice notice-danger mb-4">{error}</p>}
       {restMsg && !restPlan && <p className={`notice mb-4 ${restMsg.ok ? 'notice-success' : 'notice-danger'}`}>{restMsg.text}</p>}
 
