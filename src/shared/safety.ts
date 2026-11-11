@@ -39,3 +39,40 @@ export function wrongSide(side: Side, prices: number[], last: number | null | un
   if (!last || !(last > 0)) return []
   return prices.filter((p) => (side === 'buy' ? p >= last : p <= last))
 }
+
+/** Meldung, wenn Stufen nach dem frisch geladenen Kurs auf der falschen Seite liegen (sonst null) */
+export function priceGuard(side: Side, prices: number[], last: number, fmt: (n: number) => string = String): string | null {
+  const w = wrongSide(side, prices, last)
+  if (!w.length) return null
+  return `Der Kurs steht gerade bei ${fmt(last)}. ${w.length} ${w.length === 1 ? 'Stufe liegt' : 'Stufen liegen'} ${side === 'buy' ? 'beim oder über dem' : 'beim oder unter dem'} Kurs und ${w.length === 1 ? 'würde' : 'würden'} sofort ausgeführt oder storniert. Es wurde nichts gesendet. Passe die Preise an.`
+}
+
+/** Kursalarm: hat der Kurs die erste Stufe erreicht? Kauf: Kurs fällt darauf oder darunter. Verkauf: steigt darauf oder darüber. */
+export function alarmHit(side: Side, firstPrice: number, last: number | null | undefined): boolean {
+  if (!last || !(last > 0) || !(firstPrice > 0)) return false
+  return side === 'buy' ? last <= firstPrice : last >= firstPrice
+}
+
+const SUFFIX: Record<string, string> = { F: 'Earn (flexibel)', S: 'Earn (gebunden)', M: 'Earn', B: 'Earn', P: 'Earn', HOLD: 'zurückgehalten' }
+
+/**
+ * Lesbarer Name eines Kraken-Assets: XXBT → BTC, ZEUR → EUR, XBT.F → BTC (Earn).
+ * earn ist gesetzt, wenn das Guthaben nicht im normalen Spot-Konto liegt.
+ */
+export function assetLabel(code: string): { name: string; earn?: string } {
+  const [raw, suffix] = code.split('.')
+  let name = raw
+  if (name.length === 4 && (name[0] === 'X' || name[0] === 'Z') && !['XTZ', 'ZRX'].some((x) => name.endsWith(x))) name = name.slice(1)
+  if (name === 'XBT') name = 'BTC'
+  if (name === 'XDG') name = 'DOGE'
+  if (name.length > 4 && /^ETH2$/.test(name)) name = 'ETH'
+  return suffix ? { name, earn: SUFFIX[suffix] ?? suffix } : { name }
+}
+
+/** Vorschlag für den ersten echten Test: zwei kleine Kauf-Stufen 20 % unter dem Kurs, knapp über Krakens Minimum */
+export function firstTestInput(last: number, rules: { orderMin: number; costMin: number }): { side: 'buy'; priceStart: number; priceEnd: number; steps: number; total: number; spacing: 'linear'; curve: 'flat'; ratio: number } {
+  const priceStart = +(last * 0.8).toPrecision(6)
+  const priceEnd = +(last * 0.78).toPrecision(6)
+  const perStage = Math.max(rules.orderMin * priceStart * 1.1, rules.costMin * 1.1, 5)
+  return { side: 'buy', priceStart, priceEnd, steps: 2, total: Math.ceil(perStage * 2), spacing: 'linear', curve: 'flat', ratio: 1 }
+}

@@ -10,6 +10,7 @@ export interface PairDto {
   volumeDecimals: number
   orderMin: number
   costMin: number
+  tickSize?: number
 }
 
 export interface SendRequest {
@@ -112,6 +113,29 @@ export interface DraftDto {
   releasedAt?: string
   /** Plan-Nummer nach der Freigabe */
   userref?: number
+  /** Mitteilung, wenn der Kurs die erste Stufe erreicht */
+  alarm?: boolean
+  /** Zeitpunkt, an dem der Kursalarm ausgelöst hat (danach erst nach erneutem Speichern wieder) */
+  alarmFiredAt?: string
+}
+
+/** Ein Eintrag im Protokoll */
+export interface LogEntry {
+  at: string
+  /** send, validate, rest, cancel-plan, cancel-order, cancel-all, key-save, key-clear, alarm */
+  action: string
+  pair?: string
+  side?: Side
+  userref?: number
+  /** Anzahl Orders bzw. stornierte Orders */
+  count?: number
+  ok?: number
+  failed?: number
+  /** Gegenwert in EUR */
+  amount?: number
+  /** true = erfolgreich, false = Fehler */
+  success: boolean
+  message?: string
 }
 
 export interface PlanStatusDto {
@@ -141,6 +165,11 @@ export interface Api {
   send(req: SendRequest): Promise<SendResult>
   cancelPlan(userref: number): Promise<number>
   cancelOrder(txid: string): Promise<void>
+  /** Notbremse: alle offenen Orders des Kontos stornieren */
+  cancelAll(): Promise<number>
+  /** Krakens Systemstatus (online, maintenance, cancel_only …) */
+  systemStatus(): Promise<string>
+  log(): Promise<LogEntry[]>
   plans(): Promise<PlanDto[]>
   settings(): Promise<SettingsDto>
   saveSettings(s: Partial<SettingsDto>): Promise<SettingsDto>
@@ -157,4 +186,6 @@ export interface Api {
   saveDraft(d: DraftDto): Promise<void>
   deleteDraft(id: string): Promise<void>
   onFills(cb: () => void): () => void
+  /** Hauptprozess bittet, eine Seite zu öffnen (z. B. nach Klick auf einen Kursalarm) */
+  onOpenPage(cb: (page: string) => void): () => void
 }

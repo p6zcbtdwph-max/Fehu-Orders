@@ -6,7 +6,7 @@ import { existsSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Credentials } from './kraken'
 import type { LadderInput, LadderLevel, Side } from '../shared/ladder'
-import type { DraftDto } from '../shared/ipc'
+import type { DraftDto, LogEntry } from '../shared/ipc'
 
 const file = (name: string) => join(app.getPath('userData'), name)
 
@@ -39,7 +39,7 @@ export interface Settings {
   currency: 'EUR' | 'USD'
 }
 
-export const DEFAULT_SETTINGS: Settings = { maxPlanEur: 500, watchlist: ['BTC/EUR', 'ETH/EUR'], currency: 'EUR' }
+export const DEFAULT_SETTINGS: Settings = { maxPlanEur: 50, watchlist: ['BTC/EUR', 'ETH/EUR'], currency: 'EUR' }
 
 export interface PlanRecord {
   userref: number
@@ -146,4 +146,20 @@ export function deleteDraft(id: string): void {
 
 export function markDraftReleased(id: string, userref: number): void {
   writeDrafts(getDrafts().map((d) => (d.id === id ? { ...d, status: 'released', releasedAt: new Date().toISOString(), userref } : d)))
+}
+
+/** Entwürfe mit Kursalarm aktualisieren, ohne andere Felder anzufassen */
+export function markAlarmFired(ids: string[]): void {
+  const at = new Date().toISOString()
+  writeDrafts(getDrafts().map((d) => (ids.includes(d.id) ? { ...d, alarmFiredAt: at } : d)))
+}
+
+/** Protokoll: die letzten 2000 Aktionen, neueste zuerst. Nie mit Schlüsseln. */
+export function getLog(): LogEntry[] {
+  return readJson<{ entries: LogEntry[] }>('log.json', { entries: [] }).entries
+}
+
+export function addLog(e: Omit<LogEntry, 'at'>): void {
+  const entry: LogEntry = { at: new Date().toISOString(), ...e }
+  writeFileSync(file('log.json'), JSON.stringify({ entries: [entry, ...getLog()].slice(0, 2000) }))
 }

@@ -20,6 +20,9 @@ const api: Api = {
   send: (req) => call('send', req),
   cancelPlan: (userref) => call('plan:cancel', userref),
   cancelOrder: (txid) => call('order:cancel', txid),
+  cancelAll: () => call('orders:cancelAll'),
+  systemStatus: () => call('system:status'),
+  log: () => call('log'),
   plans: () => call('plans'),
   settings: () => call('settings'),
   saveSettings: (s) => call('settings:save', s),
@@ -39,6 +42,11 @@ const api: Api = {
     const h = () => cb()
     ipcRenderer.on('fills', h)
     return () => ipcRenderer.removeListener('fills', h)
+  },
+  onOpenPage: (cb) => {
+    const h = (_e: unknown, page: string) => cb(page)
+    ipcRenderer.on('open-page', h)
+    return () => ipcRenderer.removeListener('open-page', h)
   },
 }
 

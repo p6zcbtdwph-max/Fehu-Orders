@@ -2,10 +2,10 @@ import { app, BrowserWindow, ipcMain, Notification, safeStorage, shell } from 'e
 import { join } from 'node:path'
 import { Kraken, type PairInfo } from './kraken'
 import {
-  addPlan, clearCredentials, deleteDraft, deleteTemplate, getDrafts, markDraftReleased, saveDraft, getNotified, getPlans, getSettings, getTemplates, loadCredentials, newUserref, saveCredentials, saveSettings, saveTemplate, setNotified, updatePlan, type Settings,
+  addLog, addPlan, clearCredentials, getLog, markAlarmFired, deleteDraft, deleteTemplate, getDrafts, markDraftReleased, saveDraft, getNotified, getPlans, getSettings, getTemplates, loadCredentials, newUserref, saveCredentials, saveSettings, saveTemplate, setNotified, updatePlan, type Settings,
 } from './store'
-import type { DraftDto, PlanStatusDto, SaveKeyResult, SendRequest, SendResult, TemplateDto } from '../shared/ipc'
-import { checkKeyFormat } from '../shared/safety'
+import type { DraftDto, LogEntry, PlanStatusDto, SaveKeyResult, SendRequest, SendResult, TemplateDto } from '../shared/ipc'
+import { alarmHit, checkKeyFormat, priceGuard } from '../shared/safety'
 import { planStatus, type OrderSnapshot } from '../shared/plan-status'
 
 let pairCache: PairInfo[] | null = null
@@ -26,6 +26,9 @@ function createWindow(): void {
     titleBarStyle: 'hiddenInset',
     webPreferences: { preload: join(__dirname, '../preload/index.js'), sandbox: false, contextIsolation: true, nodeIntegration: false },
   }))
+  win.on('closed', () => {
+    if (mainWindow === win) mainWindow = null
+  })
   // Links öffnen im Browser, nicht in der App
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('https://')) shell.openExternal(url)
@@ -58,12 +61,14 @@ handle('key:save', async (key: string, secret: string): Promise<SaveKeyResult> =
     saveCredentials(creds)
     resetClient()
   }
+  addLog({ action: 'key-save', success: saved, message: saved ? 'Schlüssel gespeichert' : `Nicht gespeichert: ${checks.filter((c) => !c.ok).map((c) => c.label).join(', ')}` })
   return { saved, checks }
 })
 handle('key:verify', () => client().checkPermissions())
 handle('key:clear', () => {
   clearCredentials()
   resetClient()
+  addLog({ action: 'key-clear', success: true, message: 'Schlüssel gelöscht' })
 })
 handle('pairs', async () => (pairCache ??= await client().pairs()))
 handle('price', (pairId: string) => client().lastPrice(pairId))
@@ -87,8 +92,26 @@ handle('usdRate', async () => {
   usdCache = { at: Date.now(), rate }
   return rate
 })
-handle('plan:cancel', (userref: number) => client().cancelPlan(userref))
-handle('order:cancel', (txid: string) => client().cancelOrder(txid))
+/** Führt eine Aktion aus und schreibt Erfolg oder Fehler ins Protokoll */
+async function logged<T>(base: Omit<LogEntry, 'at' | 'success'>, fn: () => Promise<T>, done?: (r: T) => Partial<LogEntry>): Promise<T> {
+  try {
+    const r = await fn()
+    addLog({ ...base, success: true, ...(done?.(r) ?? {}) })
+    return r
+  } catch (e) {
+    addLog({ ...base, success: false, message: (e as Error).message })
+    throw e
+  }
+}
+
+handle('plan:cancel', (userref: number) => {
+  const plan = getPlans().find((p) => p.userref === userref)
+  return logged({ action: 'cancel-plan', userref, pair: plan?.pairName, side: plan?.side }, () => client().cancelPlan(userref), (n) => ({ count: n, message: `${n} Orders storniert` }))
+})
+handle('order:cancel', (txid: string) => logged({ action: 'cancel-order', message: txid }, () => client().cancelOrder(txid)))
+handle('orders:cancelAll', () => logged({ action: 'cancel-all' }, () => client().cancelAll(), (n) => ({ count: n, message: `Notbremse: ${n} Orders storniert` })))
+handle('system:status', () => client().systemStatus())
+handle('log', () => getLog())
 
 handle('ohlc', (pairId: string, interval: number) => client().ohlc(pairId, interval))
 handle('fees', (pairId: string) => client().fees(pairId))
@@ -98,7 +121,8 @@ handle('template:save', (t: TemplateDto) => saveTemplate(t))
 handle('template:delete', (id: string) => deleteTemplate(id))
 handle('plans:status', () => computeStatuses())
 handle('drafts', () => getDrafts())
-handle('draft:save', (d: DraftDto) => saveDraft(d))
+// Beim Speichern wird ein ausgelöster Kursalarm wieder scharf
+handle('draft:save', (d: DraftDto) => saveDraft({ ...d, alarmFiredAt: undefined }))
 handle('draft:delete', (id: string) => deleteDraft(id))
 
 /** Pläne, deren Status abgefragt wird: die letzten 90 Tage, höchstens 20 */
@@ -161,6 +185,33 @@ async function pollFills(): Promise<void> {
   mainWindow?.webContents.send('fills')
 }
 
+/**
+ * Dritte Sicherung: Kurs unmittelbar vor dem Senden frisch holen. Liegen Stufen auf der
+ * falschen Seite (Kauf über, Verkauf unter dem Kurs), wird nichts gesendet.
+ */
+async function freshPriceGuard(pairId: string, side: 'buy' | 'sell', levels: { price: number }[], base: Omit<LogEntry, 'at' | 'success'>): Promise<void> {
+  let last: number
+  try {
+    last = await client().lastPrice(pairId)
+  } catch (e) {
+    const msg = `Der aktuelle Kurs konnte nicht geprüft werden, deshalb wurde nichts gesendet. ${(e as Error).message}`
+    addLog({ ...base, success: false, message: msg })
+    throw new Error(msg)
+  }
+  const msg = priceGuard(side, levels.map((l) => l.price), last, (n) => `${n} €`)
+  if (msg) {
+    addLog({ ...base, success: false, message: msg })
+    throw new Error(msg)
+  }
+}
+
+function logResult(base: Omit<LogEntry, 'at' | 'success'>, orders: SendResult['orders']): void {
+  const ok = orders.filter((o) => o.txid || (base.action === 'validate' && !o.error)).length
+  const failed = orders.filter((o) => o.error).length
+  const firstError = orders.find((o) => o.error)?.error
+  addLog({ ...base, ok, failed, success: failed === 0, message: firstError ?? (base.action === 'validate' ? 'Probelauf ohne Fehler' : `${ok} Orders angelegt`) })
+}
+
 /** Zweite Sicherung im Hauptprozess: Obergrenze pro Sendung */
 function checkLimit(levels: { price: number; volume: number }[]): number {
   const total = levels.reduce((a, l) => a + l.price * l.volume, 0)
@@ -175,8 +226,17 @@ handle('send', async (req: SendRequest): Promise<SendResult> => {
   const count = req.sendCount ? Math.max(1, Math.min(valid.length, Math.floor(req.sendCount))) : valid.length
   const levels = valid.slice(0, count)
   const total = checkLimit(levels)
+  const base = { action: req.validate ? 'validate' : 'send', pair: req.pairName, side: req.side, count: levels.length, amount: total }
+  await freshPriceGuard(req.pairId, req.side, levels, base)
   const userref = newUserref()
-  const orders = await client().placeLadder(req.pairId, req.side, levels, { validate: req.validate, userref, postOnly: req.postOnly })
+  let orders: SendResult['orders']
+  try {
+    orders = await client().placeLadder(req.pairId, req.side, levels, { validate: req.validate, userref, postOnly: req.postOnly })
+  } catch (e) {
+    addLog({ ...base, success: false, message: (e as Error).message })
+    throw e
+  }
+  logResult({ ...base, userref: req.validate ? undefined : userref }, orders)
   if (!req.validate) {
     const ok = orders.filter((o) => o.txid)
     // Unklare Orders (Verbindung abgebrochen) gelten als gesendet, damit „Rest senden“ sie nicht doppelt schickt
@@ -200,7 +260,16 @@ handle('plan:rest', async (userref: number, validate: boolean): Promise<SendResu
   const rest = plan.levels.filter((l) => !sent.has(l.index))
   if (!rest.length) throw new Error('Alle Stufen dieses Plans sind schon gesendet.')
   const total = checkLimit(rest)
-  const orders = await client().placeLadder(plan.pairId, plan.side, rest, { validate, userref, postOnly: plan.postOnly ?? true })
+  const base = { action: validate ? 'validate' : 'rest', pair: plan.pairName, side: plan.side, count: rest.length, amount: total, userref }
+  await freshPriceGuard(plan.pairId, plan.side, rest, base)
+  let orders: SendResult['orders']
+  try {
+    orders = await client().placeLadder(plan.pairId, plan.side, rest, { validate, userref, postOnly: plan.postOnly ?? true })
+  } catch (e) {
+    addLog({ ...base, success: false, message: (e as Error).message })
+    throw e
+  }
+  logResult(base, orders)
   if (!validate) {
     const ok = orders.filter((o) => o.txid)
     const maybe = orders.filter((o) => o.uncertain)
@@ -212,10 +281,42 @@ handle('plan:rest', async (userref: number, validate: boolean): Promise<SendResu
   return { userref, validate, orders }
 })
 
+/** Kursalarm: meldet einmal, wenn der Kurs die erste Stufe eines Entwurfs erreicht. Sendet nichts. */
+async function pollAlarms(): Promise<void> {
+  const armed = getDrafts().filter((d) => d.status === 'draft' && d.alarm && !d.alarmFiredAt)
+  if (!armed.length) return
+  let prices: Record<string, number>
+  try {
+    prices = await client().lastPrices([...new Set(armed.map((d) => d.pairId))])
+  } catch {
+    return // nächste Minute neu
+  }
+  const hit = armed.filter((d) => alarmHit(d.side, d.input.priceStart, prices[d.pairId]))
+  if (!hit.length) return
+  markAlarmFired(hit.map((d) => d.id))
+  for (const d of hit) {
+    addLog({ action: 'alarm', pair: d.pairName, side: d.side, success: true, message: `Kursalarm „${d.name}“: Kurs ${prices[d.pairId]} hat die erste Stufe ${d.input.priceStart} erreicht` })
+    if (!Notification.isSupported()) continue
+    const n = new Notification({
+      title: `Kursalarm${d.scenario ? `: ${d.scenario}` : ''}`,
+      body: `${d.pairName} steht bei ${prices[d.pairId]} € und hat die erste Stufe von „${d.name}“ erreicht. Freigeben kannst du ihn unter Entwürfe.`,
+    })
+    n.on('click', () => {
+      if (!mainWindow) createWindow()
+      mainWindow?.show()
+      mainWindow?.focus()
+      mainWindow?.webContents.send('open-page', 'drafts')
+    })
+    n.show()
+  }
+}
+
 app.whenReady().then(() => {
   createWindow()
   setTimeout(pollFills, 10_000)
   setInterval(pollFills, 60_000)
+  setTimeout(pollAlarms, 15_000)
+  setInterval(pollAlarms, 60_000)
   app.on('activate', () => BrowserWindow.getAllWindows().length === 0 && createWindow())
 })
 app.on('window-all-closed', () => process.platform !== 'darwin' && app.quit())

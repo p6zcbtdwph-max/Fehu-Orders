@@ -22,13 +22,21 @@ Mac-App, um viele gestaffelte Limit-Orders auf einmal zu planen und an Kraken zu
 - **Entwürfe:** Order-Gruppen mit „Als Entwurf“ zwischenspeichern, nach Szenario (z. B. „Crash“) gruppieren und erst mit „Freigeben“ an Kraken senden. Vor der Freigabe zeigt die App den aktuellen Kurs, Kursbewegung seit dem Speichern, Guthaben und Stufen auf der falschen Kursseite.
 - **Schlüssel:** eigener Reiter mit Schritt-für-Schritt-Anleitung, Formatprüfung (vertauscht, unvollständig) und Rechte-Prüfung. Schlüssel mit Auszahlungsrecht werden nicht gespeichert.
 - Warnung, wenn Kauf-Stufen über bzw. Verkauf-Stufen unter dem aktuellen Kurs liegen
+- **Erster Test:** Knopf im Planer lädt einen Mini-Plan (BTC/EUR, 2 Stufen 20 % unter dem Kurs, knapp über Krakens Minimum) und senkt auf Wunsch die Obergrenze auf 50 € (neuer Standard)
+- **Kursprüfung beim Senden:** Der Hauptprozess holt den Kurs unmittelbar vor dem Senden und blockiert Stufen auf der falschen Kursseite. Der Planer frischt den Kurs alle 30 Sekunden auf.
+- **Notbremse:** „Alle Orders stornieren“ unter „Offene Orders“ (Krakens `CancelAll`)
+- **Protokoll:** jedes Senden, Stornieren, jeder Fehler und Kursalarm mit Uhrzeit, Export als CSV (Excel/Numbers)
+- **Kursalarm für Entwürfe:** macOS-Mitteilung, wenn der Kurs die erste Stufe erreicht; sendet nichts
+- **Wartungshinweis:** Krakens Systemstatus wird alle 2 Minuten abgefragt
+- Preise werden auf Krakens Preisschritt (`tick_size`) gerundet
+- Guthaben mit lesbaren Namen (BTC statt XXBT), Earn-Guthaben getrennt
 - Offene Orders, Guthaben, gesendete Pläne und „Plan stornieren“ (alle Orders eines Plans tragen dieselbe `userref`)
 
 ## Sicherheit
 
 - Der API-Schlüssel wird mit Electron `safeStorage` verschlüsselt, der Generalschlüssel liegt im macOS-Schlüsselbund (wie beim Lifemanager). Datei: `~/Library/Application Support/fehu-orders/kraken-key.bin`.
 - Der Schlüssel verlässt nie den Hauptprozess, das Fenster spricht nicht selbst mit dem Netz.
-- Obergrenze pro Plan in EUR (Standard 500 €), geprüft im Hauptprozess.
+- Obergrenze pro Sendung in EUR (Standard 50 €), geprüft im Hauptprozess.
 - Kraken-Schlüssel nur mit: Guthaben abfragen, Offene/geschlossene Orders abfragen, Orders erstellen und ändern, Orders stornieren. **Keine Auszahlungen.**
 
 ## Kraken-Anbindung
