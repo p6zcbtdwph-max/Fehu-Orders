@@ -239,8 +239,15 @@ export class Kraken {
         volumeDecimals: p.lot_decimals,
         orderMin: Number(p.ordermin),
         costMin: Number(p.costmin ?? 0),
+        ...(Number(p.tick_size) > 0 ? { tickSize: Number(p.tick_size) } : {}),
       }))
       .sort((a, b) => a.name.localeCompare(b.name))
+  }
+
+  /** Krakens Systemstatus: online, maintenance, cancel_only, reduce_only oder post_only */
+  async systemStatus(): Promise<string> {
+    const r = await this.publicGet('SystemStatus')
+    return String(r?.status ?? 'unknown')
   }
 
   async lastPrice(pairId: string): Promise<number> {
@@ -426,6 +433,12 @@ export class Kraken {
   async cancelPlan(userref: number): Promise<number> {
     const r = await this.privatePost('CancelOrder', { txid: userref })
     return Number(r.count ?? 0)
+  }
+
+  /** Notbremse: storniert ALLE offenen Orders des Kontos */
+  async cancelAll(): Promise<number> {
+    const r = await this.privatePost('CancelAll')
+    return Number(r?.count ?? 0)
   }
 
   async cancelOrder(txid: string): Promise<void> {

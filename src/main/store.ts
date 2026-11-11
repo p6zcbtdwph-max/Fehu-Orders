@@ -6,7 +6,8 @@ import { existsSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Credentials } from './kraken'
 import type { LadderInput, LadderLevel, Side } from '../shared/ladder'
-import type { DraftDto } from '../shared/ipc'
+import type { DraftDto, LogEntry } from '../shared/ipc'
+import { makeBackup, type BackupData } from '../shared/backup'
 
 const file = (name: string) => join(app.getPath('userData'), name)
 
@@ -39,7 +40,7 @@ export interface Settings {
   currency: 'EUR' | 'USD'
 }
 
-export const DEFAULT_SETTINGS: Settings = { maxPlanEur: 500, watchlist: ['BTC/EUR', 'ETH/EUR'], currency: 'EUR' }
+export const DEFAULT_SETTINGS: Settings = { maxPlanEur: 50, watchlist: ['BTC/EUR', 'ETH/EUR'], currency: 'EUR' }
 
 export interface PlanRecord {
   userref: number
@@ -146,4 +147,45 @@ export function deleteDraft(id: string): void {
 
 export function markDraftReleased(id: string, userref: number): void {
   writeDrafts(getDrafts().map((d) => (d.id === id ? { ...d, status: 'released', releasedAt: new Date().toISOString(), userref } : d)))
+}
+
+/** Entwürfe mit Kursalarm aktualisieren, ohne andere Felder anzufassen */
+export function markAlarmFired(ids: string[]): void {
+  const at = new Date().toISOString()
+  writeDrafts(getDrafts().map((d) => (ids.includes(d.id) ? { ...d, alarmFiredAt: at } : d)))
+}
+
+/** Protokoll: die letzten 2000 Aktionen, neueste zuerst. Nie mit Schlüsseln. */
+export function getLog(): LogEntry[] {
+  return readJson<{ entries: LogEntry[] }>('log.json', { entries: [] }).entries
+}
+
+export function addLog(e: Omit<LogEntry, 'at'>): void {
+  const entry: LogEntry = { at: new Date().toISOString(), ...e }
+  writeFileSync(file('log.json'), JSON.stringify({ entries: [entry, ...getLog()].slice(0, 2000) }))
+}
+
+/** Alles außer dem Schlüssel für die Datensicherung */
+export function exportAll(): BackupData {
+  return makeBackup({
+    settings: getSettings() as unknown as Record<string, unknown>,
+    plans: getPlans(),
+    drafts: getDrafts(),
+    templates: getTemplates(),
+    log: getLog(),
+    notified: getNotified(),
+  })
+}
+
+/** Ersetzt Pläne, Entwürfe, Vorlagen, Einstellungen und Protokoll. Vorher wird der alte Stand im App-Ordner gesichert. */
+export function importAll(d: BackupData): string {
+  const safety = file(`vor-wiederherstellung-${new Date().toISOString().replace(/[:.]/g, '-')}.json`)
+  writeFileSync(safety, JSON.stringify(exportAll(), null, 2))
+  writeFileSync(file('settings.json'), JSON.stringify({ ...DEFAULT_SETTINGS, ...d.settings }, null, 2))
+  writeFileSync(file('plans.json'), JSON.stringify({ plans: d.plans }, null, 2))
+  writeFileSync(file('drafts.json'), JSON.stringify({ drafts: d.drafts }, null, 2))
+  writeFileSync(file('templates.json'), JSON.stringify({ templates: d.templates }, null, 2))
+  writeFileSync(file('log.json'), JSON.stringify({ entries: d.log }))
+  writeFileSync(file('notified.json'), JSON.stringify({ txids: d.notified.length ? d.notified : ['-'] }))
+  return safety
 }

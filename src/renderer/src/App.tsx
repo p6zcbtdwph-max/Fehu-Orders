@@ -3,23 +3,34 @@ import Guide, { GUIDE_STEPS } from './components/Guide'
 import { useEffect, useState } from 'react'
 import Segmented from './components/ui/Segmented'
 import { MoneyProvider, type Currency } from './money'
-import { ClipboardList, GraduationCap, KeyRound, ListOrdered, PlayCircle, Settings, SlidersHorizontal } from 'lucide-react'
+import { AlertTriangle, ClipboardList, GraduationCap, KeyRound, ListOrdered, PlayCircle, ScrollText, Settings, SlidersHorizontal } from 'lucide-react'
 import logoUrl from './assets/logo.png'
 import PlannerPage, { type Prefill } from './pages/PlannerPage'
 import OrdersPage from './pages/OrdersPage'
 import SettingsPage from './pages/SettingsPage'
 import KeyPage from './pages/KeyPage'
 import DraftsPage from './pages/DraftsPage'
+import LogPage from './pages/LogPage'
 
-type PageId = 'planner' | 'drafts' | 'orders' | 'key' | 'settings'
+type PageId = 'planner' | 'drafts' | 'orders' | 'log' | 'key' | 'settings'
 
 const NAV: { id: PageId; label: string; icon: typeof ListOrdered }[] = [
   { id: 'planner', label: 'Planer', icon: SlidersHorizontal },
   { id: 'drafts', label: 'Entwürfe', icon: ClipboardList },
   { id: 'orders', label: 'Offene Orders', icon: ListOrdered },
+  { id: 'log', label: 'Protokoll', icon: ScrollText },
   { id: 'key', label: 'Schlüssel', icon: KeyRound },
   { id: 'settings', label: 'Einstellungen', icon: Settings },
 ]
+
+/** Hinweise zu Krakens Systemstatus. „online“ zeigt nichts. */
+const SYSTEM_TEXT: Record<string, string> = {
+  maintenance: 'Kraken ist gerade in Wartung. Orders können weder angelegt noch storniert werden.',
+  cancel_only: 'Kraken erlaubt gerade nur Stornieren. Neue Orders werden abgelehnt.',
+  reduce_only: 'Kraken erlaubt gerade nur eingeschränkten Handel. Neue Orders können abgelehnt werden.',
+  post_only: 'Kraken nimmt gerade nur Limit-Orders ins Orderbuch an (Post-only).',
+  unreachable: 'Kraken ist gerade nicht erreichbar. Prüfe deine Internetverbindung.',
+}
 
 const GUIDE_SEEN = 'fehu-orders-guide-seen'
 
@@ -68,6 +79,20 @@ export default function App(): JSX.Element {
     setCurrencyState(c)
     api().saveSettings({ currency: c })
   }
+
+  // Krakens Systemstatus alle 2 Minuten (Wartung, nur Stornieren …)
+  const [system, setSystem] = useState<string>('online')
+  useEffect(() => {
+    const load = () => api().systemStatus().then(setSystem).catch(() => setSystem('unreachable'))
+    load()
+    const t = setInterval(load, 120_000)
+    return () => clearInterval(t)
+  }, [demo])
+
+  // Klick auf einen Kursalarm öffnet die Entwürfe
+  useEffect(() => api().onOpenPage((p) => {
+    if (NAV.some((n) => n.id === p)) setPage(p as PageId)
+  }), [demo])
 
   const refreshKey = () => api().keyStatus().then((s) => setHasKey(s.hasKey))
   useEffect(() => {
@@ -125,6 +150,13 @@ export default function App(): JSX.Element {
       </aside>
       <main className="relative flex-1 overflow-y-auto">
         <div className="h-8 w-full" style={drag} />
+        {SYSTEM_TEXT[system] && (
+          <div className="page !pb-0">
+            <p className={`notice ${system === 'unreachable' ? 'notice-warning' : 'notice-danger'} flex items-start gap-2`}>
+              <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" /><span>{SYSTEM_TEXT[system]}</span>
+            </p>
+          </div>
+        )}
         {demo && (
           <div className="page !pb-0">
             <p className="notice notice-warning flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -135,10 +167,11 @@ export default function App(): JSX.Element {
           </div>
         )}
         <div key={demo ? 'demo' : 'live'} className="contents">
-        {page === 'planner' && <PlannerPage hasKey={!!hasKey} onNeedKey={() => setPage('key')} prefill={prefill} onPrefillUsed={() => setPrefill(null)} onOpenDrafts={() => setPage('drafts')} />}
+        {page === 'planner' && <PlannerPage hasKey={!!hasKey} onNeedKey={() => setPage('key')} prefill={prefill} onPrefillUsed={() => setPrefill(null)} onOpenDrafts={() => setPage('drafts')} onOpenOrders={() => setPage('orders')} />}
         {page === 'drafts' && <DraftsPage hasKey={!!hasKey} onNeedKey={() => setPage('key')}
           onEdit={(d) => { setPrefill({ pairId: d.pairId, input: d.input, postOnly: d.postOnly, sendCount: d.sendCount, draft: d }); setPage('planner') }} />}
         {page === 'orders' && <OrdersPage hasKey={!!hasKey} onPlanSell={(p) => { setPrefill(p); setPage('planner') }} />}
+        {page === 'log' && <LogPage />}
         {page === 'key' && <KeyPage hasKey={!!hasKey} onKeyChanged={refreshKey} />}
         {page === 'settings' && <SettingsPage hasKey={!!hasKey} onOpenKey={() => setPage('key')} />}
         </div>

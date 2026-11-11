@@ -1,10 +1,10 @@
 import { api } from '../api'
 import { useEffect, useMemo, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { AlertTriangle, BookmarkPlus, ClipboardList, FlaskConical, RefreshCw, Send, Star, Trash2 } from 'lucide-react'
+import { AlertTriangle, Bell, BookmarkPlus, ClipboardList, GraduationCap, FlaskConical, RefreshCw, Send, Star, Trash2 } from 'lucide-react'
 import { buildLadder, MAX_STEPS, parseWeights, type LadderInput, type PriceSpacing, type Side, type SizeCurve } from '@shared/ladder'
 import type { DraftDto, PairDto, SendResult, TemplateDto } from '@shared/ipc'
-import { wrongSide } from '@shared/safety'
+import { firstTestInput, wrongSide } from '@shared/safety'
 import KpiStrip from '../components/ui/KpiStrip'
 import PairPicker from '../components/PairPicker'
 import SectionCard from '../components/ui/SectionCard'
@@ -65,7 +65,7 @@ function NumberField({ label, value, onChange, hint, step = 'any' }: { label: st
   )
 }
 
-export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed, onOpenDrafts }: { hasKey: boolean; onNeedKey: () => void; prefill?: Prefill | null; onPrefillUsed?: () => void; onOpenDrafts?: () => void }): JSX.Element {
+export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed, onOpenDrafts, onOpenOrders }: { hasKey: boolean; onNeedKey: () => void; prefill?: Prefill | null; onPrefillUsed?: () => void; onOpenDrafts?: () => void; onOpenOrders?: () => void }): JSX.Element {
   const theme = useChartTheme()
   const { eur, fmtPrice, sym, usdHint } = useMoney()
   const [watchlist, setWatchlist] = useState<string[]>([])
@@ -93,7 +93,10 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
   const [keepPrices, setKeepPrices] = useState(false)
   /** Entwurf, der gerade bearbeitet wird */
   const [draft, setDraft] = useState<DraftDto | null>(null)
-  const [draftForm, setDraftForm] = useState<{ name: string; scenario: string; note: string } | null>(null)
+  const [draftForm, setDraftForm] = useState<{ name: string; scenario: string; note: string; alarm: boolean } | null>(null)
+  /** Fenster „Ersten Test vorbereiten“ */
+  const [firstTest, setFirstTest] = useState(false)
+  const [limit, setLimit] = useState<number | null>(null)
   const [scenarios, setScenarios] = useState<string[]>([])
   const [draftMsg, setDraftMsg] = useState<string | null>(null)
 
@@ -187,6 +190,12 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
     }).catch((e) => setLoadError(e.message))
   }
   useEffect(() => loadPrice(true), [pairId, input.side])
+  // Kurs alle 30 Sekunden auffrischen, damit Warnungen und Abstände stimmen
+  useEffect(() => {
+    if (!pairId) return
+    const t = setInterval(() => api().price(pairId).then(setLast).catch(() => {}), 30_000)
+    return () => clearInterval(t)
+  }, [pairId])
   // nach dem ersten Kursabruf dürfen Richtungswechsel die Preise wieder vorschlagen
   useEffect(() => {
     if (keepPrices) {
@@ -222,7 +231,29 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
   function openDraftForm() {
     if (!pair) return
     api().drafts().then((ds) => setScenarios([...new Set(ds.map((d) => d.scenario).filter(Boolean))])).catch(() => setScenarios([]))
-    setDraftForm({ name: draft?.name ?? draftTitle(pair.name, input), scenario: draft?.scenario ?? '', note: draft?.note ?? '' })
+    setDraftForm({ name: draft?.name ?? draftTitle(pair.name, input), scenario: draft?.scenario ?? '', note: draft?.note ?? '', alarm: draft?.alarm ?? true })
+  }
+
+  function openFirstTest() {
+    api().settings().then((s) => setLimit(s.maxPlanEur)).catch(() => setLimit(null))
+    setFirstTest(true)
+  }
+
+  function loadFirstTest() {
+    const btc = pairs.find((p) => p.name === 'BTC/EUR') ?? pair
+    if (!btc) return
+    api().price(btc.id).then((p) => {
+      setKeepPrices(true)
+      setPairId(btc.id)
+      setLast(p)
+      const t = firstTestInput(p, btc)
+      setInput(t)
+      setSendCount(null)
+      setPostOnly(true)
+      setDraft(null)
+      setResult(null)
+      setFirstTest(false)
+    }).catch((e) => setLoadError((e as Error).message))
   }
 
   async function storeDraft(asNew: boolean) {
@@ -233,6 +264,7 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
       id: base?.id ?? `d${Date.now()}`, createdAt: base?.createdAt ?? nowIso, updatedAt: nowIso, status: 'draft',
       name: draftForm.name.trim() || draftTitle(pair.name, input), scenario: draftForm.scenario.trim(), note: draftForm.note.trim() || undefined,
       pairId: pair.id, pairName: pair.name, side: input.side, input, postOnly, sendCount: partial ? nowCount : undefined, priceAtSave: last ?? undefined,
+      alarm: draftForm.alarm,
     }
     await api().saveDraft(d)
     setDraft(d)
@@ -266,6 +298,9 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
           <p className="page-subtitle">Viele Limit-Orders auf einmal planen, prüfen und an Kraken senden.</p>
         </div>
         <div className="ml-auto flex flex-shrink-0 items-center gap-2" data-guide="actions">
+          <button type="button" className="btn btn-ghost" onClick={openFirstTest} title="Einen kleinen, sicheren Plan für den ersten echten Test laden">
+            <GraduationCap size={16} /> Erster Test
+          </button>
           <button type="button" className="btn btn-secondary" disabled={!ladder?.valid || !!busy} onClick={openDraftForm} title="Zwischenspeichern und später im Reiter „Entwürfe“ freigeben">
             <ClipboardList size={16} /> Als Entwurf
           </button>
@@ -545,11 +580,45 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
               <datalist id="draft-scenarios">{scenarios.map((x) => <option key={x} value={x} />)}</datalist>
               <span className="mt-1 block text-xs text-ink-muted">Entwürfe mit gleichem Szenario stehen zusammen.</span>
             </label>
+            <label className="flex items-start gap-2">
+              <input type="checkbox" className="checkbox mt-0.5" checked={draftForm.alarm} onChange={(e) => setDraftForm({ ...draftForm, alarm: e.target.checked })} />
+              <span>
+                <span className="inline-flex items-center gap-1"><Bell size={14} /> Kursalarm</span>
+                <span className="block text-xs text-ink-muted">Dein Mac meldet sich, wenn der Kurs die erste Stufe ({fmtPrice(toSend[0]?.price ?? input.priceStart, pair.priceDecimals)} {sym}) erreicht. Gesendet wird nichts, die Freigabe bleibt bei dir. Die App muss dafür laufen.</span>
+              </span>
+            </label>
             <label className="block">
               <span className="label">Notiz (optional)</span>
               <input className="input w-full" value={draftForm.note} placeholder="z. B. nur freigeben, wenn BTC unter 60.000 € fällt" onChange={(e) => setDraftForm({ ...draftForm, note: e.target.value })} />
             </label>
             <p className="text-xs text-ink-muted">{input.side === 'buy' ? 'Kauf' : 'Verkauf'} {pair.name}, {nowCount} {partial ? `von ${sendable.length} ` : ''}Stufen, {eur(nowCost)}. Es geht nichts an Kraken. Freigeben kannst du den Entwurf im Reiter „Entwürfe“.</p>
+          </div>
+        </Modal>
+      )}
+
+      {firstTest && (
+        <Modal title="Ersten echten Test vorbereiten" size="md" onClose={() => setFirstTest(false)}
+          footer={<>
+            <button type="button" className="btn btn-secondary" onClick={() => setFirstTest(false)}>Abbrechen</button>
+            <button type="button" className="btn btn-primary" onClick={loadFirstTest}>Mini-Plan laden</button>
+          </>}>
+          <div className="space-y-3 text-sm">
+            <p>So testest du Senden, Anzeige und Stornieren mit echtem Geld, aber praktisch ohne Risiko:</p>
+            <ol className="list-decimal space-y-1.5 pl-5">
+              <li>
+                <strong>Obergrenze klein halten.</strong>{' '}
+                {limit !== null && limit > 50
+                  ? <>Sie steht bei {eur(limit)}. <button type="button" className="btn-link" onClick={() => api().saveSettings({ maxPlanEur: 50 }).then((s) => setLimit(s.maxPlanEur))}>Auf 50 € senken</button></>
+                  : limit !== null ? <>Sie steht bei {eur(limit)}. Passt.</> : null}
+              </li>
+              <li><strong>Mini-Plan laden:</strong> BTC/EUR kaufen, 2 Stufen etwa 20 % unter dem Kurs, knapp über Krakens Mindestbetrag (meist unter 15 €). So tief wird der Kurs kaum fallen, die Orders bleiben also nur liegen.</li>
+              <li><strong>Probelauf</strong> klicken. Kraken prüft alles, legt aber nichts an.</li>
+              <li><strong>An Kraken senden</strong> und bestätigen.</li>
+              <li>Unter <strong>Offene Orders</strong> nachsehen, ob beide Orders da sind, und den Plan <strong>stornieren</strong>.</li>
+              <li>Im <strong>Protokoll</strong> siehst du danach jeden Schritt mit Uhrzeit.</li>
+            </ol>
+            {!hasKey && <p className="notice notice-info">Für Schritt 3 bis 5 brauchst du einen Schlüssel. <button type="button" className="btn-link" onClick={() => { setFirstTest(false); onNeedKey() }}>Schlüssel anlegen</button></p>}
+            {onOpenOrders && <p className="text-xs text-ink-muted">Geht etwas schief, stoppt die <strong>Notbremse</strong> unter „Offene Orders“ alle offenen Orders auf einmal.</p>}
           </div>
         </Modal>
       )}

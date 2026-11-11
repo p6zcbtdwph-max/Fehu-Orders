@@ -66,7 +66,7 @@ export const GUIDE_STEPS: Step[] = [
     body: (
       <>
         <p>Mit <strong>Als Entwurf</strong> im Planer speicherst du eine Order-Gruppe, ohne dass etwas an Kraken geht.</p>
-        <p>Unter <strong>Entwürfe</strong> stehen sie nach <strong>Szenario</strong> sortiert, zum Beispiel „Crash“ oder „Bullrun“. Erst mit <strong>Freigeben</strong> werden die Orders echt angelegt. Die App zeigt dir vorher, ob die Stufen zum aktuellen Kurs noch passen.</p>
+        <p>Unter <strong>Entwürfe</strong> stehen sie nach <strong>Szenario</strong> sortiert, zum Beispiel „Crash“ oder „Bullrun“. Erst mit <strong>Freigeben</strong> werden die Orders echt angelegt. Mit dem <strong>Kursalarm</strong> meldet sich dein Mac, wenn der Kurs die erste Stufe erreicht. Die App zeigt dir vorher, ob die Stufen zum aktuellen Kurs noch passen.</p>
       </>
     ),
   },
@@ -76,7 +76,7 @@ export const GUIDE_STEPS: Step[] = [
       <>
         <p>Unter <strong>Offene Orders</strong> stehen deine Pläne: wie viele Stufen offen und wie viele schon ausgeführt sind.</p>
         <p><strong>Gewinnstaffel</strong> plant nach einem Kauf passende Verkäufe über deinem Durchschnittspreis. <strong>Rest senden</strong> schickt die zurückgehaltenen Stufen, <strong>Stornieren</strong> löscht alle offenen Orders des Plans.</p>
-        <p>Wird eine Order ausgeführt, meldet sich der Mac mit einer Mitteilung.</p>
+        <p>Wird eine Order ausgeführt, meldet sich der Mac mit einer Mitteilung. Die <strong>Notbremse</strong> storniert im Notfall alle offenen Orders auf einmal, und unter <strong>Protokoll</strong> steht jeder Schritt mit Uhrzeit.</p>
       </>
     ),
   },

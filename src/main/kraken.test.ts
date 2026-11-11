@@ -218,3 +218,20 @@ describe('checkPermissions', () => {
     expect(calls).toHaveLength(1)
   })
 })
+
+describe('Runde 2', () => {
+  it('liest den Preisschritt (tick_size) aus AssetPairs', async () => {
+    const { http } = fakeHttp(() => ({ error: [], result: { XXBTZEUR: { status: 'online', wsname: 'XBT/EUR', base: 'XXBT', quote: 'ZEUR', pair_decimals: 1, lot_decimals: 8, ordermin: '0.00005', costmin: '0.5', tick_size: '0.5' } } }))
+    const [p] = await new Kraken(null, http).pairs()
+    expect(p).toMatchObject({ name: 'BTC/EUR', tickSize: 0.5, priceDecimals: 1 })
+  })
+  it('Notbremse ruft CancelAll und liefert die Anzahl', async () => {
+    const { http, calls } = fakeHttp(() => ({ error: [], result: { count: 4 } }))
+    expect(await new Kraken({ key: 'k', secret: 'cw==' }, http).cancelAll()).toBe(4)
+    expect(calls[0].url).toMatch(/private\/CancelAll$/)
+  })
+  it('Systemstatus', async () => {
+    const { http } = fakeHttp(() => ({ error: [], result: { status: 'maintenance', timestamp: 'x' } }))
+    expect(await new Kraken(null, http).systemStatus()).toBe('maintenance')
+  })
+})

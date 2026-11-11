@@ -17,6 +17,8 @@ export interface PairRules {
   orderMin: number
   /** Kleinster Gegenwert pro Order (in der Kurswährung, z. B. EUR) */
   costMin: number
+  /** Erlaubter Preisschritt bei Kraken (z. B. 0.5). Fehlt er, gilt 1 Einheit der letzten Nachkommastelle. */
+  tickSize?: number
 }
 
 export interface LadderInput {
@@ -110,6 +112,18 @@ function roundTo(value: number, decimals: number, mode: 'down' | 'up' | 'nearest
   return r / f
 }
 
+/**
+ * Rundet einen Preis auf Krakens Preisschritt (tick size) und die Nachkommastellen.
+ * Kauf rundet ab, Verkauf auf: so wird nie schlechter gehandelt als berechnet.
+ */
+export function roundPrice(value: number, rules: Pick<PairRules, 'priceDecimals' | 'tickSize'>, mode: 'down' | 'up'): number {
+  const tick = rules.tickSize && rules.tickSize > 0 ? rules.tickSize : 0
+  if (!tick || Math.abs(tick - Math.pow(10, -rules.priceDecimals)) < 1e-15) return roundTo(value, rules.priceDecimals, mode)
+  const steps = Number((value / tick).toFixed(6))
+  const n = mode === 'down' ? Math.floor(steps) : Math.ceil(steps)
+  return Number((n * tick).toFixed(rules.priceDecimals))
+}
+
 export function validateInput(input: LadderInput): string[] {
   const e: string[] = []
   const { priceStart, priceEnd, steps, total, ratio, side } = input
@@ -145,7 +159,7 @@ export function buildLadder(input: LadderInput, rules: PairRules): Ladder {
   const levels: LadderLevel[] = weights.map((w, i) => {
     const share = w / sum
     // Kauf: Preis abrunden, Verkauf: aufrunden. So wird nie schlechter gehandelt als berechnet.
-    const price = roundTo(priceAt(spacing, priceStart, priceEnd, position(i, steps)), rules.priceDecimals, side === 'buy' ? 'down' : 'up')
+    const price = roundPrice(priceAt(spacing, priceStart, priceEnd, position(i, steps)), rules, side === 'buy' ? 'down' : 'up')
     // Menge immer abrunden, damit Budget bzw. Bestand nie überschritten wird
     const rawVolume = side === 'buy' ? (total * share) / price : total * share
     const volume = roundTo(rawVolume, rules.volumeDecimals, 'down')

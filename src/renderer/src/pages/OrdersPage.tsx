@@ -1,6 +1,7 @@
 import { api } from '../api'
 import { Fragment, useEffect, useState } from 'react'
-import { RefreshCw, Send, TrendingUp, X } from 'lucide-react'
+import { OctagonX, RefreshCw, Send, TrendingUp, X } from 'lucide-react'
+import { assetLabel } from '@shared/safety'
 import type { OpenOrderDto, PlanDto, PlanStatusDto } from '@shared/ipc'
 import { profitLadderSuggestion } from '@shared/plan-status'
 import type { Prefill } from './PlannerPage'
@@ -20,6 +21,29 @@ export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; on
   const { eur, fmtPrice, sym } = useMoney()
   const [restPlan, setRestPlan] = useState<PlanDto | null>(null)
   const [restMsg, setRestMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [brake, setBrake] = useState(false)
+  const [brakeMsg, setBrakeMsg] = useState<string | null>(null)
+
+  async function emergencyStop() {
+    setBusy(true)
+    try {
+      const n = await api().cancelAll()
+      setBrakeMsg(`Notbremse ausgeführt: ${n} ${n === 1 ? 'Order' : 'Orders'} storniert.`)
+    } catch (e) {
+      setError((e as Error).message)
+    }
+    setBusy(false)
+    setBrake(false)
+    load()
+  }
+
+  // Guthaben nach Coin zusammenfassen: normal handelbar und in Earn getrennt
+  const balanceRows = Object.entries(balances).reduce<Record<string, { spot: number; earn: number; earnLabel?: string }>>((acc, [code, v]) => {
+    const { name, earn } = assetLabel(code)
+    const row = (acc[name] ??= { spot: 0, earn: 0 })
+    if (earn) { row.earn += v; row.earnLabel = earn } else row.spot += v
+    return acc
+  }, {})
 
   async function load() {
     setError(null)
@@ -108,18 +132,34 @@ export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; on
           <h1 className="page-title">Offene Orders</h1>
           <p className="page-subtitle">Was gerade bei Kraken liegt, nach Plänen gruppiert.</p>
         </div>
-        <button type="button" className="btn btn-secondary ml-auto" onClick={load}><RefreshCw size={16} /> Aktualisieren</button>
+        <div className="ml-auto flex flex-shrink-0 gap-2">
+          {hasKey && <button type="button" className="btn btn-outline text-danger-fg" onClick={() => { setBrakeMsg(null); setBrake(true) }} title="Alle offenen Orders bei Kraken auf einmal stornieren"><OctagonX size={16} /> Notbremse</button>}
+          <button type="button" className="btn btn-secondary" onClick={load}><RefreshCw size={16} /> Aktualisieren</button>
+        </div>
       </header>
       {!hasKey && <p className="notice notice-info mb-4">Hinterlege zuerst im Reiter „Schlüssel“ einen Kraken-API-Schlüssel.</p>}
       {error && <p className="notice notice-danger mb-4">{error}</p>}
+      {brakeMsg && <p className="notice notice-success mb-4">{brakeMsg}</p>}
       {restMsg && !restPlan && <p className={`notice mb-4 ${restMsg.ok ? 'notice-success' : 'notice-danger'}`}>{restMsg.text}</p>}
 
       <div className="space-y-4">
         {Object.keys(balances).length > 0 && (
           <SectionCard title="Guthaben">
-            <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
-              {Object.entries(balances).map(([k, v]) => <span key={k}><span className="text-ink-muted">{k.replace(/^Z(EUR|USD)$/, '$1').replace(/^XXBT$/, 'BTC').replace(/^X(ETH|XRP|LTC)$/, '$1')}</span> <span className="tabular-nums">{num(v, 8)}</span></span>)}
+            <div className="overflow-x-auto">
+              <table className="data-table">
+                <thead><tr><th>Coin</th><th className="num">Handelbar</th><th className="num">In Earn</th></tr></thead>
+                <tbody>
+                  {Object.entries(balanceRows).sort(([a], [b]) => (a === 'EUR' ? -1 : b === 'EUR' ? 1 : a.localeCompare(b))).map(([name, r]) => (
+                    <tr key={name}>
+                      <td className="font-medium">{name}</td>
+                      <td className="num">{name === 'EUR' ? eur(r.spot) : num(r.spot, 8)}</td>
+                      <td className="num text-ink-muted">{r.earn > 0 ? <span title={r.earnLabel}>{name === 'EUR' ? eur(r.earn) : num(r.earn, 8)}</span> : '–'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
+            {Object.values(balanceRows).some((r) => r.earn > 0) && <p className="mt-2 text-xs text-ink-muted">„In Earn“ ist Guthaben in Krakens Belohnungsprogramm (Staking). Gebundenes Guthaben lässt sich nicht sofort verkaufen.</p>}
           </SectionCard>
         )}
 
@@ -211,6 +251,19 @@ export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; on
             <p>Gegenwert: <strong>{eur(restLevels(restPlan).reduce((a, l) => a + l.cost, 0))}</strong></p>
             <p className="text-ink-muted">Die Stufen wurden beim Planen berechnet. Liegt der Kurs inzwischen woanders, prüfe sie vorher mit dem Probelauf.</p>
             {restMsg && <p className={`notice ${restMsg.ok ? 'notice-success' : 'notice-danger'}`}>{restMsg.text}</p>}
+          </div>
+        </Modal>
+      )}
+
+      {brake && (
+        <Modal title="Notbremse: alle Orders stornieren?" size="sm" onClose={() => !busy && setBrake(false)}
+          footer={<>
+            <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => setBrake(false)}>Abbrechen</button>
+            <button type="button" className="btn btn-danger" disabled={busy} onClick={emergencyStop}>{busy ? 'Storniere …' : 'Alle stornieren'}</button>
+          </>}>
+          <div className="space-y-2 text-sm">
+            <p>Storniert <strong>alle offenen Orders</strong> in deinem Kraken-Konto auf einmal{orders ? ` (gerade ${orders.length})` : ''}, auch solche, die du nicht mit dieser App angelegt hast.</p>
+            <p className="text-ink-muted">Bereits ausgeführte Käufe und Verkäufe bleiben bestehen. Noch nicht gesendete Stufen deiner Pläne bleiben in der App und gehen nicht raus.</p>
           </div>
         </Modal>
       )}

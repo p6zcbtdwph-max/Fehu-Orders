@@ -1,6 +1,6 @@
 // Demo-Modus: dieselbe Schnittstelle wie die echte App, aber nur mit Beispieldaten im Speicher.
 // Hier gibt es keinen Netzwerkzugriff, es kann also keine echte Order entstehen.
-import type { Api, DraftDto, KeyCheck, OpenOrderDto, PairDto, PlanDto, PlanStatusDto, SendResult, SettingsDto, TemplateDto } from '@shared/ipc'
+import type { Api, DraftDto, KeyCheck, LogEntry, OpenOrderDto, PairDto, PlanDto, PlanStatusDto, SendResult, SettingsDto, TemplateDto } from '@shared/ipc'
 
 const P = (id: string, name: string, base: string, priceDecimals: number, orderMin: number, price: number) =>
   ({ pair: { id, name, base, quote: 'ZEUR', priceDecimals, volumeDecimals: 8, orderMin, costMin: 0.5 } as PairDto, price })
@@ -30,6 +30,8 @@ export function createDemoApi(): Api {
       input: { side: 'buy', priceStart: 78000, priceEnd: 64000, steps: 10, total: 300, spacing: 'linear', curve: 'linear', ratio: 3 } },
   ]
   let orders: OpenOrderDto[] = []
+  const log: LogEntry[] = []
+  const addLog = (e: Omit<LogEntry, 'at'>) => log.unshift({ at: new Date().toISOString(), ...e })
   const now = new Date().toISOString()
   let drafts: DraftDto[] = [
     { id: 'demo-d1', name: 'BTC Crash-Kauf', scenario: 'Crash', note: 'Nur freigeben, wenn BTC deutlich fällt.', createdAt: now, updatedAt: now,
@@ -92,6 +94,14 @@ export function createDemoApi(): Api {
     async send(req) {
       const valid = req.levels.filter((l) => !l.problem)
       const chosen = valid.slice(0, req.sendCount ?? valid.length)
+      const amount = chosen.reduce((a, l) => a + l.cost, 0)
+      const last = priceOf(req.pairId)
+      if (chosen.some((l) => (req.side === 'buy' ? l.price >= last : l.price <= last))) {
+        const msg = `Der Kurs steht gerade bei ${last} €. Stufen auf der falschen Seite, es wurde nichts gesendet.`
+        addLog({ action: req.validate ? 'validate' : 'send', pair: req.pairName, side: req.side, count: chosen.length, amount, success: false, message: msg })
+        throw new Error(msg)
+      }
+      addLog({ action: req.validate ? 'validate' : 'send', pair: req.pairName, side: req.side, count: chosen.length, ok: chosen.length, failed: 0, amount, success: true, message: req.validate ? 'Probelauf ohne Fehler' : `${chosen.length} Orders angelegt` })
       if (req.validate) return wait({ userref: 0, validate: true, orders: chosen.map((l) => ({ index: l.index, price: l.price, volume: l.volume })) }, 400)
       const plan: PlanDto = { userref: nextRef++, createdAt: new Date().toISOString(), pairId: req.pairId, pairName: req.pairName, side: req.side, input: req.input,
         sent: chosen.length, failed: 0, totalCost: chosen.reduce((a, l) => a + l.cost, 0), levels: req.levels, sentIndices: chosen.map((l) => l.index), postOnly: req.postOnly }
@@ -113,8 +123,20 @@ export function createDemoApi(): Api {
     async cancelPlan(userref) {
       const n = orders.filter((o) => o.userref === userref).length
       orders = orders.filter((o) => o.userref !== userref)
+      addLog({ action: 'cancel-plan', userref, success: true, count: n, message: `${n} Orders storniert` })
       return wait(n)
     },
+    async cancelAll() {
+      const n = orders.length
+      orders = []
+      addLog({ action: 'cancel-all', success: true, count: n, message: `Notbremse: ${n} Orders storniert` })
+      return wait(n)
+    },
+    systemStatus: () => wait('online'),
+    log: () => wait(log.map((e) => ({ ...e }))),
+    backupExport: async () => { throw new Error('Im Demo-Modus gibt es nichts zu sichern. Beende zuerst die Demo.') },
+    backupPick: async () => { throw new Error('Im Demo-Modus kannst du keine Sicherung einspielen. Beende zuerst die Demo.') },
+    backupRestore: async () => { throw new Error('Im Demo-Modus nicht möglich.') },
     async cancelOrder(txid) {
       orders = orders.filter((o) => o.txid !== txid)
       await wait(null)
@@ -156,5 +178,6 @@ export function createDemoApi(): Api {
     async saveDraft(d) { drafts = drafts.some((x) => x.id === d.id) ? drafts.map((x) => (x.id === d.id ? d : x)) : [d, ...drafts] },
     async deleteDraft(id) { drafts = drafts.filter((d) => d.id !== id) },
     onFills: () => () => {},
+    onOpenPage: () => () => {},
   }
 }

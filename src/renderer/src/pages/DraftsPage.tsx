@@ -1,6 +1,6 @@
 import { api } from '../api'
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, ClipboardList, FlaskConical, Pencil, RefreshCw, Rocket, Trash2 } from 'lucide-react'
+import { AlertTriangle, Bell, BellRing, ClipboardList, FlaskConical, Pencil, RefreshCw, Rocket, Trash2 } from 'lucide-react'
 import { buildLadder } from '@shared/ladder'
 import type { DraftDto, PairDto, SendResult } from '@shared/ipc'
 import { wrongSide } from '@shared/safety'
@@ -104,6 +104,9 @@ export default function DraftsPage({ hasKey, onEdit, onNeedKey }: { hasKey: bool
                         <td className="min-w-[12rem]">
                           <span className="font-medium text-ink">{d.name}</span>
                           {d.note && <span className="block text-xs text-ink-muted">{d.note}</span>}
+                          {d.alarmFiredAt
+                            ? <span className="mt-1 block"><Badge tone="accent"><BellRing size={12} className="mr-1 inline" />Kursalarm ausgelöst {new Date(d.alarmFiredAt).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })}</Badge></span>
+                            : d.alarm && <span className="mt-1 flex items-center gap-1 text-xs text-ink-muted"><Bell size={12} /> Alarm bei {fmtPrice(first, dec)} {sym}</span>}
                           {ev && ev.wrong.length > 0 && <span className="mt-1 block"><Badge tone="danger">{ev.wrong.length} Stufen auf falscher Kursseite</Badge></span>}
                           {ev && !ev.ladder.valid && <span className="mt-1 block"><Badge tone="warning">Passt nicht mehr zu Krakens Regeln</Badge></span>}
                         </td>
