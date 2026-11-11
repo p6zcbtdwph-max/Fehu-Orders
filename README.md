@@ -40,6 +40,9 @@ Mac-App, um viele gestaffelte Limit-Orders auf einmal zu planen und an Kraken zu
 - Der API-Schlüssel wird mit Electron `safeStorage` verschlüsselt, der Generalschlüssel liegt im macOS-Schlüsselbund (wie beim Lifemanager). Datei: `~/Library/Application Support/fehu-orders/kraken-key.bin`.
 - Der Schlüssel verlässt nie den Hauptprozess, das Fenster spricht nicht selbst mit dem Netz.
 - Obergrenze pro Sendung in EUR (Standard 50 €), geprüft im Hauptprozess.
+- **Touch ID vor jedem echten Senden** (auch „Rest senden“ und Entwurf freigeben), abgefragt im Hauptprozess. Der Probelauf geht ohne. Macs ohne Touch ID nutzen nur das Bestätigungsfenster; der Reiter Schlüssel zeigt, was gilt.
+- Reiter Schlüssel mit **Profi-Tipp IP-Beschränkung** (Schlüssel nur vom eigenen Anschluss nutzbar, mit Hinweis auf wechselnde IP-Adressen)
+- **Hinweis zum gesperrten Guthaben:** Planer, Bestätigung, Entwürfe und Einführung erklären, dass jede gesendete Order ihren vollen Betrag bei Kraken sperrt, bis sie ausgeführt oder storniert ist. Entwürfe sperren nichts.
 - Kraken-Schlüssel nur mit: Guthaben abfragen, Offene/geschlossene Orders abfragen, Orders erstellen und ändern, Orders stornieren. **Keine Auszahlungen.**
 
 ## Kraken-Anbindung

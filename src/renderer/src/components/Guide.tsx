@@ -49,6 +49,7 @@ export const GUIDE_STEPS: Step[] = [
       <>
         <p>Oben siehst du, was der Plan kostet, die geschätzte <strong>Gebühr</strong> und den <strong>Durchschnittspreis</strong>, falls alle Stufen ausgeführt werden.</p>
         <p>Im Chart zeigen die gestrichelten Linien, wo deine Orders im Kursverlauf liegen. Reicht dein Guthaben nicht, sagt die App es dir, bevor etwas rausgeht.</p>
+        <p><strong>Wichtig:</strong> Jede Order muss mit echtem Guthaben hinterlegt sein. Kraken sperrt den Betrag aller gesendeten Stufen sofort, auch wenn sie erst viel später oder nie ausgeführt werden. Bis zur Ausführung oder Stornierung ist das Geld gebunden. Entwürfe sperren dagegen nichts.</p>
       </>
     ),
   },
@@ -57,7 +58,7 @@ export const GUIDE_STEPS: Step[] = [
     body: (
       <>
         <p><strong>Probelauf</strong>: Kraken prüft jede Order, legt aber nichts an. Mach das vor jedem echten Plan.</p>
-        <p><strong>An Kraken senden</strong> legt die Orders wirklich an, erst nach einer Bestätigung. Eine Obergrenze pro Plan in den Einstellungen schützt vor Tippfehlern.</p>
+        <p><strong>An Kraken senden</strong> legt die Orders wirklich an, erst nach einer Bestätigung und, wenn dein Mac es hat, mit Touch ID. Eine Obergrenze pro Plan in den Einstellungen schützt vor Tippfehlern.</p>
       </>
     ),
   },

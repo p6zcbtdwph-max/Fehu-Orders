@@ -1,6 +1,6 @@
 import { api } from '../api'
-import { useState } from 'react'
-import { Check, ExternalLink, KeyRound, ShieldAlert, ShieldCheck, X } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Check, ExternalLink, Fingerprint, Globe, KeyRound, ShieldAlert, ShieldCheck, X } from 'lucide-react'
 import type { KeyCheck } from '@shared/ipc'
 import { checkKeyFormat } from '@shared/safety'
 import SectionCard from '../components/ui/SectionCard'
@@ -46,6 +46,10 @@ export default function KeyPage({ hasKey, onKeyChanged }: { hasKey: boolean; onK
   /** Wo die Meldung steht: beim Status (erneut prüfen) oder beim Formular (speichern) */
   const [source, setSource] = useState<'status' | 'form'>('form')
   const formatIssues = checkKeyFormat(key, secret)
+  const [touchId, setTouchId] = useState<boolean | null>(null)
+  useEffect(() => {
+    api().keyStatus().then((s) => setTouchId(s.touchId)).catch(() => setTouchId(null))
+  }, [])
 
   async function save() {
     setBusy('save')
@@ -111,6 +115,8 @@ export default function KeyPage({ hasKey, onKeyChanged }: { hasKey: boolean; onK
               <p className="notice notice-info flex items-center gap-2"><KeyRound size={16} /> Noch kein Schlüssel hinterlegt. Folge den Schritten unten.</p>
             )}
             <p className="flex items-center gap-2 text-ink-muted"><ShieldCheck size={16} className="text-success-fg" /> Der Schlüssel bleibt auf diesem Mac, verschlüsselt über den macOS-Schlüsselbund.</p>
+            {touchId === true && <p className="flex items-center gap-2 text-ink-muted"><Fingerprint size={16} className="text-success-fg" /> Touch ID ist aktiv: Vor jedem echten Senden fragt der Mac nach deinem Finger. Der Probelauf geht ohne.</p>}
+            {touchId === false && <p className="flex items-start gap-2 text-ink-muted"><Fingerprint size={16} className="mt-0.5 flex-shrink-0 text-warning-fg" /> <span>Dieser Mac hat kein Touch ID oder es ist kein Finger eingerichtet. Vor dem Senden fragt die App dann nur mit dem Bestätigungsfenster. Einrichten kannst du Touch ID in den Systemeinstellungen unter „Touch ID &amp; Passwort“.</span></p>}
             {hasKey && (
               <div className="flex flex-wrap gap-2">
                 <button type="button" className="btn btn-secondary" disabled={!!busy} onClick={verify}>{busy === 'verify' ? 'Prüfe …' : 'Rechte erneut prüfen'}</button>
@@ -162,7 +168,7 @@ export default function KeyPage({ hasKey, onKeyChanged }: { hasKey: boolean; onK
             </li>
             <li>
               <span className="step-num">4</span>
-              <p className="min-w-0 flex-1"><strong>Alles andere so lassen</strong> (Nonce Window, IP-Beschränkung, Ablaufdatum). Das brauchst du für den Anfang nicht.</p>
+              <p className="min-w-0 flex-1"><strong>Alles andere so lassen</strong> (Nonce Window, IP-Beschränkung, Ablaufdatum). Das brauchst du für den Anfang nicht. Die IP-Beschränkung kannst du später als Profi-Schutz einrichten, siehe unten.</p>
             </li>
             <li>
               <span className="step-num">5</span>
@@ -193,6 +199,20 @@ export default function KeyPage({ hasKey, onKeyChanged }: { hasKey: boolean; onK
             </button>
           </div>
         </SectionCard></div>
+
+        <SectionCard title="Profi-Tipp: IP-Beschränkung">
+          <div className="space-y-2 text-sm">
+            <p className="flex items-start gap-2"><Globe size={16} className="mt-0.5 flex-shrink-0 text-ink-muted" /><span>Bei Kraken kannst du einen Schlüssel auf deine <strong>IP-Adresse</strong> beschränken. Das ist die Adresse, unter der dein Internetanschluss im Netz auftritt. Dann funktioniert der Schlüssel nur noch von deinem Anschluss aus. Selbst wenn ihn jemand stiehlt, kann er damit woanders nichts anfangen.</span></p>
+            <p className="text-ink-muted">Das ist der stärkste Schutz für den Fall, dass der Schlüssel in falsche Hände gerät. Touch ID und die Obergrenze in der App helfen dann nicht mehr, weil ein Dieb die App gar nicht braucht.</p>
+            <p className="font-medium">So geht es:</p>
+            <ol className="list-decimal space-y-1 pl-5 text-ink-muted">
+              <li>Deine aktuelle IP-Adresse findest du in deinem Router, bei einer FRITZ!Box unter <em>Internet › Online-Monitor</em> („IPv4-Adresse“).</li>
+              <li>Bei Kraken den Schlüssel bearbeiten und unter <em>IP Whitelisting</em> genau diese Adresse eintragen.</li>
+              <li>Hier „Rechte erneut prüfen“. Alles grün heißt: es klappt.</li>
+            </ol>
+            <p className="notice notice-warning">Achtung: Bei den meisten privaten Anschlüssen in Deutschland ändert sich die IP-Adresse ab und zu, zum Beispiel nach einem Router-Neustart. Dann meldet die App „fehlende Berechtigung“, bis du die neue Adresse bei Kraken einträgst. Unterwegs (anderes WLAN, Handy-Hotspot) geht der Schlüssel ebenfalls nicht. Lohnt sich vor allem, wenn du eine feste IP-Adresse hast oder größere Beträge verwaltest.</p>
+          </div>
+        </SectionCard>
 
         <SectionCard title="Häufige Fehler">
           <ul className="list-disc space-y-1 pl-5 text-sm text-ink-muted">

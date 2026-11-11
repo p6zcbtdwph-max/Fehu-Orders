@@ -80,7 +80,7 @@ export default function DraftsPage({ hasKey, onEdit, onNeedKey }: { hasKey: bool
         {open.length === 0 && (
           <SectionCard title="Noch keine Entwürfe">
             <div className="space-y-2 text-sm text-ink-muted">
-              <p>Plane im <strong className="text-ink">Planer</strong> eine Staffel und klicke oben auf <strong className="text-ink">Als Entwurf</strong>. Sie wird dann hier gespeichert, ohne dass etwas an Kraken geht.</p>
+              <p>Plane im <strong className="text-ink">Planer</strong> eine Staffel und klicke oben auf <strong className="text-ink">Als Entwurf</strong>. Sie wird dann hier gespeichert, ohne dass etwas an Kraken geht. Ein Entwurf sperrt auch kein Guthaben. Erst beim Freigeben muss der volle Betrag auf deinem Kraken-Konto bereitliegen.</p>
               <p>Mit einem <strong className="text-ink">Szenario</strong> wie „Crash“ oder „Bullrun“ hältst du passende Gruppen zusammen und gibst sie frei, wenn es so weit ist.</p>
             </div>
           </SectionCard>
@@ -269,7 +269,7 @@ function ReleaseModal({ draft, pair, last, hasKey, onNeedKey, onClose }: {
             {result.orders.some((o) => o.uncertain) && <p className="mt-1 text-xs font-medium">Die Verbindung brach ab. Schau unter „Offene Orders“ nach, was wirklich angelegt wurde.</p>}
           </div>
         )}
-        {!result && !err && <p className="text-xs text-ink-muted">Erst der Knopf „Freigeben und senden“ legt die Orders echt bei Kraken an. Der Probelauf prüft nur.</p>}
+        {!result && !err && <p className="text-xs text-ink-muted">Erst der Knopf „Freigeben und senden“ legt die Orders echt bei Kraken an. Ab dann sperrt Kraken den vollen Betrag auf deinem Konto, bis die Orders ausgeführt oder storniert sind. Der Probelauf prüft nur.</p>}
       </div>
     </Modal>
   )

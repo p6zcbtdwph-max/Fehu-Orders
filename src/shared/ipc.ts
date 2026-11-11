@@ -152,7 +152,8 @@ export interface PlanStatusDto {
 }
 
 export interface Api {
-  keyStatus(): Promise<{ hasKey: boolean; encryption: boolean }>
+  /** touchId: Mac kann Touch ID abfragen, dann ist es vor jedem echten Senden Pflicht */
+  keyStatus(): Promise<{ hasKey: boolean; encryption: boolean; touchId: boolean }>
   saveKey(key: string, secret: string): Promise<SaveKeyResult>
   /** Rechte des gespeicherten Schlüssels erneut prüfen */
   verifyKey(): Promise<KeyCheck[]>

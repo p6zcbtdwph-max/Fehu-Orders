@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Notification, safeStorage, session, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Notification, safeStorage, session, shell, systemPreferences } from 'electron'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { parseBackup, summarize } from '../shared/backup'
 import { join } from 'node:path'
@@ -65,7 +65,7 @@ function handle(channel: string, fn: (...args: any[]) => any): void {
   })
 }
 
-handle('key:status', () => ({ hasKey: loadCredentials() !== null, encryption: safeStorage.isEncryptionAvailable() }))
+handle('key:status', () => ({ hasKey: loadCredentials() !== null, encryption: safeStorage.isEncryptionAvailable(), touchId: touchIdAvailable() }))
 handle('key:save', async (key: string, secret: string): Promise<SaveKeyResult> => {
   const creds = { key: String(key).trim(), secret: String(secret).trim() }
   const format = checkKeyFormat(creds.key, creds.secret)
@@ -255,6 +255,31 @@ function logResult(base: Omit<LogEntry, 'at' | 'success'>, orders: SendResult['o
   addLog({ ...base, ok, failed, success: failed === 0, message: firstError ?? (base.action === 'validate' ? 'Probelauf ohne Fehler' : `${ok} Orders angelegt`) })
 }
 
+/** Hat dieser Mac Touch ID (und ist ein Finger eingerichtet)? */
+function touchIdAvailable(): boolean {
+  try {
+    return process.platform === 'darwin' && systemPreferences.canPromptTouchID()
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Zweite Ebene vor jedem echten Senden: Touch ID.
+ * Das Bestätigungsfenster schützt vor Versehen, Touch ID davor, dass jemand anderes an deinem offenen Mac klickt.
+ * Ohne Touch ID (älterer Mac, kein Finger eingerichtet) bleibt es beim Bestätigungsfenster.
+ */
+async function confirmWithTouchId(reason: string, base: Omit<LogEntry, 'at' | 'success'>): Promise<void> {
+  if (!touchIdAvailable()) return
+  try {
+    await systemPreferences.promptTouchID(reason)
+  } catch {
+    const msg = 'Touch ID wurde abgebrochen oder nicht erkannt. Es wurde nichts gesendet.'
+    addLog({ ...base, success: false, message: msg })
+    throw new Error(msg)
+  }
+}
+
 /** Zweite Sicherung im Hauptprozess: Obergrenze pro Sendung */
 function checkLimit(levels: { price: number; volume: number }[]): number {
   const total = levels.reduce((a, l) => a + l.price * l.volume, 0)
@@ -270,6 +295,7 @@ handle('send', async (req: SendRequest): Promise<SendResult> => {
   const levels = valid.slice(0, count)
   const total = checkLimit(levels)
   const base = { action: req.validate ? 'validate' : 'send', pair: req.pairName, side: req.side, count: levels.length, amount: total }
+  if (!req.validate) await confirmWithTouchId(`${levels.length} echte Orders über ${total.toFixed(2)} € an Kraken senden`, base)
   await freshPriceGuard(req.pairId, req.side, levels, base)
   const userref = newUserref()
   let orders: SendResult['orders']
@@ -304,6 +330,7 @@ handle('plan:rest', async (userref: number, validate: boolean): Promise<SendResu
   if (!rest.length) throw new Error('Alle Stufen dieses Plans sind schon gesendet.')
   const total = checkLimit(rest)
   const base = { action: validate ? 'validate' : 'rest', pair: plan.pairName, side: plan.side, count: rest.length, amount: total, userref }
+  if (!validate) await confirmWithTouchId(`${rest.length} weitere echte Orders über ${total.toFixed(2)} € an Kraken senden`, base)
   await freshPriceGuard(plan.pairId, plan.side, rest, base)
   let orders: SendResult['orders']
   try {

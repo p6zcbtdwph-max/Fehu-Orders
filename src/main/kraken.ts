@@ -96,7 +96,7 @@ export function sign(path: string, nonce: string, body: string, secret: string):
 export function explainError(code: string): string {
   if (code.includes('Invalid key')) return 'Der API-Schlüssel ist ungültig. Prüfe, ob du ihn vollständig kopiert hast.'
   if (code.includes('Invalid signature')) return 'Der private Schlüssel passt nicht zum API-Schlüssel. Prüfe, ob beide vollständig und nicht vertauscht sind.'
-  if (code.includes('Permission denied')) return 'Dem API-Schlüssel fehlt eine Berechtigung. Unter „Schlüssel“ siehst du, welche Häkchen nötig sind.'
+  if (code.includes('Permission denied')) return 'Dem API-Schlüssel fehlt eine Berechtigung. Unter „Schlüssel“ siehst du, welche Häkchen nötig sind. Hast du bei Kraken eine IP-Beschränkung eingerichtet, hat sich vielleicht deine IP-Adresse geändert.'
   if (code.includes('Insufficient funds')) return 'Nicht genug Guthaben.'
   if (code.includes('Invalid nonce')) return 'Zeitstempel abgelehnt. Bitte noch einmal versuchen.'
   if (code.includes('Temporary lockout')) return 'Kraken hat den Schlüssel nach zu vielen Fehlversuchen kurz gesperrt. Bitte etwa 15 Minuten warten.'
