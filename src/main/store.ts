@@ -2,7 +2,7 @@
 // Der API-Schlüssel wird mit Electron safeStorage verschlüsselt. Den Generalschlüssel
 // dafür verwaltet der macOS-Schlüsselbund, genau wie beim Lifemanager.
 import { app, safeStorage } from 'electron'
-import { existsSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs'
+import { copyFileSync, existsSync, readFileSync, renameSync, writeFileSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Credentials } from './kraken'
 import type { LadderInput, LadderLevel, Side } from '../shared/ladder'
@@ -13,7 +13,9 @@ const file = (name: string) => join(app.getPath('userData'), name)
 
 export function saveCredentials(c: Credentials): void {
   if (!safeStorage.isEncryptionAvailable()) throw new Error('Der Schlüsselbund ist nicht verfügbar. Der Schlüssel wird nicht unverschlüsselt gespeichert.')
-  writeFileSync(file('kraken-key.bin'), safeStorage.encryptString(JSON.stringify(c)), { mode: 0o600 })
+  const f = file('kraken-key.bin')
+  writeFileSync(`${f}.tmp`, safeStorage.encryptString(JSON.stringify(c)), { mode: 0o600 })
+  renameSync(`${f}.tmp`, f)
 }
 
 export function loadCredentials(): Credentials | null {
@@ -38,9 +40,11 @@ export interface Settings {
   watchlist: string[]
   /** Anzeigewährung. Orders laufen immer in der Kurswährung des Paars (EUR). */
   currency: 'EUR' | 'USD'
+  /** Zahlenformat für Eingaben und Anzeige: de = 1.234,56, en = 1,234.56 */
+  numberFormat: 'de' | 'en'
 }
 
-export const DEFAULT_SETTINGS: Settings = { maxPlanEur: 50, watchlist: ['BTC/EUR', 'ETH/EUR'], currency: 'EUR' }
+export const DEFAULT_SETTINGS: Settings = { maxPlanEur: 50, watchlist: ['BTC/EUR', 'ETH/EUR'], currency: 'EUR', numberFormat: 'de' }
 
 export interface PlanRecord {
   userref: number
@@ -59,21 +63,70 @@ export interface PlanRecord {
   postOnly?: boolean
 }
 
+/**
+ * Schreibt sicher: erst in eine Hilfsdatei, dann umbenennen. Geht der Mac mitten im Schreiben aus,
+ * bleibt die alte Datei vollständig. Der vorige Stand liegt zusätzlich als .bak daneben.
+ */
+export function writeJson(name: string, data: unknown, pretty = true): void {
+  const f = file(name)
+  const tmp = `${f}.tmp`
+  writeFileSync(tmp, JSON.stringify(data, null, pretty ? 2 : undefined))
+  if (existsSync(f)) {
+    try {
+      JSON.parse(readFileSync(f, 'utf8'))
+      copyFileSync(f, `${f}.bak`) // nur einen lesbaren Stand als Reserve behalten
+    } catch { /* kaputte Datei nicht als Reserve übernehmen */ }
+  }
+  renameSync(tmp, f)
+}
+
+function parseFile<T>(path: string, fallback: T): T {
+  const raw = JSON.parse(readFileSync(path, 'utf8'))
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('kein Objekt')
+  return { ...fallback, ...raw }
+}
+
+/**
+ * Liest eine Datei. Fehlt sie, gilt der Startwert. Ist sie kaputt, wird sie nicht still als leer behandelt
+ * (das nächste Speichern würde sonst alles überschreiben): Sie wird als .defekt-… beiseitegelegt
+ * und der letzte gute Stand (.bak) wird genommen.
+ */
 function readJson<T>(name: string, fallback: T): T {
+  const f = file(name)
+  if (!existsSync(f)) return fallback
   try {
-    return { ...fallback, ...JSON.parse(readFileSync(file(name), 'utf8')) }
+    return parseFile(f, fallback)
   } catch {
+    try { renameSync(f, `${f}.defekt-${new Date().toISOString().replace(/[:.]/g, '-')}`) } catch { /* egal */ }
+    if (existsSync(`${f}.bak`)) {
+      try {
+        const restored = parseFile(`${f}.bak`, fallback)
+        copyFileSync(`${f}.bak`, f)
+        return restored
+      } catch { /* auch die Reserve ist kaputt */ }
+    }
     return fallback
   }
 }
 
+/** Nur gültige Einstellungen übernehmen (z. B. aus einer von Hand geänderten Sicherung), sonst den Standard */
+export function cleanSettings(raw: Record<string, unknown>): Settings {
+  const s: Settings = { ...DEFAULT_SETTINGS }
+  const max = Number(raw.maxPlanEur)
+  if (Number.isFinite(max) && max >= 1) s.maxPlanEur = max
+  if (Array.isArray(raw.watchlist)) s.watchlist = raw.watchlist.filter((x): x is string => typeof x === 'string').slice(0, 50)
+  if (raw.currency === 'EUR' || raw.currency === 'USD') s.currency = raw.currency
+  if (raw.numberFormat === 'de' || raw.numberFormat === 'en') s.numberFormat = raw.numberFormat
+  return s
+}
+
 export function getSettings(): Settings {
-  return readJson('settings.json', DEFAULT_SETTINGS)
+  return cleanSettings(readJson<Record<string, unknown>>('settings.json', {}))
 }
 
 export function saveSettings(patch: Partial<Settings>): Settings {
   const s = { ...getSettings(), ...patch }
-  writeFileSync(file('settings.json'), JSON.stringify(s, null, 2))
+  writeJson('settings.json', s)
   return s
 }
 
@@ -82,11 +135,12 @@ export function getPlans(): PlanRecord[] {
 }
 
 export function addPlan(p: PlanRecord): void {
-  writeFileSync(file('plans.json'), JSON.stringify({ plans: [p, ...getPlans()].slice(0, 200) }, null, 2))
+  // Keine Obergrenze: ein gelöschter Plan ließe sich nicht mehr stornieren oder weitersenden
+  writeJson('plans.json', { plans: [p, ...getPlans()] })
 }
 
 export function updatePlan(userref: number, change: (p: PlanRecord) => PlanRecord): void {
-  writeFileSync(file('plans.json'), JSON.stringify({ plans: getPlans().map((p) => (p.userref === userref ? change(p) : p)) }, null, 2))
+  writeJson('plans.json', { plans: getPlans().map((p) => (p.userref === userref ? change(p) : p)) })
 }
 
 /** Plan-Kennung für Krakens userref (positive 32-Bit-Zahl), aus der Zeit abgeleitet */
@@ -108,11 +162,11 @@ export function getTemplates(): Template[] {
 
 export function saveTemplate(t: Template): void {
   const rest = getTemplates().filter((x) => x.id !== t.id && x.name !== t.name)
-  writeFileSync(file('templates.json'), JSON.stringify({ templates: [t, ...rest] }, null, 2))
+  writeJson('templates.json', { templates: [t, ...rest] })
 }
 
 export function deleteTemplate(id: string): void {
-  writeFileSync(file('templates.json'), JSON.stringify({ templates: getTemplates().filter((x) => x.id !== id) }, null, 2))
+  writeJson('templates.json', { templates: getTemplates().filter((x) => x.id !== id) })
 }
 
 /** txids, über deren Ausführung schon benachrichtigt wurde */
@@ -121,7 +175,7 @@ export function getNotified(): string[] {
 }
 
 export function setNotified(txids: string[]): void {
-  writeFileSync(file('notified.json'), JSON.stringify({ txids: txids.slice(-5000) }))
+  writeJson('notified.json', { txids: txids.slice(-5000) }, false)
 }
 
 /** Entwürfe: Order-Gruppen, die erst nach Freigabe an Kraken gehen */
@@ -130,7 +184,9 @@ export function getDrafts(): DraftDto[] {
 }
 
 function writeDrafts(drafts: DraftDto[]): void {
-  writeFileSync(file('drafts.json'), JSON.stringify({ drafts: drafts.slice(0, 300) }, null, 2))
+  // Offene Entwürfe werden nie automatisch gelöscht, von den freigegebenen bleiben die neuesten 300
+  let released = 0
+  writeJson('drafts.json', { drafts: drafts.filter((d) => d.status !== 'released' || ++released <= 300) })
 }
 
 export function saveDraft(d: DraftDto): void {
@@ -162,7 +218,7 @@ export function getLog(): LogEntry[] {
 
 export function addLog(e: Omit<LogEntry, 'at'>): void {
   const entry: LogEntry = { at: new Date().toISOString(), ...e }
-  writeFileSync(file('log.json'), JSON.stringify({ entries: [entry, ...getLog()].slice(0, 2000) }))
+  writeJson('log.json', { entries: [entry, ...getLog()].slice(0, 2000) }, false)
 }
 
 /** Alles außer dem Schlüssel für die Datensicherung */
@@ -181,11 +237,11 @@ export function exportAll(): BackupData {
 export function importAll(d: BackupData): string {
   const safety = file(`vor-wiederherstellung-${new Date().toISOString().replace(/[:.]/g, '-')}.json`)
   writeFileSync(safety, JSON.stringify(exportAll(), null, 2))
-  writeFileSync(file('settings.json'), JSON.stringify({ ...DEFAULT_SETTINGS, ...d.settings }, null, 2))
-  writeFileSync(file('plans.json'), JSON.stringify({ plans: d.plans }, null, 2))
-  writeFileSync(file('drafts.json'), JSON.stringify({ drafts: d.drafts }, null, 2))
-  writeFileSync(file('templates.json'), JSON.stringify({ templates: d.templates }, null, 2))
-  writeFileSync(file('log.json'), JSON.stringify({ entries: d.log }))
-  writeFileSync(file('notified.json'), JSON.stringify({ txids: d.notified.length ? d.notified : ['-'] }))
+  writeJson('settings.json', cleanSettings(d.settings))
+  writeJson('plans.json', { plans: d.plans })
+  writeJson('drafts.json', { drafts: d.drafts })
+  writeJson('templates.json', { templates: d.templates })
+  writeJson('log.json', { entries: d.log }, false)
+  writeJson('notified.json', { txids: d.notified.length ? d.notified : ['-'] }, false)
   return safety
 }

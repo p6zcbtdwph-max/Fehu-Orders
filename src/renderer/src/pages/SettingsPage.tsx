@@ -4,6 +4,7 @@ import { DatabaseBackup, Download, Upload } from 'lucide-react'
 import type { BackupSummary } from '@shared/backup'
 import SectionCard from '../components/ui/SectionCard'
 import Modal from '../components/ui/Modal'
+import { NumberField } from './PlannerPage'
 
 export default function SettingsPage({ hasKey, onOpenKey }: { hasKey: boolean; onOpenKey: () => void }): JSX.Element {
   const [maxPlan, setMaxPlan] = useState(500)
@@ -67,12 +68,11 @@ export default function SettingsPage({ hasKey, onOpenKey }: { hasKey: boolean; o
 
         <SectionCard title="Sicherheit">
           <div className="space-y-3 text-sm">
-            <label className="block max-w-xs">
-              <span className="label">Obergrenze pro Plan (EUR)</span>
-              <input className="input w-full tabular-nums" inputMode="decimal" value={maxPlan} onChange={(e) => { setMaxPlan(Number(e.target.value.replace(',', '.')) || 0); setSavedMax(false) }} />
-              <span className="mt-1 block text-xs text-ink-muted">Ein Plan mit höherem Gegenwert wird nicht gesendet. Schützt vor Tippfehlern.</span>
-            </label>
-            <button type="button" className="btn btn-secondary" onClick={() => api().saveSettings({ maxPlanEur: maxPlan }).then(() => setSavedMax(true))}>{savedMax ? 'Gespeichert' : 'Speichern'}</button>
+            <div className="max-w-xs">
+              <NumberField label="Obergrenze pro Plan (EUR)" value={maxPlan} onChange={(v) => { setMaxPlan(v); setSavedMax(false) }}
+                hint="Ein Plan mit höherem Gegenwert wird nicht gesendet. Schützt vor Tippfehlern." />
+            </div>
+            <button type="button" className="btn btn-secondary" disabled={!(maxPlan >= 1)} onClick={() => api().saveSettings({ maxPlanEur: maxPlan }).then(() => setSavedMax(true))}>{savedMax ? 'Gespeichert' : 'Speichern'}</button>
           </div>
         </SectionCard>
 

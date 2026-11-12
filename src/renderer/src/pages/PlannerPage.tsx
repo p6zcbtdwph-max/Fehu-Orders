@@ -2,7 +2,7 @@ import { api } from '../api'
 import { useEffect, useMemo, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { AlertTriangle, Bell, BookmarkPlus, ClipboardList, GraduationCap, FlaskConical, Info, RefreshCw, Send, Star, Trash2 } from 'lucide-react'
-import { buildLadder, MAX_STEPS, parseWeights, type LadderInput, type PriceSpacing, type Side, type SizeCurve } from '@shared/ladder'
+import { buildLadder, MAX_STEPS, type LadderInput, type PriceSpacing, type Side, type SizeCurve } from '@shared/ladder'
 import type { DraftDto, PairDto, SendResult, TemplateDto } from '@shared/ipc'
 import { firstTestInput, wrongSide } from '@shared/safety'
 import KpiStrip from '../components/ui/KpiStrip'
@@ -11,7 +11,8 @@ import SectionCard from '../components/ui/SectionCard'
 import Segmented from '../components/ui/Segmented'
 import Modal from '../components/ui/Modal'
 import { useChartTheme } from '../utils/chartTheme'
-import { num, pct } from '../format'
+import { num, numberFormat, pct } from '../format'
+import { parseNumber, parseWeightList, toInputText } from '@shared/number-format'
 import { useMoney } from '../money'
 
 const CURVES: { id: SizeCurve; label: string; title: string }[] = [
@@ -41,26 +42,50 @@ export interface Prefill {
 /** Kurzer Vorschlag für den Namen eines Entwurfs */
 export const draftTitle = (pairName: string, input: LadderInput) => `${pairName.split('/')[0]} ${input.side === 'buy' ? 'Kauf' : 'Verkauf'} ${input.steps} Stufen`
 
+/** Prozentliste als Text im gewählten Zahlenformat */
+const weightsText = (w?: number[]) => (w ?? []).map((x) => toInputText(x, numberFormat())).join(numberFormat() === 'de' ? '; ' : ', ')
+
 const SPACINGS: { id: PriceSpacing; label: string; title: string }[] = [
   { id: 'linear', label: 'Gleiche €-Abstände', title: 'Zwischen zwei Stufen liegt immer derselbe Betrag' },
   { id: 'geometric', label: 'Gleiche %-Abstände', title: 'Zwischen zwei Stufen liegt immer derselbe Prozentsatz (logarithmisch)' },
 ]
 
-function NumberField({ label, value, onChange, hint, step = 'any' }: { label: string; value: number; onChange: (n: number) => void; hint?: string; step?: string }) {
-  const [text, setText] = useState(String(value))
+/**
+ * Zahlenfeld im gewählten Format (Deutsch 1.234,56 oder Amerikanisch 1,234.56).
+ * Ist der Text keine gültige Zahl, meldet das Feld NaN: der Plan wird dann ungültig,
+ * statt still mit dem alten Wert weiterzurechnen.
+ */
+export function NumberField({ label, value, onChange, hint, step = 'any', emptyValue }: { label: string; value: number; onChange: (n: number) => void; hint?: string; step?: string; emptyValue?: number }) {
+  const fmt = numberFormat()
+  const [text, setText] = useState(toInputText(value, fmt))
+  const [shownFmt, setShownFmt] = useState(fmt)
   useEffect(() => {
-    if (Number(text.replace(',', '.')) !== value) setText(String(value))
-  }, [value])
+    // Wert kam von außen (Vorlage, Kursvorschlag) oder das Format wurde umgestellt
+    if (fmt !== shownFmt) {
+      // Text im alten Format lesen und im neuen schreiben; Ungültiges bleibt stehen, damit man es sieht
+      const old = parseNumber(text, shownFmt)
+      setShownFmt(fmt)
+      if (!Number.isNaN(old)) setText(toInputText(old, fmt))
+      else if (!Number.isNaN(parseNumber(text, fmt))) onChange(parseNumber(text, fmt)) // war ungültig, passt aber zum neuen Format
+      return
+    }
+    const parsed = parseNumber(text, fmt)
+    if (text.trim() !== '' && !Number.isNaN(parsed) && parsed !== value && Number.isFinite(value)) setText(toInputText(value, fmt))
+  }, [value, fmt])
+  const invalid = text.trim() !== '' && Number.isNaN(parseNumber(text, fmt))
   return (
     <label className="block">
       <span className="label">{label}</span>
-      <input className="input w-full tabular-nums" inputMode="decimal" step={step} value={text}
+      <input className={`input w-full tabular-nums ${invalid ? 'border-danger-500' : ''}`} inputMode="decimal" step={step} value={text} aria-invalid={invalid}
         onChange={(e) => {
           setText(e.target.value)
-          const n = Number(e.target.value.replace(',', '.'))
-          if (!Number.isNaN(n)) onChange(n)
-        }} />
-      {hint && <span className="mt-1 block text-xs text-ink-muted">{hint}</span>}
+          const n = parseNumber(e.target.value, fmt)
+          onChange(e.target.value.trim() === '' && emptyValue !== undefined ? emptyValue : n)
+        }}
+        onBlur={() => { if (text.trim() === '' && Number.isFinite(value)) setText(toInputText(value, fmt)) }} />
+      {invalid
+        ? <span className="mt-1 block text-xs text-danger-fg">Keine gültige Zahl. Gewählt ist das {fmt === 'de' ? 'deutsche Format, z. B. 60.000,50' : 'amerikanische Format, z. B. 60,000.50'} (umstellen links unten bei „Zahlenformat“).</span>
+        : hint && <span className="mt-1 block text-xs text-ink-muted">{hint}</span>}
     </label>
   )
 }
@@ -129,7 +154,7 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
     setInput(prefill.input)
     if (prefill.postOnly !== undefined) setPostOnly(prefill.postOnly)
     setSendCount(prefill.sendCount ?? null)
-    setCustomText((prefill.input.customWeights ?? []).join(', '))
+    setCustomText(weightsText(prefill.input.customWeights))
     setDraft(prefill.draft ?? null)
     setDraftMsg(null)
     setResult(null)
@@ -159,7 +184,7 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
     if (p) setPairId(p.id)
     setInput(t.input)
     setPostOnly(t.postOnly)
-    setCustomText((t.input.customWeights ?? []).join(', '))
+    setCustomText(weightsText(t.input.customWeights))
     setResult(null)
   }
 
@@ -278,7 +303,13 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
     setSendError(null)
     setResult(null)
     try {
-      setResult(await api().send({ pairId: pair.id, pairName: pair.name, side: input.side, input, levels: ladder.levels, validate, postOnly, sendCount: partial ? nowCount : undefined }))
+      // Wird gerade ein Entwurf bearbeitet, gilt er nach dem echten Senden als freigegeben (sonst ließe er sich ein zweites Mal senden)
+      const r = await api().send({ pairId: pair.id, pairName: pair.name, side: input.side, input, levels: ladder.levels, validate, postOnly, sendCount: partial ? nowCount : undefined, draftId: validate ? undefined : draft?.id })
+      setResult(r)
+      if (!validate && draft && r.orders.some((o) => o.txid || o.uncertain)) {
+        setDraftMsg(`Der Entwurf „${draft.name}“ ist jetzt freigegeben (Plan-Nummer ${r.userref}).`)
+        setDraft(null)
+      }
     } catch (e) {
       setSendError((e as Error).message)
     } finally {
@@ -407,10 +438,10 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
             {input.curve === 'custom' && (
               <label className="block">
                 <span className="label">Anteil je Stufe in %</span>
-                <input className="input w-full tabular-nums" value={customText} placeholder="z. B. 10, 15, 20, 25, 30"
-                  onChange={(e) => { setCustomText(e.target.value); set('customWeights', parseWeights(e.target.value)) }} />
+                <input className="input w-full tabular-nums" value={customText} placeholder={numberFormat() === 'de' ? 'z. B. 12,5; 12,5; 25; 50' : 'z. B. 12.5, 12.5, 25, 50'}
+                  onChange={(e) => { setCustomText(e.target.value); set('customWeights', parseWeightList(e.target.value, numberFormat())) }} />
                 <span className="mt-1 block text-xs text-ink-muted">
-                  {input.steps} Werte, getrennt mit Komma. Summe {num((input.customWeights ?? []).reduce((a, b) => a + b, 0), 1)} % (wird auf 100 % umgerechnet).
+                  {input.steps} Werte, getrennt mit {numberFormat() === 'de' ? 'Semikolon oder Leerzeichen (Komma ist das Dezimalzeichen)' : 'Komma'}. Summe {num((input.customWeights ?? []).filter(Number.isFinite).reduce((a, b) => a + b, 0), 1)} % (wird auf 100 % umgerechnet).
                 </span>
               </label>
             )}

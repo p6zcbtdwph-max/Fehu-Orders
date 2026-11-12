@@ -1,8 +1,9 @@
 import { app, BrowserWindow, dialog, ipcMain, Notification, safeStorage, session, shell, systemPreferences } from 'electron'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { parseBackup, summarize } from '../shared/backup'
+import { localDate } from '../shared/dates'
 import { join } from 'node:path'
-import { Kraken, type PairInfo } from './kraken'
+import { Kraken, type ClosedOrder, type PairInfo } from './kraken'
 import {
   addLog, addPlan, clearCredentials, exportAll, importAll, getLog, markAlarmFired, deleteDraft, deleteTemplate, getDrafts, markDraftReleased, saveDraft, getNotified, getPlans, getSettings, getTemplates, loadCredentials, newUserref, saveCredentials, saveSettings, saveTemplate, setNotified, updatePlan, type Settings,
 } from './store'
@@ -16,7 +17,14 @@ let mainWindow: BrowserWindow | null = null
 // (Kraken lehnt Zeitstempel ab, die nicht in steigender Reihenfolge ankommen)
 let shared: Kraken | null = null
 const client = () => (shared ??= new Kraken(loadCredentials()))
-const resetClient = () => { shared = null }
+// Neuer Schlüssel kann ein anderes Konto sein: dann auch die geladenen geschlossenen Orders verwerfen
+const resetClient = () => {
+  shared = null
+  closedCache.orders.clear()
+  closedCache.coveredFrom = Infinity
+  closedCache.fetchedAt = 0
+  statusCache = null
+}
 
 function createWindow(): void {
   const win = (mainWindow = new BrowserWindow({
@@ -98,6 +106,7 @@ handle('settings:save', (s: Partial<Settings>) => {
   if (s.maxPlanEur !== undefined) patch.maxPlanEur = Math.max(1, Number(s.maxPlanEur) || 1)
   if (Array.isArray(s.watchlist)) patch.watchlist = s.watchlist.filter((x) => typeof x === 'string').slice(0, 50)
   if (s.currency === 'EUR' || s.currency === 'USD') patch.currency = s.currency
+  if (s.numberFormat === 'de' || s.numberFormat === 'en') patch.numberFormat = s.numberFormat
   return saveSettings(patch)
 })
 // Wechselkurs für die Dollar-Anzeige (1 EUR = x USD), eine Minute zwischengespeichert
@@ -131,7 +140,7 @@ handle('log', () => getLog())
 
 // Datensicherung: alles außer dem Schlüssel in eine Datei
 handle('backup:export', async () => {
-  const name = `fehu-orders-sicherung-${new Date().toISOString().slice(0, 10)}.json`
+  const name = `fehu-orders-sicherung-${localDate()}.json`
   const r = await dialog.showSaveDialog({ title: 'Fehu Orders sichern', defaultPath: join(app.getPath('documents'), name), filters: [{ name: 'Fehu-Orders-Sicherung', extensions: ['json'] }] })
   if (r.canceled || !r.filePath) return null
   const data = exportAll()
@@ -168,22 +177,46 @@ handle('drafts', () => getDrafts())
 handle('draft:save', (d: DraftDto) => saveDraft({ ...d, alarmFiredAt: undefined }))
 handle('draft:delete', (id: string) => deleteDraft(id))
 
-/** Pläne, deren Status abgefragt wird: die letzten 90 Tage, höchstens 20 */
-function activePlans() {
+/**
+ * Pläne, deren Status abgefragt wird: alle der letzten 90 Tage, dazu ältere, die laut Kraken noch offene Orders haben.
+ * Keine feste Höchstzahl mehr: geschlossene Orders kommen für alle Pläne aus einer gemeinsamen, zwischengespeicherten Abfrage.
+ */
+function activePlans(openRefs: Set<number> = lastOpenRefs) {
   const since = Date.now() - 90 * 86_400_000
-  return getPlans().filter((p) => Date.parse(p.createdAt) >= since).slice(0, 20)
+  return getPlans().filter((p) => Date.parse(p.createdAt) >= since || openRefs.has(p.userref))
 }
+/** userrefs mit offenen Orders aus der letzten Abfrage (für activePlans ohne neue Anfrage) */
+let lastOpenRefs = new Set<number>()
 
 let statusCache: { at: number; value: PlanStatusDto[]; executed: Map<number, string[]> } | null = null
+
+/**
+ * Geschlossene Orders, einmal vollständig geladen und danach nur noch ergänzt.
+ * Geschlossene Orders ändern sich nicht mehr, deshalb reicht beim nächsten Mal alles seit der letzten Abfrage.
+ * So fehlen auch bei vielen hundert stornierten Orders keine Ausführungen älterer Pläne.
+ */
+const closedCache: { orders: Map<string, ClosedOrder>; coveredFrom: number; fetchedAt: number } = { orders: new Map(), coveredFrom: Infinity, fetchedAt: 0 }
+
+async function closedOrdersFrom(k: Kraken, from: number): Promise<ClosedOrder[]> {
+  const now = Date.now() / 1000
+  // Lücke vorne (neuer, älterer Plan) → ab dort komplett laden, sonst nur das Neue (mit 2 Minuten Überlappung)
+  const start = from < closedCache.coveredFrom ? from : closedCache.fetchedAt - 120
+  const fresh = await k.closedOrdersSince(start, 100)
+  for (const o of fresh) closedCache.orders.set(o.txid, o)
+  closedCache.coveredFrom = Math.min(closedCache.coveredFrom, start)
+  closedCache.fetchedAt = now
+  return [...closedCache.orders.values()]
+}
 
 async function computeStatuses(): Promise<PlanStatusDto[]> {
   if (statusCache && Date.now() - statusCache.at < 20_000) return statusCache.value
   const k = client()
-  const plans = activePlans()
-  const open = plans.length ? await k.openOrders() : []
+  const open = getPlans().length ? await k.openOrders() : []
+  lastOpenRefs = new Set(open.map((o) => o.userref))
+  const plans = activePlans(lastOpenRefs)
   // eine Abfrage für alle Pläne statt einer pro Plan (Krakens Anfrage-Grenze)
   const since = plans.length ? Math.min(...plans.map((p) => Date.parse(p.createdAt))) / 1000 - 60 : 0
-  const allClosed = plans.length ? await k.closedOrdersSince(since) : []
+  const allClosed = plans.length ? await closedOrdersFrom(k, since) : []
   const value: PlanStatusDto[] = []
   const executed = new Map<number, string[]>()
   for (const p of plans) {
@@ -203,7 +236,7 @@ async function computeStatuses(): Promise<PlanStatusDto[]> {
 
 /** Prüft jede Minute, ob Orders ausgeführt wurden, und meldet neue per Mitteilung */
 async function pollFills(): Promise<void> {
-  if (!loadCredentials() || !activePlans().length) return
+  if (!loadCredentials() || !getPlans().length) return
   try {
     statusCache = null
     await computeStatuses()

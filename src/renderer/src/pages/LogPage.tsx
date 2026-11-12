@@ -5,7 +5,7 @@ import type { LogEntry } from '@shared/ipc'
 import SectionCard from '../components/ui/SectionCard'
 import Badge from '../components/ui/Badge'
 import Segmented from '../components/ui/Segmented'
-import { num } from '../format'
+import { localDate, num } from '../format'
 import { useMoney } from '../money'
 
 export const ACTION_LABEL: Record<string, string> = {
@@ -54,7 +54,7 @@ export default function LogPage(): JSX.Element {
     const blob = new Blob([toCsv(shown)], { type: 'text/csv;charset=utf-8' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
-    a.download = `fehu-orders-protokoll-${new Date().toISOString().slice(0, 10)}.csv`
+    a.download = `fehu-orders-protokoll-${localDate()}.csv`
     a.click()
     setTimeout(() => URL.revokeObjectURL(a.href), 1000)
   }

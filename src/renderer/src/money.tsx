@@ -1,7 +1,8 @@
 // Anzeigewährung: Orders laufen immer in EUR, auf Wunsch werden Beträge und Preise
 // mit dem aktuellen Kraken-Kurs EUR/USD in Dollar angezeigt.
 import { createContext, useContext, type ReactNode } from 'react'
-import { eur as fmtEur, price as fmtPriceRaw } from './format'
+import { eur as fmtEur, numberFormat, price as fmtPriceRaw } from './format'
+import { localeOf } from '../../shared/number-format'
 
 export type Currency = 'EUR' | 'USD'
 
@@ -22,7 +23,7 @@ export function useMoney() {
   const s = useContext(Ctx)
   const usd = s.currency === 'USD' && !!s.rate
   const k = usd ? (s.rate as number) : 1
-  const usdFmt = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  const usdFmt = new Intl.NumberFormat(localeOf(numberFormat()), { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   return {
     ...s,
     usd,

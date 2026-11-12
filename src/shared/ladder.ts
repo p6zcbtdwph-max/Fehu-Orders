@@ -135,6 +135,7 @@ export function validateInput(input: LadderInput): string[] {
   if (input.curve === 'custom') {
     const w = input.customWeights ?? []
     if (w.length !== steps) e.push(`Bei eigener Verteilung braucht es genau ${steps} Prozentwerte (jetzt ${w.length}).`)
+    if (w.some((x) => !(x > 0) || !Number.isFinite(x))) e.push('Jeder Prozentwert muss eine Zahl über 0 sein.')
   }
   if (priceStart > 0 && priceEnd > 0 && steps > 1) {
     if (side === 'buy' && priceEnd > priceStart) e.push('Beim Kauf liegt die letzte Stufe unter der ersten (tiefer kaufen).')
