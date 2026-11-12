@@ -421,6 +421,8 @@ export class Kraken {
   async closedOrdersSince(start: number, maxPages = 10): Promise<ClosedOrder[]> {
     const out: ClosedOrder[] = []
     for (let page = 0; page < maxPages; page++) {
+      // Ab der 5. Seite kurz warten, damit Krakens Anfrage-Zähler (2 Punkte pro Seite) nicht überläuft
+      if (page >= 4) await this.pause(6000)
       const r = await this.privatePost('ClosedOrders', { start: Math.floor(start), ofs: out.length })
       const batch = this.mapClosed(r)
       out.push(...batch)

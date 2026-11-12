@@ -29,12 +29,14 @@ const COLS: Record<number, string> = {
   1: 'grid-cols-1',
   2: 'grid-cols-2',
   3: 'grid-cols-3',
-  4: 'grid-cols-2 @lg:grid-cols-4',
+  // Vier Werte nur nebeneinander, wenn die Leiste selbst breit genug ist (sonst brechen Zahlen wie 70.822,3 mitten durch)
+  4: 'grid-cols-2 @[40rem]/kpi:grid-cols-4',
   5: 'grid-cols-2 @lg:grid-cols-5',
 }
 
 export default function KpiStrip({ items, className = '' }: { items: Kpi[]; className?: string }): JSX.Element {
   return (
+    <div className="@container/kpi">
     <div data-kpis className={`card mb-4 grid gap-px overflow-hidden bg-line-soft ${COLS[items.length] ?? ''} ${className}`} style={items.length > 5 ? { gridTemplateColumns: 'repeat(auto-fill, minmax(10rem, 1fr))' } : undefined}>
       {items.map((k, i) => {
         // Bei 5 Werten in zwei Spalten füllt der letzte die Reihe, statt eine leere Zelle zu lassen
@@ -42,7 +44,7 @@ export default function KpiStrip({ items, className = '' }: { items: Kpi[]; clas
         const body = (
           <>
             <p className="truncate text-xs text-ink-muted">{k.label}</p>
-            <p className={`mt-0.5 text-2xl font-semibold tabular-nums ${TONE[k.tone ?? 'default']}`}>{k.value}</p>
+            <p className={`mt-0.5 whitespace-nowrap text-2xl font-semibold tabular-nums ${TONE[k.tone ?? 'default']}`}>{k.value}</p>
             {k.hint && <p className="mt-0.5 truncate text-xs text-ink-muted">{k.hint}</p>}
           </>
         )
@@ -56,6 +58,7 @@ export default function KpiStrip({ items, className = '' }: { items: Kpi[]; clas
           <div key={k.label} className={`min-w-0 bg-surface px-4 py-3 ${span}`}>{body}</div>
         )
       })}
+    </div>
     </div>
   )
 }

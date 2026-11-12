@@ -32,6 +32,8 @@ export interface SettingsDto {
   maxPlanEur: number
   watchlist: string[]
   currency: 'EUR' | 'USD'
+  /** de = 1.234,56, en = 1,234.56 */
+  numberFormat: 'de' | 'en'
 }
 
 export interface SendResult {

@@ -3,6 +3,8 @@ import Guide, { GUIDE_STEPS } from './components/Guide'
 import { useEffect, useState } from 'react'
 import Segmented from './components/ui/Segmented'
 import { MoneyProvider, type Currency } from './money'
+import { num, setNumberFormat } from './format'
+import { NUMBER_FORMATS, type NumberFormat } from '@shared/number-format'
 import { AlertTriangle, ClipboardList, GraduationCap, KeyRound, ListOrdered, PlayCircle, ScrollText, Settings, SlidersHorizontal } from 'lucide-react'
 import logoUrl from './assets/logo.png'
 import PlannerPage, { type Prefill } from './pages/PlannerPage'
@@ -43,6 +45,9 @@ export default function App(): JSX.Element {
   const [prefill, setPrefill] = useState<Prefill | null>(null)
   const [currency, setCurrencyState] = useState<Currency>('EUR')
   const [rate, setRate] = useState<number | null>(null)
+  const [numFmt, setNumFmtState] = useState<NumberFormat>('de')
+  // Modul-Wert vor dem Zeichnen setzen, damit alle Seiten im selben Durchlauf das neue Format nutzen
+  setNumberFormat(numFmt)
   const [demo, setDemoState] = useState(isDemo())
   // Beim allerersten Start öffnet sich die Einführung von selbst
   const [guideStep, setGuideStep] = useState<number | null>(() => {
@@ -50,7 +55,10 @@ export default function App(): JSX.Element {
   })
 
   useEffect(() => {
-    api().settings().then((s) => setCurrencyState(s.currency ?? 'EUR'))
+    api().settings().then((s) => {
+      setCurrencyState(s.currency ?? 'EUR')
+      setNumFmtState(s.numberFormat === 'en' ? 'en' : 'de')
+    })
   }, [demo])
 
   const closeGuide = () => {
@@ -74,6 +82,11 @@ export default function App(): JSX.Element {
     const t = setInterval(load, 60_000)
     return () => clearInterval(t)
   }, [currency, demo])
+
+  const setNumFmt = (f: NumberFormat) => {
+    setNumFmtState(f)
+    api().saveSettings({ numberFormat: f })
+  }
 
   const setCurrency = (c: Currency) => {
     setCurrencyState(c)
@@ -140,7 +153,14 @@ export default function App(): JSX.Element {
             <span>Anzeige</span>
             <Segmented<Currency> value={currency} onChange={setCurrency} aria-label="Anzeigewährung" options={[{ id: 'EUR', label: '€ EUR' }, { id: 'USD', label: '$ USD' }]} />
           </div>
-          {currency === 'USD' && <p>{rate ? `1 € = ${rate.toFixed(4).replace('.', ',')} $ · Orders laufen in Euro` : 'Kurs EUR/USD wird geladen …'}</p>}
+          {currency === 'USD' && <p>{rate ? `1 € = ${num(rate, 4)} $ · Orders laufen in Euro` : 'Kurs EUR/USD wird geladen …'}</p>}
+          <div className="space-y-1">
+            <span className="flex items-center justify-between gap-2" title="So schreibst du Zahlen in die Felder, und so zeigt die App sie an">
+              <span>Zahlenformat</span><span className="tabular-nums">{numFmt === 'de' ? '1.234,56' : '1,234.56'}</span>
+            </span>
+            <Segmented<NumberFormat> block value={numFmt} onChange={setNumFmt} aria-label="Zahlenformat"
+              options={NUMBER_FORMATS.map((f) => ({ id: f.id, label: f.label, title: `${f.label}: ${f.example}` }))} />
+          </div>
           <span className="flex items-center gap-2">
             {demo ? <><PlayCircle size={14} className="text-warning-fg" /> Demo: nichts geht an Kraken</> : <>
             <KeyRound size={14} className={hasKey ? 'text-success-fg' : 'text-warning-fg'} />
@@ -167,7 +187,8 @@ export default function App(): JSX.Element {
           </div>
         )}
         <div key={demo ? 'demo' : 'live'} className="contents">
-        {page === 'planner' && <PlannerPage hasKey={!!hasKey} onNeedKey={() => setPage('key')} prefill={prefill} onPrefillUsed={() => setPrefill(null)} onOpenDrafts={() => setPage('drafts')} onOpenOrders={() => setPage('orders')} />}
+        {/* Der Planer bleibt beim Reiterwechsel erhalten (nur versteckt), damit keine Eingaben verloren gehen */}
+        <div className={page === 'planner' ? 'contents' : 'hidden'}><PlannerPage hasKey={!!hasKey} onNeedKey={() => setPage('key')} prefill={prefill} onPrefillUsed={() => setPrefill(null)} onOpenDrafts={() => setPage('drafts')} onOpenOrders={() => setPage('orders')} /></div>
         {page === 'drafts' && <DraftsPage hasKey={!!hasKey} onNeedKey={() => setPage('key')}
           onEdit={(d) => { setPrefill({ pairId: d.pairId, input: d.input, postOnly: d.postOnly, sendCount: d.sendCount, draft: d }); setPage('planner') }} />}
         {page === 'orders' && <OrdersPage hasKey={!!hasKey} onPlanSell={(p) => { setPrefill(p); setPage('planner') }} />}

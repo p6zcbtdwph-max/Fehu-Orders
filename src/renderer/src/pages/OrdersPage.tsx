@@ -13,6 +13,9 @@ import { useMoney } from '../money'
 export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; onPlanSell: (p: Prefill) => void }): JSX.Element {
   const [orders, setOrders] = useState<OpenOrderDto[] | null>(null)
   const [plans, setPlans] = useState<PlanDto[]>([])
+  /** Nachkommastellen je Paar, damit günstige Coins (DOGE 0,1234567) nicht auf 0,12 gekürzt werden */
+  const [decimals, setDecimals] = useState<Record<string, number>>({})
+  const dec = (pairId: string) => decimals[pairId] ?? 2
   const [balances, setBalances] = useState<Record<string, number>>({})
   const [error, setError] = useState<string | null>(null)
   const [cancelPlan, setCancelPlan] = useState<PlanDto | null>(null)
@@ -47,7 +50,8 @@ export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; on
 
   async function load() {
     setError(null)
-    api().plans().then(setPlans)
+    api().plans().then(setPlans).catch(() => {})
+    api().pairs().then((ps) => setDecimals(Object.fromEntries(ps.map((x) => [x.id, x.priceDecimals])))).catch(() => {})
     if (!hasKey) return
     try {
       const [o, b] = await Promise.all([api().openOrders(), api().balances()])
@@ -182,7 +186,7 @@ export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; on
                         <td className="num">
                           {st ? <span className={st.filled + st.partial > 0 ? 'text-success-fg' : ''}>{st.filled}{st.partial ? ` + ${st.partial} teilw.` : ''}</span> : '–'}
                         </td>
-                        <td className="num">{st && st.averagePrice ? `${fmtPrice(st.averagePrice, 2)} ${sym}` : '–'}</td>
+                        <td className="num">{st && st.averagePrice ? `${fmtPrice(st.averagePrice, dec(p.pairId))} ${sym}` : '–'}</td>
                         <td className="num">{eur(p.totalCost)}</td>
                       </tr>
                       {hasActions(p, st, open) && (
@@ -246,7 +250,7 @@ export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; on
           <div className="space-y-2 text-sm">
             <p>
               {restPlan.side === 'buy' ? 'Kaufen' : 'Verkaufen'} {restPlan.pairName}: {restLevels(restPlan).length} Stufen von{' '}
-              {fmtPrice(restLevels(restPlan)[0].price, 2)} bis {fmtPrice(restLevels(restPlan)[restLevels(restPlan).length - 1].price, 2)} {sym}.
+              {fmtPrice(restLevels(restPlan)[0].price, dec(restPlan.pairId))} bis {fmtPrice(restLevels(restPlan)[restLevels(restPlan).length - 1].price, dec(restPlan.pairId))} {sym}.
             </p>
             <p>Gegenwert: <strong>{eur(restLevels(restPlan).reduce((a, l) => a + l.cost, 0))}</strong></p>
             <p className="text-ink-muted">Die Stufen wurden beim Planen berechnet. Liegt der Kurs inzwischen woanders, prüfe sie vorher mit dem Probelauf.</p>

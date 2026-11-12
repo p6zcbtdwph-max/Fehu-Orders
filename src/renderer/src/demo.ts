@@ -23,7 +23,7 @@ const pairOf = (pairId: string) => MARKET.find((m) => m.pair.id === pairId)?.pai
 const round = (v: number, d: number) => Math.round(v * 10 ** d) / 10 ** d
 
 export function createDemoApi(): Api {
-  let settings: SettingsDto = { maxPlanEur: 5000, watchlist: ['BTC/EUR', 'ETH/EUR', 'SOL/EUR'], currency: 'EUR' }
+  let settings: SettingsDto = { maxPlanEur: 5000, watchlist: ['BTC/EUR', 'ETH/EUR', 'SOL/EUR'], currency: 'EUR', numberFormat: 'de' }
   const balances: Record<string, number> = { ZEUR: 2500, XXBT: 0.02, XETH: 0.5, SOL: 4 }
   let templates: TemplateDto[] = [
     { id: 'demo-1', name: 'Dip-Kauf 10 Stufen', pairName: 'BTC/EUR', postOnly: true,

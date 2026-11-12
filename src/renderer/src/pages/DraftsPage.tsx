@@ -90,7 +90,7 @@ export default function DraftsPage({ hasKey, onEdit, onNeedKey }: { hasKey: bool
           <SectionCard key={scenario || '-'} title={<span className="flex items-center gap-2"><ClipboardList size={16} className="text-accent-fg" /> {scenario || 'Ohne Szenario'} <span className="font-normal text-ink-muted">· {list.length}</span></span>}>
             <div className="overflow-x-auto">
               <table className="data-table">
-                <thead><tr><th>Entwurf</th><th>Paar</th><th className="num">Stufen</th><th className="num">Preisbereich</th><th className="num">Gegenwert</th><th className="num">Kurs jetzt</th><th /></tr></thead>
+                <thead><tr><th>Entwurf</th><th>Paar</th><th className="num">Stufen</th><th className="num">Preisbereich</th><th className="num">Gegenwert</th><th className="num">Kurs jetzt</th><th className="sticky right-0 bg-surface" /></tr></thead>
                 <tbody>
                   {list.map((d) => {
                     const pair = pairOf(d.pairId)
@@ -101,7 +101,7 @@ export default function DraftsPage({ hasKey, onEdit, onNeedKey }: { hasKey: bool
                     const dec = pair?.priceDecimals ?? 2
                     return (
                       <tr key={d.id}>
-                        <td className="min-w-[12rem]">
+                        <td className="min-w-[10rem] max-w-[18rem] [overflow-wrap:anywhere]">
                           <span className="font-medium text-ink">{d.name}</span>
                           {d.note && <span className="block text-xs text-ink-muted">{d.note}</span>}
                           {d.alarmFiredAt
@@ -117,7 +117,8 @@ export default function DraftsPage({ hasKey, onEdit, onNeedKey }: { hasKey: bool
                         <td className="num whitespace-nowrap">
                           {last ? <>{fmtPrice(last, dec)} {sym}<span className="block text-xs text-ink-muted">erste Stufe {pct(first / last - 1)}</span></> : '–'}
                         </td>
-                        <td className="text-right">
+                        {/* Knöpfe bleiben rechts sichtbar, auch wenn die Tabelle im schmalen Fenster seitlich scrollt */}
+                        <td className="sticky right-0 bg-surface text-right shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.15)]">
                           <span className="inline-flex gap-1.5">
                             <button type="button" className="btn btn-primary btn-sm whitespace-nowrap" onClick={() => { setNotice(null); setRelease(d) }}><Rocket size={14} /> Freigeben</button>
                             <button type="button" className="btn btn-ghost btn-icon" aria-label="Im Planer bearbeiten" title="Im Planer bearbeiten" onClick={() => onEdit(d)}><Pencil size={15} /></button>
