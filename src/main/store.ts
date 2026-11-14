@@ -4,7 +4,8 @@
 import { app, safeStorage } from 'electron'
 import { copyFileSync, existsSync, readFileSync, renameSync, writeFileSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
-import type { Credentials } from './kraken'
+import type { Credentials } from './exchange'
+import { exchangeOf, isExchangeId, type ExchangeId } from '../shared/exchanges'
 import type { LadderInput, LadderLevel, Side } from '../shared/ladder'
 import type { DraftDto, LogEntry } from '../shared/ipc'
 import { makeBackup, type BackupData } from '../shared/backup'
@@ -12,15 +13,18 @@ import { langFromLocale, tr, type Lang } from '../shared/i18n'
 
 const file = (name: string) => join(app.getPath('userData'), name)
 
-export function saveCredentials(c: Credentials): void {
+/** Je Börse eine eigene verschlüsselte Datei. Kraken behält den alten Namen, damit vorhandene Schlüssel bleiben. */
+const keyFile = (ex: ExchangeId) => file(ex === 'kraken' ? 'kraken-key.bin' : `${ex}-key.bin`)
+
+export function saveCredentials(c: Credentials, ex: ExchangeId = 'kraken'): void {
   if (!safeStorage.isEncryptionAvailable()) throw new Error(tr('Der Schlüsselbund ist nicht verfügbar. Der Schlüssel wird nicht unverschlüsselt gespeichert.', 'The macOS keychain is not available. The key is never stored unencrypted.'))
-  const f = file('kraken-key.bin')
+  const f = keyFile(ex)
   writeFileSync(`${f}.tmp`, safeStorage.encryptString(JSON.stringify(c)), { mode: 0o600 })
   renameSync(`${f}.tmp`, f)
 }
 
-export function loadCredentials(): Credentials | null {
-  const f = file('kraken-key.bin')
+export function loadCredentials(ex: ExchangeId = 'kraken'): Credentials | null {
+  const f = keyFile(ex)
   if (!existsSync(f)) return null
   try {
     return JSON.parse(safeStorage.decryptString(readFileSync(f)))
@@ -29,8 +33,8 @@ export function loadCredentials(): Credentials | null {
   }
 }
 
-export function clearCredentials(): void {
-  const f = file('kraken-key.bin')
+export function clearCredentials(ex: ExchangeId = 'kraken'): void {
+  const f = keyFile(ex)
   if (existsSync(f)) unlinkSync(f)
 }
 
@@ -45,11 +49,15 @@ export interface Settings {
   numberFormat: 'de' | 'en'
   /** Sprache der App. Fehlt sie, gilt die Systemsprache des Macs. */
   language?: Lang
+  /** Börse, mit der die App gerade arbeitet */
+  exchange: ExchangeId
 }
 
-export const DEFAULT_SETTINGS: Settings = { maxPlanEur: 50, watchlist: ['BTC/EUR', 'ETH/EUR'], currency: 'EUR', numberFormat: 'de' }
+export const DEFAULT_SETTINGS: Settings = { maxPlanEur: 50, watchlist: ['BTC/EUR', 'ETH/EUR'], currency: 'EUR', numberFormat: 'de', exchange: 'kraken' }
 
 export interface PlanRecord {
+  /** Fehlt bei Plänen aus der Zeit, als es nur Kraken gab */
+  exchange?: ExchangeId
   userref: number
   createdAt: string
   pairId: string
@@ -121,6 +129,7 @@ export function cleanSettings(raw: Record<string, unknown>): Settings {
   if (raw.currency === 'EUR' || raw.currency === 'USD') s.currency = raw.currency
   if (raw.numberFormat === 'de' || raw.numberFormat === 'en') s.numberFormat = raw.numberFormat
   if (raw.language === 'de' || raw.language === 'en') s.language = raw.language
+  if (isExchangeId(raw.exchange)) s.exchange = raw.exchange
   return s
 }
 
@@ -156,9 +165,18 @@ export function updatePlan(userref: number, change: (p: PlanRecord) => PlanRecor
   writeJson('plans.json', { plans: getPlans().map((p) => (p.userref === userref ? change(p) : p)) })
 }
 
+/** Wurde auf dieser Börse schon einmal ein Plan echt angelegt? Bis dahin gilt die 50-Euro-Grenze für den ersten Test. */
+export function hasRealPlan(ex: ExchangeId): boolean {
+  return getPlans().some((p) => exchangeOf(p) === ex && p.sent > 0)
+}
+
 /** Plan-Kennung für Krakens userref (positive 32-Bit-Zahl), aus der Zeit abgeleitet */
 export function newUserref(): number {
-  return Math.floor(Date.now() / 1000) % 2_000_000_000
+  const used = new Set(getPlans().map((p) => p.userref))
+  let r = Math.floor(Date.now() / 1000) % 2_000_000_000
+  // zwei Sendungen in derselben Sekunde (z. B. auf zwei Börsen) bekommen trotzdem verschiedene Nummern
+  while (used.has(r)) r++
+  return r
 }
 
 export interface Template {

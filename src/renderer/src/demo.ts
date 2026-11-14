@@ -24,7 +24,7 @@ const pairOf = (pairId: string) => MARKET.find((m) => m.pair.id === pairId)?.pai
 const round = (v: number, d: number) => Math.round(v * 10 ** d) / 10 ** d
 
 export function createDemoApi(): Api {
-  let settings: SettingsDto = { maxPlanEur: 5000, watchlist: ['BTC/EUR', 'ETH/EUR', 'SOL/EUR'], currency: 'EUR', numberFormat: 'de' }
+  let settings: SettingsDto = { maxPlanEur: 5000, watchlist: ['BTC/EUR', 'ETH/EUR', 'SOL/EUR'], currency: 'EUR', numberFormat: 'de', exchange: 'kraken' }
   const balances: Record<string, number> = { ZEUR: 2500, XXBT: 0.02, XETH: 0.5, SOL: 4 }
   let templates: TemplateDto[] = [
     { id: 'demo-1', name: 'Dip-Kauf 10 Stufen', pairName: 'BTC/EUR', postOnly: true,
@@ -46,12 +46,12 @@ export function createDemoApi(): Api {
       input: { side: 'sell', priceStart: 180, priceEnd: 260, steps: 5, total: 3, spacing: 'linear', curve: 'flat', ratio: 1 } },
   ]
   const demoChecks = (): KeyCheck[] => [
-    { id: 'funds', label: tr('Guthaben abfragen', 'Query funds'), krakenLabel: 'Query Funds', required: true, ok: true },
-    { id: 'open', label: tr('Offene Orders abfragen', 'Query open orders'), krakenLabel: 'Query Open Orders & Trades', required: true, ok: true },
-    { id: 'closed', label: tr('Geschlossene Orders abfragen', 'Query closed orders'), krakenLabel: 'Query Closed Orders & Trades', required: true, ok: true },
-    { id: 'create', label: tr('Orders erstellen', 'Create orders'), krakenLabel: 'Create & Modify Orders', required: true, ok: true },
-    { id: 'cancel', label: tr('Orders stornieren', 'Cancel orders'), krakenLabel: 'Cancel & Close Orders', required: true, ok: true },
-    { id: 'withdraw', label: tr('Keine Auszahlungen', 'No withdrawals'), krakenLabel: 'Withdraw Funds', required: true, ok: true },
+    { id: 'funds', label: tr('Guthaben abfragen', 'Query funds'), exchangeLabel: 'Query Funds', required: true, ok: true },
+    { id: 'open', label: tr('Offene Orders abfragen', 'Query open orders'), exchangeLabel: 'Query Open Orders & Trades', required: true, ok: true },
+    { id: 'closed', label: tr('Geschlossene Orders abfragen', 'Query closed orders'), exchangeLabel: 'Query Closed Orders & Trades', required: true, ok: true },
+    { id: 'create', label: tr('Orders erstellen', 'Create orders'), exchangeLabel: 'Create & Modify Orders', required: true, ok: true },
+    { id: 'cancel', label: tr('Orders stornieren', 'Cancel orders'), exchangeLabel: 'Cancel & Close Orders', required: true, ok: true },
+    { id: 'withdraw', label: tr('Keine Auszahlungen', 'No withdrawals'), exchangeLabel: 'Withdraw Funds', required: true, ok: true },
   ]
   const plans: PlanDto[] = []
   const fills = new Map<number, PlanStatusDto>()
@@ -83,7 +83,7 @@ export function createDemoApi(): Api {
   const wait = <T,>(v: T, ms = 150) => new Promise<T>((r) => setTimeout(() => r(v), ms))
 
   return {
-    keyStatus: () => wait({ hasKey: true, encryption: true, touchId: true }, 0),
+    keyStatus: () => wait({ hasKey: true, encryption: true, touchId: true, exchange: settings.exchange, keys: { kraken: true, bitvavo: true, coinbase: true } }, 0),
     saveKey: async () => { throw new Error(tr('Im Demo-Modus brauchst du keinen Schlüssel. Beende zuerst die Demo.', 'You need no key in demo mode. End the demo first.')) },
     verifyKey: () => wait(demoChecks().map((c) => ({ ...c })), 600),
     clearKey: async () => {},

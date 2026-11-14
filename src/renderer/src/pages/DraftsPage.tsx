@@ -10,6 +10,7 @@ import Badge from '../components/ui/Badge'
 import { dateLocale, num, pct } from '../format'
 import { tr } from '@shared/i18n'
 import { useMoney } from '../money'
+import { exName, probeOk } from '@shared/exchanges'
 
 /** Was ein Entwurf jetzt bedeuten würde: Stufen nach den aktuellen Regeln des Paars */
 function evaluate(d: DraftDto, pair: PairDto | undefined, last: number | undefined) {
@@ -69,7 +70,7 @@ export default function DraftsPage({ hasKey, onEdit, onNeedKey }: { hasKey: bool
       <header className="mb-5 page-header">
         <div className="min-w-0 flex-1 basis-64">
           <h1 className="page-title">{tr('Entwürfe', 'Drafts')}</h1>
-          <p className="page-subtitle">{tr('Order-Gruppen zwischenspeichern, für Szenarien zurückhalten und erst nach deiner Freigabe an Kraken senden.', 'Save groups of orders, hold them back for scenarios and send them to Kraken only after you release them.')}</p>
+          <p className="page-subtitle">{tr(`Order-Gruppen zwischenspeichern, für Szenarien zurückhalten und erst nach deiner Freigabe an ${exName()} senden.`, `Save groups of orders, hold them back for scenarios and send them to ${exName()} only after you release them.`)}</p>
         </div>
         <button type="button" className="btn btn-secondary ml-auto" onClick={load}><RefreshCw size={16} /> {tr('Kurse aktualisieren', 'Refresh prices')}</button>
       </header>
@@ -83,11 +84,11 @@ export default function DraftsPage({ hasKey, onEdit, onNeedKey }: { hasKey: bool
             <div className="space-y-2 text-sm text-ink-muted">
               {tr(
                 <>
-                  <p>Plane im <strong className="text-ink">Planer</strong> eine Staffel und klicke oben auf <strong className="text-ink">Als Entwurf</strong>. Sie wird dann hier gespeichert, ohne dass etwas an Kraken geht. Ein Entwurf sperrt auch kein Guthaben. Erst beim Freigeben muss der volle Betrag auf deinem Kraken-Konto bereitliegen.</p>
+                  <p>Plane im <strong className="text-ink">Planer</strong> eine Staffel und klicke oben auf <strong className="text-ink">Als Entwurf</strong>. Sie wird dann hier gespeichert, ohne dass etwas an {exName()} geht. Ein Entwurf sperrt auch kein Guthaben. Erst beim Freigeben muss der volle Betrag auf deinem {exName()}-Konto bereitliegen.</p>
                   <p>Mit einem <strong className="text-ink">Szenario</strong> wie „Crash“ oder „Bullrun“ hältst du passende Gruppen zusammen und gibst sie frei, wenn es so weit ist.</p>
                 </>,
                 <>
-                  <p>Plan a ladder in the <strong className="text-ink">Planner</strong> and click <strong className="text-ink">Save as draft</strong> at the top. It is then stored here without anything going to Kraken. A draft locks no funds either. Only when you release it does the full amount have to be in your Kraken account.</p>
+                  <p>Plan a ladder in the <strong className="text-ink">Planner</strong> and click <strong className="text-ink">Save as draft</strong> at the top. It is then stored here without anything going to {exName()}. A draft locks no funds either. Only when you release it does the full amount have to be in your {exName()} account.</p>
                   <p>With a <strong className="text-ink">scenario</strong> such as “Crash” or “Bull run” you keep matching groups together and release them when the time comes.</p>
                 </>,
               )}
@@ -117,7 +118,7 @@ export default function DraftsPage({ hasKey, onEdit, onNeedKey }: { hasKey: bool
                             ? <span className="mt-1 block"><Badge tone="accent"><BellRing size={12} className="mr-1 inline" />{tr('Kursalarm ausgelöst', 'Price alert triggered')} {new Date(d.alarmFiredAt).toLocaleString(dateLocale(), { dateStyle: 'short', timeStyle: 'short' })}</Badge></span>
                             : d.alarm && <span className="mt-1 flex items-center gap-1 text-xs text-ink-muted"><Bell size={12} /> {tr('Alarm bei', 'Alert at')} {fmtPrice(first, dec)} {sym}</span>}
                           {ev && ev.wrong.length > 0 && <span className="mt-1 block"><Badge tone="danger">{tr(`${ev.wrong.length} Stufen auf falscher Kursseite`, `${ev.wrong.length} levels on the wrong side of the price`)}</Badge></span>}
-                          {ev && !ev.ladder.valid && <span className="mt-1 block"><Badge tone="warning">{tr('Passt nicht mehr zu Krakens Regeln', 'No longer fits Kraken’s rules')}</Badge></span>}
+                          {ev && !ev.ladder.valid && <span className="mt-1 block"><Badge tone="warning">{tr(`Passt nicht mehr zu ${exName()}s Regeln`, `No longer fits ${exName()}’s rules`)}</Badge></span>}
                         </td>
                         <td className="whitespace-nowrap">{d.pairName} <span className="text-ink-muted">{d.side === 'buy' ? tr('Kauf', 'buy') : tr('Verkauf', 'sell')}</span></td>
                         <td className="num">{ev ? (ev.count < ev.sendable.length ? tr(`${ev.count} von ${ev.sendable.length}`, `${ev.count} of ${ev.sendable.length}`) : ev.count) : d.input.steps}</td>
@@ -172,7 +173,7 @@ export default function DraftsPage({ hasKey, onEdit, onNeedKey }: { hasKey: bool
           onClose={(sent) => {
             setRelease(null)
             if (sent) {
-              setNotice(tr(`„${release.name}“ wurde freigegeben und an Kraken gesendet (Plan-Nummer ${sent.userref}).`, `“${release.name}” was released and sent to Kraken (plan number ${sent.userref}).`))
+              setNotice(tr(`„${release.name}“ wurde freigegeben und an ${exName()} gesendet (Plan-Nummer ${sent.userref}).`, `“${release.name}” was released and sent to ${exName()} (plan number ${sent.userref}).`))
               load()
             }
           }} />
@@ -185,8 +186,8 @@ export default function DraftsPage({ hasKey, onEdit, onNeedKey }: { hasKey: bool
             <button type="button" className="btn btn-danger" onClick={() => doRemove(remove)}>{tr('Löschen', 'Delete')}</button>
           </>}>
           <p className="text-sm">{tr(
-            `„${remove.name}“ wird aus der App gelöscht. ${remove.status === 'released' ? 'Die Orders bei Kraken bleiben davon unberührt.' : 'Bei Kraken ändert sich nichts.'}`,
-            `“${remove.name}” will be deleted from the app. ${remove.status === 'released' ? 'The orders at Kraken are not affected.' : 'Nothing changes at Kraken.'}`,
+            `„${remove.name}“ wird aus der App gelöscht. ${remove.status === 'released' ? `Die Orders bei ${exName()} bleiben davon unberührt.` : `Bei ${exName()} ändert sich nichts.`}`,
+            `“${remove.name}” will be deleted from the app. ${remove.status === 'released' ? `The orders at ${exName()} are not affected.` : `Nothing changes at ${exName()}.`}`,
           )}</p>
         </Modal>
       )}
@@ -253,7 +254,7 @@ function ReleaseModal({ draft, pair, last, hasKey, onNeedKey, onClose }: {
       <div className="space-y-2 text-sm">
         <p><strong>{draft.name}</strong>{draft.scenario && <span className="text-ink-muted"> · {draft.scenario}</span>}</p>
         {draft.note && <p className="text-ink-muted">{draft.note}</p>}
-        {!pair && <p className="notice notice-danger">{tr(`Das Handelspaar ${draft.pairName} gibt es bei Kraken gerade nicht.`, `The trading pair ${draft.pairName} is currently not available at Kraken.`)}</p>}
+        {!pair && <p className="notice notice-danger">{tr(`Das Handelspaar ${draft.pairName} gibt es bei ${exName()} gerade nicht.`, `The trading pair ${draft.pairName} is currently not available at ${exName()}.`)}</p>}
         {ev && (
           <>
             <p>
@@ -275,17 +276,17 @@ function ReleaseModal({ draft, pair, last, hasKey, onNeedKey, onClose }: {
             {shortfall && <p className="notice notice-danger">{tr('Nicht genug verfügbares Guthaben: nötig', 'Not enough available balance: needed')} {draft.side === 'buy' ? eur(need) : `${num(need, pair?.volumeDecimals)} ${draft.pairName.split('/')[0]}`}, {tr('verfügbar', 'available')} {draft.side === 'buy' ? eur(have ?? 0) : num(have ?? 0, pair?.volumeDecimals)}.</p>}
           </>
         )}
-        {!hasKey && <p className="notice notice-info">{tr('Zum Freigeben brauchst du einen Kraken-API-Schlüssel.', 'To release you need a Kraken API key.')} <button type="button" className="btn-link" onClick={onNeedKey}>{tr('Schlüssel anlegen', 'Create key')}</button></p>}
+        {!hasKey && <p className="notice notice-info">{tr(`Zum Freigeben brauchst du einen ${exName()}-API-Schlüssel.`, `To release you need a ${exName()} API key.`)} <button type="button" className="btn-link" onClick={onNeedKey}>{tr('Schlüssel anlegen', 'Create key')}</button></p>}
         {err && <p className="notice notice-danger">{err}</p>}
         {result && (
           <div className={`notice ${failed.length ? 'notice-warning' : 'notice-success'}`}>
             {result.validate
-              ? failed.length ? tr(`Probelauf: ${failed.length} Orders würden abgelehnt. Grund: ${failed[0].error}`, `Test run: ${failed.length} orders would be rejected. Reason: ${failed[0].error}`) : tr(`Probelauf erfolgreich: Kraken würde alle ${ok} Orders annehmen. Es wurde nichts angelegt.`, `Test run successful: Kraken would accept all ${ok} orders. Nothing was placed.`)
+              ? failed.length ? tr(`Probelauf: ${failed.length} Orders würden abgelehnt. Grund: ${failed[0].error}`, `Test run: ${failed.length} orders would be rejected. Reason: ${failed[0].error}`) : probeOk(ok)
               : tr(`${ok} Orders angelegt${failed.length ? `, ${failed.length} fehlgeschlagen (${failed[0].error})` : ''}. Plan-Nummer ${result.userref}.`, `${ok} orders placed${failed.length ? `, ${failed.length} failed (${failed[0].error})` : ''}. Plan number ${result.userref}.`)}
             {result.orders.some((o) => o.uncertain) && <p className="mt-1 text-xs font-medium">{tr('Die Verbindung brach ab. Schau unter „Offene Orders“ nach, was wirklich angelegt wurde.', 'The connection dropped. Check under “Open orders” what was really placed.')}</p>}
           </div>
         )}
-        {!result && !err && <p className="text-xs text-ink-muted">{tr('Erst der Knopf „Freigeben und senden“ legt die Orders echt bei Kraken an. Ab dann sperrt Kraken den vollen Betrag auf deinem Konto, bis die Orders ausgeführt oder storniert sind. Der Probelauf prüft nur.', 'Only the “Release and send” button really places the orders at Kraken. From then on Kraken locks the full amount in your account until the orders are filled or cancelled. The test run only checks.')}</p>}
+        {!result && !err && <p className="text-xs text-ink-muted">{tr(`Erst der Knopf „Freigeben und senden“ legt die Orders echt bei ${exName()} an. Ab dann sperrt ${exName()} den vollen Betrag auf deinem Konto, bis die Orders ausgeführt oder storniert sind. Der Probelauf prüft nur.`, `Only the “Release and send” button really places the orders at ${exName()}. From then on ${exName()} locks the full amount in your account until the orders are filled or cancelled. The test run only checks.`)}</p>}
       </div>
     </Modal>
   )

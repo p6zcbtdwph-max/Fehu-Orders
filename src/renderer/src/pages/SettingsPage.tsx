@@ -8,6 +8,7 @@ import { NumberField } from './PlannerPage'
 import RiskNotice from '../components/RiskNotice'
 import { dateLocale } from '../format'
 import { tr } from '@shared/i18n'
+import { exName } from '@shared/exchanges'
 
 export default function SettingsPage({ hasKey, onOpenKey }: { hasKey: boolean; onOpenKey: () => void }): JSX.Element {
   const [maxPlan, setMaxPlan] = useState(500)
@@ -62,7 +63,7 @@ export default function SettingsPage({ hasKey, onOpenKey }: { hasKey: boolean; o
         </div>
       </header>
       <div className="space-y-4">
-        <SectionCard title={tr('Kraken-API-Schlüssel', 'Kraken API key')}>
+        <SectionCard title={tr(`${exName()}-API-Schlüssel`, `${exName()} API key`)}>
           <div className="flex flex-wrap items-center gap-3 text-sm">
             <p className="flex-1 text-ink-muted">{hasKey ? tr('Ein Schlüssel ist hinterlegt.', 'A key is saved.') : tr('Noch kein Schlüssel hinterlegt.', 'No key saved yet.')} {tr('Anlegen, prüfen und löschen geht im Reiter „Schlüssel“.', 'Create, check and delete it in the “API key” tab.')}</p>
             <button type="button" className="btn btn-secondary" onClick={onOpenKey}>{tr('Zum Reiter Schlüssel', 'Open API key tab')}</button>
@@ -111,9 +112,9 @@ export default function SettingsPage({ hasKey, onOpenKey }: { hasKey: boolean; o
           <div className="space-y-2 text-sm">
             {tr(
               <><p>Sicherung vom <strong>{date(restore.createdAt)}</strong> mit {restore.plans} Plänen, {restore.drafts} Entwürfen, {restore.templates} Vorlagen und {restore.log} Protokoll-Einträgen.</p>
-              <p className="text-ink-muted">Sie ersetzt den aktuellen Stand in der App. Der jetzige Stand wird vorher automatisch im App-Ordner gesichert. Bei Kraken ändert sich nichts, dein Schlüssel bleibt wie er ist.</p></>,
+              <p className="text-ink-muted">Sie ersetzt den aktuellen Stand in der App. Der jetzige Stand wird vorher automatisch im App-Ordner gesichert. Bei {exName()} ändert sich nichts, dein Schlüssel bleibt wie er ist.</p></>,
               <><p>Backup from <strong>{date(restore.createdAt)}</strong> with {restore.plans} plans, {restore.drafts} drafts, {restore.templates} templates and {restore.log} log entries.</p>
-              <p className="text-ink-muted">It replaces the current state in the app. The current state is backed up automatically in the app folder first. Nothing changes at Kraken, your key stays as it is.</p></>,
+              <p className="text-ink-muted">It replaces the current state in the app. The current state is backed up automatically in the app folder first. Nothing changes at {exName()}, your key stays as it is.</p></>,
             )}
           </div>
         </Modal>

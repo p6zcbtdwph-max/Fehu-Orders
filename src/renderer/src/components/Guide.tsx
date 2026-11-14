@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { ArrowLeft, ArrowRight, GraduationCap, PlayCircle, X } from 'lucide-react'
 import { tr } from '@shared/i18n'
 import RiskNotice from './RiskNotice'
+import { exName } from '@shared/exchanges'
 
 export type GuidePage = 'planner' | 'drafts' | 'orders' | 'key' | 'settings'
 
@@ -74,12 +75,12 @@ export const guideSteps = (): Step[] => [
       <>
         <p>Oben siehst du, was der Plan kostet, die geschätzte <strong>Gebühr</strong> und den <strong>Durchschnittspreis</strong>, falls alle Stufen ausgeführt werden.</p>
         <p>Im Chart zeigen die gestrichelten Linien, wo deine Orders im Kursverlauf liegen. Reicht dein Guthaben nicht, sagt die App es dir, bevor etwas rausgeht.</p>
-        <p><strong>Wichtig:</strong> Jede Order muss mit echtem Guthaben hinterlegt sein. Kraken sperrt den Betrag aller gesendeten Stufen sofort, auch wenn sie erst viel später oder nie ausgeführt werden. Bis zur Ausführung oder Stornierung ist das Geld gebunden. Entwürfe sperren dagegen nichts.</p>
+        <p><strong>Wichtig:</strong> Jede Order muss mit echtem Guthaben hinterlegt sein. {exName()} sperrt den Betrag aller gesendeten Stufen sofort, auch wenn sie erst viel später oder nie ausgeführt werden. Bis zur Ausführung oder Stornierung ist das Geld gebunden. Entwürfe sperren dagegen nichts.</p>
       </>,
       <>
         <p>At the top you see what the plan costs, the estimated <strong>fee</strong> and the <strong>average price</strong> if all levels are filled.</p>
         <p>In the chart, the dashed lines show where your orders sit in the price history. If your balance is not enough, the app tells you before anything goes out.</p>
-        <p><strong>Important:</strong> every order must be backed by real funds. Kraken reserves the amount of all sent levels immediately, even if they are filled much later or never. The money stays locked until the order is filled or cancelled. Drafts, on the other hand, lock nothing.</p>
+        <p><strong>Important:</strong> every order must be backed by real funds. {exName()} reserves the amount of all sent levels immediately, even if they are filled much later or never. The money stays locked until the order is filled or cancelled. Drafts, on the other hand, lock nothing.</p>
       </>,
     ),
   },
@@ -87,12 +88,12 @@ export const guideSteps = (): Step[] => [
     page: 'planner', target: 'actions', title: tr('4. Erst prüfen, dann senden', '4. Check first, then send'),
     body: tr(
       <>
-        <p><strong>Probelauf</strong>: Kraken prüft jede Order, legt aber nichts an. Mach das vor jedem echten Plan.</p>
-        <p><strong>An Kraken senden</strong> legt die Orders wirklich an, erst nach einer Bestätigung und, wenn dein Mac es hat, mit Touch ID.</p>
+        <p><strong>Probelauf</strong>: {exName()} prüft jede Order, legt aber nichts an. Mach das vor jedem echten Plan.</p>
+        <p><strong>An {exName()} senden</strong> legt die Orders wirklich an, erst nach einer Bestätigung und, wenn dein Mac es hat, mit Touch ID.</p>
       </>,
       <>
-        <p><strong>Test run</strong>: Kraken checks every order but places nothing. Do this before every real plan.</p>
-        <p><strong>Send to Kraken</strong> really places the orders, only after a confirmation and, if your Mac has it, with Touch ID.</p>
+        <p><strong>Test run</strong>: {exName()} checks every order but places nothing. Do this before every real plan.</p>
+        <p><strong>Send to {exName()}</strong> really places the orders, only after a confirmation and, if your Mac has it, with Touch ID.</p>
       </>,
     ),
   },
@@ -115,11 +116,11 @@ export const guideSteps = (): Step[] => [
     page: 'drafts', target: 'drafts', title: tr('6. Entwürfe: erst planen, später freigeben', '6. Drafts: plan now, release later'),
     body: tr(
       <>
-        <p>Mit <strong>Als Entwurf</strong> im Planer speicherst du eine Order-Gruppe, ohne dass etwas an Kraken geht.</p>
+        <p>Mit <strong>Als Entwurf</strong> im Planer speicherst du eine Order-Gruppe, ohne dass etwas an {exName()} geht.</p>
         <p>Unter <strong>Entwürfe</strong> stehen sie nach <strong>Szenario</strong> sortiert, zum Beispiel „Crash“ oder „Bullrun“. Erst mit <strong>Freigeben</strong> werden die Orders echt angelegt. Mit dem <strong>Kursalarm</strong> meldet sich dein Mac, wenn der Kurs die erste Stufe erreicht. Die App zeigt dir vorher, ob die Stufen zum aktuellen Kurs noch passen.</p>
       </>,
       <>
-        <p>With <strong>Save as draft</strong> in the planner you store a group of orders without sending anything to Kraken.</p>
+        <p>With <strong>Save as draft</strong> in the planner you store a group of orders without sending anything to {exName()}.</p>
         <p>Under <strong>Drafts</strong> they are sorted by <strong>scenario</strong>, for example “Crash” or “Bull run”. Only <strong>Release</strong> really places the orders. With a <strong>price alert</strong> your Mac notifies you when the price reaches the first level. Beforehand the app shows you whether the levels still fit the current price.</p>
       </>,
     ),
@@ -140,15 +141,15 @@ export const guideSteps = (): Step[] => [
     ),
   },
   {
-    page: 'key', target: 'key', title: tr('8. Mit Kraken verbinden', '8. Connect to Kraken'),
+    page: 'key', target: 'key', title: tr(`8. Mit ${exName()} verbinden`, `8. Connect to ${exName()}`),
     body: tr(
       <>
-        <p>Für echte Orders brauchst du einen <strong>API-Schlüssel</strong> von Kraken. Er erlaubt der App, in deinem Namen Orders anzulegen.</p>
-        <p>Im Reiter <strong>Schlüssel</strong> zeigt dir eine Anleitung, welche Häkchen du bei Kraken setzt. Kraken zeigt die Namen auf Englisch, deshalb steht bei jedem Häkchen der englische Originalname und die deutsche Bedeutung. Erlaube nur Abfragen und Orders, <strong>niemals Auszahlungen</strong> („Withdraw Funds“). Die App prüft das beim Speichern. Der Schlüssel bleibt verschlüsselt im Schlüsselbund dieses Macs und wird nirgendwo anders hin geschickt.</p>
+        <p>Für echte Orders brauchst du einen <strong>API-Schlüssel</strong> von {exName()}. Er erlaubt der App, in deinem Namen Orders anzulegen.</p>
+        <p>Im Reiter <strong>Schlüssel</strong> zeigt dir eine Anleitung, welche Häkchen du bei {exName()} setzt. {exName()} zeigt die Namen auf Englisch, deshalb steht bei jedem Häkchen der englische Originalname und die deutsche Bedeutung. Erlaube nur Abfragen und Orders, <strong>niemals Auszahlungen</strong> („Withdraw Funds“). Die App prüft das beim Speichern. Der Schlüssel bleibt verschlüsselt im Schlüsselbund dieses Macs und wird nirgendwo anders hin geschickt.</p>
       </>,
       <>
-        <p>For real orders you need an <strong>API key</strong> from Kraken. It allows the app to place orders on your behalf.</p>
-        <p>In the <strong>API key</strong> tab a guide shows you which boxes to tick at Kraken. Only allow queries and orders, <strong>never withdrawals</strong> (“Withdraw Funds”). The app checks this when saving. The key stays encrypted in this Mac’s keychain and is never sent anywhere else.</p>
+        <p>For real orders you need an <strong>API key</strong> from {exName()}. It allows the app to place orders on your behalf.</p>
+        <p>In the <strong>API key</strong> tab a guide shows you which boxes to tick at {exName()}. Only allow queries and orders, <strong>never withdrawals</strong> (“Withdraw Funds”). The app checks this when saving. The key stays encrypted in this Mac’s keychain and is never sent anywhere else.</p>
       </>,
     ),
   },
@@ -156,11 +157,11 @@ export const guideSteps = (): Step[] => [
     title: tr('Jetzt ausprobieren', 'Try it now'),
     body: tr(
       <>
-        <p>Im <strong>Demo-Modus</strong> spielst du alles mit Beispielkursen und erfundenem Guthaben durch. Es geht nichts an Kraken, du brauchst keinen Schlüssel.</p>
+        <p>Im <strong>Demo-Modus</strong> spielst du alles mit Beispielkursen und erfundenem Guthaben durch. Es geht nichts an {exName()}, du brauchst keinen Schlüssel.</p>
         <p>Für den ersten echten Test denk an die <strong>Grenze von 50 € pro Plan</strong>. Die Einführung findest du jederzeit wieder unten links unter <strong>Einführung</strong>, die Sprache stellst du dort unter <strong>Sprache</strong> um.</p>
       </>,
       <>
-        <p>In <strong>demo mode</strong> you can try everything with sample prices and made-up balances. Nothing goes to Kraken and you need no key.</p>
+        <p>In <strong>demo mode</strong> you can try everything with sample prices and made-up balances. Nothing goes to {exName()} and you need no key.</p>
         <p>For your first real test, remember the <strong>limit of 50 € per plan</strong>. You can reopen the introduction at any time bottom left under <strong>Introduction</strong>, and switch the language there under <strong>Language</strong>.</p>
       </>,
     ),

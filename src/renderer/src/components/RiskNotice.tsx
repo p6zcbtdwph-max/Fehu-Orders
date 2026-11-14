@@ -1,5 +1,6 @@
 import { ShieldAlert } from 'lucide-react'
 import { tr } from '@shared/i18n'
+import { exName } from '@shared/exchanges'
 
 /**
  * Risiko-Hinweis (Haftungsausschluss). Steht in der Einführung und dauerhaft in den Einstellungen.
@@ -9,16 +10,16 @@ export default function RiskNotice({ compact = false }: { compact?: boolean }): 
   const points = tr(
     [
       <><strong>Krypto ist hochriskant.</strong> Kurse können in Stunden stark fallen. Du kannst dein eingesetztes Geld teilweise oder ganz verlieren.</>,
-      <><strong>Echte Orders, echtes Geld.</strong> Was du an Kraken sendest, wird wirklich ausgeführt, sobald der Kurs deine Stufe erreicht. Ausgeführte Orders lassen sich nicht rückgängig machen.</>,
+      <><strong>Echte Orders, echtes Geld.</strong> Was du an {exName()} sendest, wird wirklich ausgeführt, sobald der Kurs deine Stufe erreicht. Ausgeführte Orders lassen sich nicht rückgängig machen.</>,
       <><strong>Keine Anlageberatung.</strong> Fehu Orders ist nur ein Werkzeug. Die App gibt keine Empfehlungen, was oder wann du kaufen oder verkaufen sollst. Jede Entscheidung triffst du selbst.</>,
-      <><strong>Beta-Version ohne Gewähr.</strong> Die App kann Fehler haben. Kraken kann ausfallen oder Orders ablehnen. Prüfe deine Orders immer auch direkt bei Kraken.</>,
+      <><strong>Beta-Version ohne Gewähr.</strong> Die App kann Fehler haben. {exName()} kann ausfallen oder Orders ablehnen. Prüfe deine Orders immer auch direkt bei {exName()}.</>,
       <><strong>Du trägst die Verantwortung,</strong> auch für deinen API-Schlüssel und für Steuern auf deine Gewinne. Setze nur Geld ein, dessen Verlust du verkraften kannst.</>,
     ],
     [
       <><strong>Crypto is high risk.</strong> Prices can drop sharply within hours. You can lose some or all of the money you put in.</>,
-      <><strong>Real orders, real money.</strong> What you send to Kraken is really executed as soon as the price reaches your level. Filled orders cannot be undone.</>,
+      <><strong>Real orders, real money.</strong> What you send to {exName()} is really executed as soon as the price reaches your level. Filled orders cannot be undone.</>,
       <><strong>No investment advice.</strong> Fehu Orders is only a tool. The app gives no recommendations on what or when to buy or sell. Every decision is yours.</>,
-      <><strong>Beta version without warranty.</strong> The app may contain bugs. Kraken may go down or reject orders. Always also check your orders directly at Kraken.</>,
+      <><strong>Beta version without warranty.</strong> The app may contain bugs. {exName()} may go down or reject orders. Always also check your orders directly at {exName()}.</>,
       <><strong>You are responsible,</strong> including for your API key and for taxes on your gains. Only use money you can afford to lose.</>,
     ],
   )

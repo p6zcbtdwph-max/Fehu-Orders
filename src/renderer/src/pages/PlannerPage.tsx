@@ -15,6 +15,7 @@ import { dateLocale, num, numberFormat, pct } from '../format'
 import { tr } from '@shared/i18n'
 import { parseNumber, parseWeightList, toInputText } from '@shared/number-format'
 import { useMoney } from '../money'
+import { exName, probeHint, probeOk } from '@shared/exchanges'
 
 const curves = (): { id: SizeCurve; label: string; title: string }[] => [
   { id: 'flat', label: tr('Gleich', 'Equal'), title: tr('Jede Stufe gleich groß', 'Every level the same size') },
@@ -307,7 +308,7 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
     await api().saveDraft(d)
     setDraft(d)
     setDraftForm(null)
-    setDraftMsg(tr(`Entwurf „${d.name}“ gespeichert. Es wurde nichts an Kraken gesendet.`, `Draft “${d.name}” saved. Nothing was sent to Kraken.`))
+    setDraftMsg(tr(`Entwurf „${d.name}“ gespeichert. Es wurde nichts an ${exName()} gesendet.`, `Draft “${d.name}” saved. Nothing was sent to ${exName()}.`))
   }
 
   async function run(validate: boolean) {
@@ -339,7 +340,7 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
       <header className="mb-5 page-header">
         <div className="min-w-0 flex-1 basis-64">
           <h1 className="page-title">{tr('Planer', 'Planner')}</h1>
-          <p className="page-subtitle">{tr('Viele Limit-Orders auf einmal planen, prüfen und an Kraken senden.', 'Plan, check and send many limit orders to Kraken at once.')}</p>
+          <p className="page-subtitle">{tr(`Viele Limit-Orders auf einmal planen, prüfen und an ${exName()} senden.`, `Plan, check and send many limit orders to ${exName()} at once.`)}</p>
         </div>
         <div className="ml-auto flex flex-shrink-0 items-center gap-2" data-guide="actions">
           <button type="button" className="btn btn-ghost" onClick={openFirstTest} title={tr('Einen kleinen, sicheren Plan für den ersten echten Test laden (bis 50 €)', 'Load a small, safe plan for your first real test (up to 50 €)')}>
@@ -348,11 +349,11 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
           <button type="button" className="btn btn-secondary" disabled={!ladder?.valid || !!busy} onClick={openDraftForm} title={tr('Zwischenspeichern und später im Reiter „Entwürfe“ freigeben', 'Save for now and release later in the “Drafts” tab')}>
             <ClipboardList size={16} /> {tr('Als Entwurf', 'Save as draft')}
           </button>
-          <button type="button" className="btn btn-secondary" disabled={!hasKey || !ladder?.valid || !!busy} onClick={() => run(true)} title={tr('Kraken prüft alle Orders, legt aber nichts an', 'Kraken checks all orders but places nothing')}>
+          <button type="button" className="btn btn-secondary" disabled={!hasKey || !ladder?.valid || !!busy} onClick={() => run(true)} title={probeHint()}>
             <FlaskConical size={16} /> {busy === 'validate' ? tr('Prüfe …', 'Checking …') : tr('Probelauf', 'Test run')}
           </button>
           <button type="button" data-primary-action className="btn btn-primary" disabled={!hasKey || !ladder?.valid || !!busy || !!shortfall} onClick={() => { setConfirm(true); api().settings().then((s) => setLimit(s.maxPlanEur)).catch(() => undefined) }}>
-            <Send size={16} /> {tr('An Kraken senden', 'Send to Kraken')}
+            <Send size={16} /> {tr(`An ${exName()} senden`, `Send to ${exName()}`)}
           </button>
         </div>
       </header>
@@ -373,7 +374,7 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
       )}
       {!hasKey && (
         <p className="notice notice-info mb-4">
-          {tr('Planen geht auch ohne Schlüssel. Zum Prüfen und Senden brauchst du einen Kraken-API-Schlüssel.', 'You can plan without a key. To check and send you need a Kraken API key.')}{' '}
+          {tr(`Planen geht auch ohne Schlüssel. Zum Prüfen und Senden brauchst du einen ${exName()}-API-Schlüssel.`, `You can plan without a key. To check and send you need a ${exName()} API key.`)}{' '}
           <button type="button" className="btn-link" onClick={onNeedKey}>{tr('Schlüssel hinterlegen', 'Add key')}</button>
         </p>
       )}
@@ -516,9 +517,9 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
               <Info size={14} className="mt-0.5 flex-shrink-0" />
               <span>
                 {tr(
-                  <><strong>Jede Order braucht echtes Guthaben.</strong> Kraken sperrt beim Senden den vollen Betrag aller gesendeten Stufen ({input.side === 'buy' ? 'beim Kaufen Euro' : `beim Verkaufen ${base}`}), auch für Stufen weit weg vom Kurs, die vielleicht nie ausgeführt werden. Das Geld bleibt gesperrt, bis die Order ausgeführt oder storniert ist, und steht so lange nicht für andere Orders bereit. Mehr Orders als Guthaben geht nicht.{' '}
+                  <><strong>Jede Order braucht echtes Guthaben.</strong> {exName()} sperrt beim Senden den vollen Betrag aller gesendeten Stufen ({input.side === 'buy' ? 'beim Kaufen Euro' : `beim Verkaufen ${base}`}), auch für Stufen weit weg vom Kurs, die vielleicht nie ausgeführt werden. Das Geld bleibt gesperrt, bis die Order ausgeführt oder storniert ist, und steht so lange nicht für andere Orders bereit. Mehr Orders als Guthaben geht nicht.{' '}
                   {partial ? `Mit „Davon jetzt senden“ sperrst du nur ${eur(nowCost)} für die ${nowCount} Stufen nah am Kurs.` : 'Tipp: Mit „Davon jetzt senden“ sperrst du erst einmal nur die Stufen nah am Kurs, oder du speicherst den Plan als Entwurf. Entwürfe sperren kein Geld.'}</>,
-                  <><strong>Every order needs real funds.</strong> When sending, Kraken locks the full amount of all sent levels ({input.side === 'buy' ? 'euro when buying' : `${base} when selling`}), even for levels far from the price that may never be filled. The money stays locked until the order is filled or cancelled and cannot be used for other orders meanwhile. You cannot place more orders than you have funds.{' '}
+                  <><strong>Every order needs real funds.</strong> When sending, {exName()} locks the full amount of all sent levels ({input.side === 'buy' ? 'euro when buying' : `${base} when selling`}), even for levels far from the price that may never be filled. The money stays locked until the order is filled or cancelled and cannot be used for other orders meanwhile. You cannot place more orders than you have funds.{' '}
                   {partial ? `With “Send now” you only lock ${eur(nowCost)} for the ${nowCount} levels close to the price.` : 'Tip: with “Send now” you first lock only the levels close to the price, or save the plan as a draft. Drafts lock no money.'}</>,
                 )}
               </span>
@@ -529,8 +530,8 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
               <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" />
               <span>
                 {tr(
-                  `${wrong.length === 1 ? '1 Stufe liegt' : `${wrong.length} Stufen liegen`} ${input.side === 'buy' ? 'beim oder über dem' : 'beim oder unter dem'} aktuellen Kurs. ${postOnly ? 'Mit Post-only storniert Kraken diese Orders sofort wieder.' : 'Diese Orders würden sofort zum Marktpreis ausgeführt.'} ${input.side === 'buy' ? 'Beim Kaufen liegen alle Stufen unter dem Kurs.' : 'Beim Verkaufen liegen alle Stufen über dem Kurs.'}`,
-                  `${wrong.length === 1 ? '1 level is' : `${wrong.length} levels are`} ${input.side === 'buy' ? 'at or above' : 'at or below'} the current price. ${postOnly ? 'With post-only, Kraken cancels these orders right away.' : 'These orders would be filled immediately at market price.'} ${input.side === 'buy' ? 'When buying, all levels are below the price.' : 'When selling, all levels are above the price.'}`,
+                  `${wrong.length === 1 ? '1 Stufe liegt' : `${wrong.length} Stufen liegen`} ${input.side === 'buy' ? 'beim oder über dem' : 'beim oder unter dem'} aktuellen Kurs. ${postOnly ? `Mit Post-only storniert ${exName()} diese Orders sofort wieder.` : 'Diese Orders würden sofort zum Marktpreis ausgeführt.'} ${input.side === 'buy' ? 'Beim Kaufen liegen alle Stufen unter dem Kurs.' : 'Beim Verkaufen liegen alle Stufen über dem Kurs.'}`,
+                  `${wrong.length === 1 ? '1 level is' : `${wrong.length} levels are`} ${input.side === 'buy' ? 'at or above' : 'at or below'} the current price. ${postOnly ? `With post-only, ${exName()} cancels these orders right away.` : 'These orders would be filled immediately at market price.'} ${input.side === 'buy' ? 'When buying, all levels are below the price.' : 'When selling, all levels are above the price.'}`,
                 )}
               </span>
             </p>
@@ -539,7 +540,7 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
           {result && (
             <div className={`notice ${failed.length ? 'notice-warning' : 'notice-success'}`}>
               {result.validate
-                ? failed.length ? tr(`Probelauf: ${failed.length} Orders würden abgelehnt.`, `Test run: ${failed.length} orders would be rejected.`) : tr(`Probelauf erfolgreich: Kraken würde alle ${ok} Orders annehmen. Es wurde nichts angelegt.`, `Test run successful: Kraken would accept all ${ok} orders. Nothing was placed.`)
+                ? failed.length ? tr(`Probelauf: ${failed.length} Orders würden abgelehnt.`, `Test run: ${failed.length} orders would be rejected.`) : probeOk(ok)
                 : tr(`${ok} Orders angelegt${failed.length ? `, ${failed.length} fehlgeschlagen` : ''}. Plan-Nummer ${result.userref}.`, `${ok} orders placed${failed.length ? `, ${failed.length} failed` : ''}. Plan number ${result.userref}.`)}
               {result.orders.some((o) => o.uncertain) && <p className="mt-1 text-xs font-medium">{tr('Die Verbindung brach ab. Schau unter „Offene Orders“ nach, was wirklich angelegt wurde, bevor du noch einmal sendest.', 'The connection dropped. Check under “Open orders” what was really placed before you send again.')}</p>}
               {failed.length > 0 && <p className="mt-1 text-xs">{tr('Grund', 'Reason')}: {failed[0].error}</p>}
@@ -672,8 +673,8 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
               <input className="input w-full" value={draftForm.note} placeholder={tr('z. B. nur freigeben, wenn BTC unter 60.000 € fällt', 'e.g. only release if BTC falls below 60,000 €')} onChange={(e) => setDraftForm({ ...draftForm, note: e.target.value })} />
             </label>
             <p className="text-xs text-ink-muted">{tr(
-              `${input.side === 'buy' ? 'Kauf' : 'Verkauf'} ${pair.name}, ${nowCount} ${partial ? `von ${sendable.length} ` : ''}Stufen, ${eur(nowCost)}. Es geht nichts an Kraken. Freigeben kannst du den Entwurf im Reiter „Entwürfe“.`,
-              `${input.side === 'buy' ? 'Buy' : 'Sell'} ${pair.name}, ${nowCount} ${partial ? `of ${sendable.length} ` : ''}levels, ${eur(nowCost)}. Nothing goes to Kraken. You can release the draft in the “Drafts” tab.`,
+              `${input.side === 'buy' ? 'Kauf' : 'Verkauf'} ${pair.name}, ${nowCount} ${partial ? `von ${sendable.length} ` : ''}Stufen, ${eur(nowCost)}. Es geht nichts an ${exName()}. Freigeben kannst du den Entwurf im Reiter „Entwürfe“.`,
+              `${input.side === 'buy' ? 'Buy' : 'Sell'} ${pair.name}, ${nowCount} ${partial ? `of ${sendable.length} ` : ''}levels, ${eur(nowCost)}. Nothing goes to ${exName()}. You can release the draft in the “Drafts” tab.`,
             )}</p>
           </div>
         </Modal>
@@ -700,16 +701,16 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
               </li>
               {tr(
                 <>
-                  <li><strong>Mini-Plan laden:</strong> BTC/EUR kaufen, 2 Stufen etwa 20 % unter dem Kurs, knapp über Krakens Mindestbetrag (meist unter 15 €). So tief wird der Kurs kaum fallen, die Orders bleiben also nur liegen.</li>
-                  <li><strong>Probelauf</strong> klicken. Kraken prüft alles, legt aber nichts an.</li>
-                  <li><strong>An Kraken senden</strong> und bestätigen.</li>
+                  <li><strong>Mini-Plan laden:</strong> BTC/EUR kaufen, 2 Stufen etwa 20 % unter dem Kurs, knapp über dem Mindestbetrag von {exName()} (meist unter 15 €). So tief wird der Kurs kaum fallen, die Orders bleiben also nur liegen.</li>
+                  <li><strong>Probelauf</strong> klicken. {probeHint()}.</li>
+                  <li><strong>An {exName()} senden</strong> und bestätigen.</li>
                   <li>Unter <strong>Offene Orders</strong> nachsehen, ob beide Orders da sind, und den Plan <strong>stornieren</strong>.</li>
                   <li>Im <strong>Protokoll</strong> siehst du danach jeden Schritt mit Uhrzeit.</li>
                 </>,
                 <>
-                  <li><strong>Load mini plan:</strong> buy BTC/EUR, 2 levels about 20 % below the price, just above Kraken’s minimum (usually under 15 €). The price will hardly fall that far, so the orders just sit there.</li>
-                  <li>Click <strong>Test run</strong>. Kraken checks everything but places nothing.</li>
-                  <li><strong>Send to Kraken</strong> and confirm.</li>
+                  <li><strong>Load mini plan:</strong> buy BTC/EUR, 2 levels about 20 % below the price, just above {exName()}’s minimum (usually under 15 €). The price will hardly fall that far, so the orders just sit there.</li>
+                  <li>Click <strong>Test run</strong>. {probeHint()}.</li>
+                  <li><strong>Send to {exName()}</strong> and confirm.</li>
                   <li>Check under <strong>Open orders</strong> that both orders are there, and <strong>cancel</strong> the plan.</li>
                   <li>Afterwards the <strong>Log</strong> shows every step with its time.</li>
                 </>,
@@ -743,10 +744,10 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
             )}</p>}
             {partial && <p className="text-ink-muted">{tr(`Die restlichen ${sendable.length - nowCount} Stufen bleiben im Plan. Du kannst sie später unter „Offene Orders“ mit „Rest senden“ nachschicken.`, `The remaining ${sendable.length - nowCount} levels stay in the plan. You can send them later under “Open orders” with “Send rest”.`)}</p>}
             <p>{tr(
-              <>Kraken sperrt dafür jetzt <strong>{input.side === 'buy' ? eur(nowCost) : `${num(toSend.reduce((a, l) => a + l.volume, 0), pair.volumeDecimals)} ${base}`}</strong> von deinem Guthaben, bis die Orders ausgeführt oder storniert sind.</>,
-              <>Kraken now locks <strong>{input.side === 'buy' ? eur(nowCost) : `${num(toSend.reduce((a, l) => a + l.volume, 0), pair.volumeDecimals)} ${base}`}</strong> of your balance for this until the orders are filled or cancelled.</>,
+              <>{exName()} sperrt dafür jetzt <strong>{input.side === 'buy' ? eur(nowCost) : `${num(toSend.reduce((a, l) => a + l.volume, 0), pair.volumeDecimals)} ${base}`}</strong> von deinem Guthaben, bis die Orders ausgeführt oder storniert sind.</>,
+              <>{exName()} now locks <strong>{input.side === 'buy' ? eur(nowCost) : `${num(toSend.reduce((a, l) => a + l.volume, 0), pair.volumeDecimals)} ${base}`}</strong> of your balance for this until the orders are filled or cancelled.</>,
             )}</p>
-            <p className="text-ink-muted">{tr('Die Orders werden echt bei Kraken angelegt. Du kannst sie unter „Offene Orders“ jederzeit stornieren, solange sie noch nicht ausgeführt sind. Dann ist das Geld sofort wieder frei.', 'The orders are really placed at Kraken. You can cancel them any time under “Open orders” as long as they are not filled yet. The money is then free again right away.')}</p>
+            <p className="text-ink-muted">{tr(`Die Orders werden echt bei ${exName()} angelegt. Du kannst sie unter „Offene Orders“ jederzeit stornieren, solange sie noch nicht ausgeführt sind. Dann ist das Geld sofort wieder frei.`, `The orders are really placed at ${exName()}. You can cancel them any time under “Open orders” as long as they are not filled yet. The money is then free again right away.`)}</p>
             <p className="text-xs text-ink-muted">{tr('Hat dein Mac Touch ID, fragt er nach dem Klick noch nach deinem Finger.', 'If your Mac has Touch ID, it asks for your fingerprint after the click.')}</p>
           </div>
         </Modal>
