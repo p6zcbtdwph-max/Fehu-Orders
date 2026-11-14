@@ -76,3 +76,61 @@ describe('Fibonacci und eigene Verteilung', () => {
   })
   it('liest Prozente aus Text', () => expect(parseWeights('10, 20;30 40%  x')).toEqual([10, 20, 30, 40]))
 })
+
+describe('Schwerpunkt-Regler', () => {
+  const ten: LadderInput = { ...base, steps: 10 }
+  it('ohne Regler gilt die Formel: gleich und linear liegt genau in der Mitte', () => {
+    const c = buildLadder(ten, BTC_EUR).centers!
+    expect(c.orderDefault).toBeCloseTo(0.5)
+    expect(c.order).toBeCloseTo(0.5)
+    expect(c.volume).toBeCloseTo(0.5)
+  })
+  it('steigende Kurve hat den Volumen-Schwerpunkt hinter der Mitte', () => {
+    const c = buildLadder({ ...ten, curve: 'linear', ratio: 3 }, BTC_EUR).centers!
+    expect(c.volumeDefault).toBeGreaterThan(0.55)
+    expect(c.orderDefault).toBeCloseTo(0.5)
+  })
+  it('gleiche %-Abstände legen die Stufen beim Kauf dichter nach unten', () => {
+    const c = buildLadder({ ...ten, priceEnd: 30000, spacing: 'geometric' }, BTC_EUR).centers!
+    expect(c.orderDefault).toBeGreaterThan(0.5)
+  })
+  it('Orderanzahl-Regler verschiebt die Stufen, erste und letzte bleiben', () => {
+    const l = buildLadder({ ...ten, orderCenter: 0.65 }, BTC_EUR)
+    expect(l.valid).toBe(true)
+    expect(l.centers!.order).toBeCloseTo(0.65, 3)
+    expect(l.levels[0].price).toBe(60000)
+    expect(l.levels[9].price).toBe(50000)
+    // dichter am Ende: der Abstand der letzten beiden Stufen ist kleiner als der ersten beiden
+    expect(l.levels[8].price - l.levels[9].price).toBeLessThan(l.levels[0].price - l.levels[1].price)
+  })
+  it('Volumen-Regler trifft den Wunschwert und hält das Budget', () => {
+    for (const curve of ['flat', 'linear', 'log', 'exp', 'fib'] as const) {
+      const l = buildLadder({ ...ten, curve, volumeCenter: 0.65 }, BTC_EUR)
+      expect(l.centers!.volume).toBeCloseTo(0.65, 3)
+      expect(l.totalCost).toBeLessThanOrEqual(1000)
+      expect(l.totalCost).toBeGreaterThan(999)
+    }
+  })
+  it('Regler auf dem Formelwert ändert nichts', () => {
+    const a = buildLadder({ ...ten, curve: 'linear' }, BTC_EUR)
+    const b = buildLadder({ ...ten, curve: 'linear', orderCenter: a.centers!.orderDefault, volumeCenter: a.centers!.volumeDefault }, BTC_EUR)
+    b.levels.forEach((x, i) => {
+      expect(x.price).toBe(a.levels[i].price)
+      expect(x.share).toBeCloseTo(a.levels[i].share, 6)
+    })
+  })
+  it('beide Regler zusammen', () => {
+    const l = buildLadder({ ...ten, orderCenter: 0.3, volumeCenter: 0.7 }, BTC_EUR)
+    expect(l.centers!.order).toBeCloseTo(0.3, 3)
+    expect(l.centers!.volume).toBeCloseTo(0.7, 3)
+  })
+  it('Verkauf und wenige Stufen', () => {
+    const s = buildLadder({ ...base, side: 'sell', priceStart: 70000, priceEnd: 80000, total: 0.1, volumeCenter: 0.2 }, BTC_EUR)
+    expect(s.centers!.volume).toBeCloseTo(0.2, 3)
+    const two = buildLadder({ ...base, steps: 2, orderCenter: 0.8 }, BTC_EUR)
+    expect(two.levels.map((x) => x.price)).toEqual([60000, 50000])
+  })
+  it('Werte außerhalb 0–100 % sind ein Fehler', () => {
+    expect(buildLadder({ ...ten, volumeCenter: 1.5 }, BTC_EUR).valid).toBe(false)
+  })
+})

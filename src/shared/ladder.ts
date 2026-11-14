@@ -37,6 +37,30 @@ export interface LadderInput {
   ratio: number
   /** Nur bei curve 'custom': Anteil je Stufe in Prozent (wird auf 100 % normiert) */
   customWeights?: number[]
+  /**
+   * Schwerpunkt der Orderanzahl (0–1): wo im Preisbereich die Stufen im Mittel liegen.
+   * 0 = bei der ersten Stufe, 1 = bei der letzten. Fehlt der Wert, gilt die gewählte Formel.
+   */
+  orderCenter?: number
+  /**
+   * Schwerpunkt des Volumens (0–1): wo im Preisbereich das Geld (Kauf) bzw. die Menge (Verkauf)
+   * im Mittel liegt. Fehlt der Wert, gilt die gewählte Formel.
+   */
+  volumeCenter?: number
+}
+
+/** Schwerpunkte einer Leiter, jeweils 0–1 (Anteil des Wegs von der ersten zur letzten Stufe) */
+export interface LadderCenters {
+  /** Schwerpunkt der Orderanzahl, so wie er jetzt ist */
+  order: number
+  /** Schwerpunkt der Orderanzahl ohne Regler, also nur nach der Formel */
+  orderDefault: number
+  /** Schwerpunkt des Volumens, so wie er jetzt ist */
+  volume: number
+  /** Schwerpunkt des Volumens nur nach der Formel (bei der jetzigen Lage der Stufen) */
+  volumeDefault: number
+  /** Lage jeder Stufe im Preisbereich (0–1) */
+  positions: number[]
 }
 
 export interface LadderLevel {
@@ -59,9 +83,13 @@ export interface Ladder {
   averagePrice: number
   valid: boolean
   errors: string[]
+  centers?: LadderCenters
 }
 
 export const MAX_STEPS = 200
+/** Grenzen der Schwerpunkt-Regler. Ganz an den Rand geht nicht, weil die erste und letzte Stufe fest bleiben. */
+export const CENTER_MIN = 0.05
+export const CENTER_MAX = 0.95
 
 /** Position t von 0 (erste Stufe) bis 1 (letzte Stufe) */
 function position(i: number, steps: number): number {
@@ -105,6 +133,41 @@ export function priceAt(spacing: PriceSpacing, start: number, end: number, t: nu
   return spacing === 'geometric' ? start * Math.pow(end / start, t) : start + (end - start) * t
 }
 
+/**
+ * Lage jeder Stufe im Preisbereich (0 = erste Stufe, 1 = letzte), vor dem Runden.
+ * k verschiebt die Stufen: 1 = genau nach der Formel, größer = dichter an der ersten Stufe,
+ * kleiner = dichter an der letzten. Erste und letzte Stufe bleiben immer an ihrem Platz.
+ */
+export function stageT(steps: number, k = 1): number[] {
+  return Array.from({ length: steps }, (_, i) => Math.pow(position(i, steps), k))
+}
+
+export function stagePositions(spacing: PriceSpacing, start: number, end: number, ts: number[]): number[] {
+  const span = end - start
+  return ts.map((t) => (span === 0 ? t : (priceAt(spacing, start, end, t) - start) / span))
+}
+
+/** Gewichteter Mittelwert der Lagen, also der Schwerpunkt (0–1) */
+export function weightedCenter(weights: number[], positions: number[]): number {
+  const sum = weights.reduce((a, b) => a + b, 0)
+  if (!(sum > 0)) return 0.5
+  return weights.reduce((a, w, i) => a + w * positions[i], 0) / sum
+}
+
+/** Sucht x in [lo, hi], sodass f(x) = target. f muss steigen. Liegt target außerhalb, gilt der nächste Rand. */
+function solveIncreasing(f: (x: number) => number, target: number, lo: number, hi: number): number {
+  if (target <= f(lo)) return lo
+  if (target >= f(hi)) return hi
+  for (let n = 0; n < 60; n++) {
+    const mid = (lo + hi) / 2
+    if (f(mid) < target) lo = mid
+    else hi = mid
+  }
+  return (lo + hi) / 2
+}
+
+const clampCenter = (c: number) => Math.min(CENTER_MAX, Math.max(CENTER_MIN, c))
+
 function roundTo(value: number, decimals: number, mode: 'down' | 'up' | 'nearest'): number {
   const f = Math.pow(10, decimals)
   // kleine Korrektur gegen Gleitkomma-Reste wie 0.30000000000000004
@@ -138,6 +201,9 @@ export function validateInput(input: LadderInput): string[] {
     if (w.length !== steps) e.push(tr(`Bei eigener Verteilung braucht es genau ${steps} Prozentwerte (jetzt ${w.length}).`, `A custom distribution needs exactly ${steps} percentages (now ${w.length}).`))
     if (w.some((x) => !(x > 0) || !Number.isFinite(x))) e.push(tr('Jeder Prozentwert muss eine Zahl über 0 sein.', 'Every percentage must be a number above 0.'))
   }
+  for (const c of [input.orderCenter, input.volumeCenter]) {
+    if (c !== undefined && !(c >= 0 && c <= 1)) e.push(tr('Der Schwerpunkt muss zwischen 0 % und 100 % liegen.', 'The center of weight must be between 0 % and 100 %.'))
+  }
   if (priceStart > 0 && priceEnd > 0 && steps > 1) {
     if (side === 'buy' && priceEnd > priceStart) e.push(tr('Beim Kauf liegt die letzte Stufe unter der ersten (tiefer kaufen).', 'When buying, the last level is below the first (buy lower).'))
     if (side === 'sell' && priceEnd < priceStart) e.push(tr('Beim Verkauf liegt die letzte Stufe über der ersten (höher verkaufen).', 'When selling, the last level is above the first (sell higher).'))
@@ -150,18 +216,44 @@ export function buildLadder(input: LadderInput, rules: PairRules): Ladder {
   if (errors.length) return { levels: [], totalVolume: 0, totalCost: 0, averagePrice: 0, valid: false, errors }
 
   const { side, steps, total, spacing, curve, ratio, priceStart, priceEnd } = input
-  const weights =
+  const baseWeights =
     curve === 'fib'
       ? Array.from({ length: steps }, (_, i) => fibonacci(i))
       : curve === 'custom'
         ? (input.customWeights ?? []).slice(0, steps)
         : Array.from({ length: steps }, (_, i) => weight(curve, position(i, steps), ratio))
-  const sum = weights.reduce((a, b) => a + b, 0)
+
+  // Regler 1: Schwerpunkt der Orderanzahl. Die Stufen rücken zusammen oder auseinander,
+  // erste und letzte Stufe bleiben fest. Mit 1 oder 2 Stufen gibt es nichts zu verschieben.
+  const meanAt = (logK: number) => {
+    const pos = stagePositions(spacing, priceStart, priceEnd, stageT(steps, Math.exp(logK)))
+    return pos.reduce((a, b) => a + b, 0) / steps
+  }
+  const orderDefault = meanAt(0)
+  // größeres k zieht die Stufen zur ersten hin, also sinkt der Schwerpunkt: darum -logK
+  const logK = input.orderCenter !== undefined && steps > 2 ? -solveIncreasing((x) => meanAt(-x), clampCenter(input.orderCenter), -5, 5) : 0
+  const ts = stageT(steps, Math.exp(logK))
+  const positions = stagePositions(spacing, priceStart, priceEnd, ts)
+
+  // Regler 2: Schwerpunkt des Volumens. Die Gewichte der Formel werden zur einen oder
+  // anderen Seite gekippt (mal e^(a·Lage)). a = 0 heißt: genau wie die Formel.
+  const volumeDefault = weightedCenter(baseWeights, positions)
+  const tilt = (a: number) => baseWeights.map((w, i) => w * Math.exp(a * (positions[i] - 0.5)))
+  const a = input.volumeCenter !== undefined && steps > 1 ? solveIncreasing((x) => weightedCenter(tilt(x), positions), clampCenter(input.volumeCenter), -60, 60) : 0
+  const weights = a === 0 ? baseWeights : tilt(a)
+  const sum = weights.reduce((x, y) => x + y, 0)
+  const centers: LadderCenters = {
+    order: positions.reduce((x, y) => x + y, 0) / steps,
+    orderDefault,
+    volume: weightedCenter(weights, positions),
+    volumeDefault,
+    positions,
+  }
 
   const levels: LadderLevel[] = weights.map((w, i) => {
     const share = w / sum
     // Kauf: Preis abrunden, Verkauf: aufrunden. So wird nie schlechter gehandelt als berechnet.
-    const price = roundPrice(priceAt(spacing, priceStart, priceEnd, position(i, steps)), rules, side === 'buy' ? 'down' : 'up')
+    const price = roundPrice(priceAt(spacing, priceStart, priceEnd, ts[i]), rules, side === 'buy' ? 'down' : 'up')
     // Menge immer abrunden, damit Budget bzw. Bestand nie überschritten wird
     const rawVolume = side === 'buy' ? (total * share) / price : total * share
     const volume = roundTo(rawVolume, rules.volumeDecimals, 'down')
@@ -188,5 +280,6 @@ export function buildLadder(input: LadderInput, rules: PairRules): Ladder {
     averagePrice: totalVolume > 0 ? totalCost / totalVolume : 0,
     valid: errors.length === 0,
     errors,
+    centers,
   }
 }
