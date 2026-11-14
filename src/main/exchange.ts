@@ -1,7 +1,7 @@
 // Gemeinsame Schnittstelle aller Börsen. Der Rest der App spricht nur mit dieser Schnittstelle,
 // welche Börse dahinter steckt, entscheidet create() anhand der Einstellungen.
 // Läuft nur im Hauptprozess, Schlüssel verlassen ihn nie.
-import type { LadderLevel, PairRules, Side } from '../shared/ladder'
+import { priceText, volumeText, type LadderLevel, type PairRules, type Side } from '../shared/ladder'
 import type { KeyCheck } from '../shared/ipc'
 import type { ExchangeId } from '../shared/exchanges'
 import { tr } from '../shared/i18n'
@@ -117,8 +117,23 @@ export const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeou
 /** Zahl ohne wissenschaftliche Schreibweise (5e-7 wird 0.0000005), ohne überflüssige Nullen */
 export function plain(n: number): string {
   if (!Number.isFinite(n)) throw new ExchangeError(tr('Ungültige Zahl in einer Order.', 'Invalid number in an order.'))
-  const s = n.toFixed(12).replace(/0+$/, '').replace(/\.$/, '')
+  // Nur so viele Nachkommastellen, wie eine Gleitkommazahl verlässlich trägt (15 gültige Ziffern).
+  // Sonst wird aus 76543.2 der Text "76543.199999999997".
+  const intDigits = n === 0 ? 1 : Math.floor(Math.log10(Math.abs(n))) + 1
+  const s = n.toFixed(Math.max(0, Math.min(20, 15 - intDigits))).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '')
   return s === '-0' ? '0' : s
+}
+
+/** Preis für die Börse: mit den Regeln des Paars auf erlaubte Nachkommastellen, sonst ohne Gleitkomma-Reste */
+export function priceOut(price: number, rules: PairRules | undefined): string {
+  if (!Number.isFinite(price)) return plain(price)
+  return rules && Number.isFinite(rules.priceDecimals) ? priceText(price, rules) : plain(price)
+}
+
+/** Menge für die Börse: mit den Regeln des Paars auf erlaubte Nachkommastellen (abgerundet), sonst ohne Gleitkomma-Reste */
+export function volumeOut(volume: number, rules: PairRules | undefined): string {
+  if (!Number.isFinite(volume)) return plain(volume)
+  return rules && Number.isFinite(rules.volumeDecimals) ? volumeText(volume, rules) : plain(volume)
 }
 
 /** Nachkommastellen eines Schritts wie "0.01" → 2, "1" → 0, "1e-8" → 8 */

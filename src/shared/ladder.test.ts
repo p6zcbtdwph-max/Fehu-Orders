@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildLadder, fibonacci, parseWeights, priceAt, weight, type LadderInput, type PairRules } from './ladder'
+import { buildLadder, conformLevels, fibonacci, parseWeights, priceAt, priceText, volumeText, weight, type LadderInput, type PairRules } from './ladder'
 
 const BTC_EUR: PairRules = { priceDecimals: 1, volumeDecimals: 8, orderMin: 0.00005, costMin: 0.5 }
 const base: LadderInput = { side: 'buy', priceStart: 60000, priceEnd: 50000, steps: 5, total: 1000, spacing: 'linear', curve: 'flat', ratio: 3 }
@@ -132,5 +132,48 @@ describe('Schwerpunkt-Regler', () => {
   })
   it('Werte außerhalb 0–100 % sind ein Fehler', () => {
     expect(buildLadder({ ...ten, volumeCenter: 1.5 }, BTC_EUR).valid).toBe(false)
+  })
+})
+
+describe('Rundung auf die Regeln der Börse', () => {
+  const btc: PairRules = { priceDecimals: 1, volumeDecimals: 8, orderMin: 0.00005, costMin: 0.5, tickSize: 0.1 }
+
+  it('jede Stufe hat auch mit Schwerpunkt-Reglern höchstens 1 Nachkommastelle und keine doppelten Preise', () => {
+    for (const side of ['buy', 'sell'] as const) {
+      for (const orderCenter of [undefined, 0.1, 0.35, 0.5, 0.8]) {
+        for (const volumeCenter of [undefined, 0.2, 0.7]) {
+          const start = side === 'buy' ? 76543.21 : 80000.07
+          const end = side === 'buy' ? 70011.13 : 86543.98
+          const l = buildLadder({ side, priceStart: start, priceEnd: end, steps: 10, total: side === 'buy' ? 1000 : 0.02, spacing: 'geometric', curve: 'log', ratio: 3, orderCenter, volumeCenter }, btc)
+          for (const x of l.levels) {
+            expect(priceText(x.price, btc)).toMatch(/^\d+(\.\d)?$/)
+            expect(Number(priceText(x.price, btc))).toBe(x.price)
+          }
+          expect(new Set(l.levels.map((x) => x.price)).size).toBe(l.levels.length)
+          expect(l.errors).toEqual([])
+        }
+      }
+    }
+  })
+
+  it('priceText und volumeText geben genau die erlaubten Nachkommastellen aus', () => {
+    expect(priceText(76543.2, btc)).toBe('76543.2')
+    expect(priceText(76543.199999999997, btc)).toBe('76543.2')
+    expect(priceText(76543, btc)).toBe('76543')
+    expect(priceText(1.2345, { priceDecimals: 2, tickSize: 0.05 })).toBe('1.25')
+    expect(volumeText(0.000123456789, btc)).toBe('0.00012345')
+    expect(volumeText(5e-7, btc)).toBe('0.0000005')
+  })
+
+  it('conformLevels rundet alte Stufen nach (Kauf ab, Verkauf auf) und meldet doppelte Preise', () => {
+    const old = [{ price: 76543.27, volume: 0.000123456789 }, { price: 76000.05, volume: 0.001 }]
+    const buy = conformLevels(old, btc, 'buy')
+    expect(buy.levels.map((l) => l.price)).toEqual([76543.2, 76000])
+    expect(buy.levels[0].volume).toBe(0.00012345)
+    expect(buy.duplicate).toBe(false)
+    expect(conformLevels(old, btc, 'sell').levels.map((l) => l.price)).toEqual([76543.3, 76000.1])
+    expect(conformLevels([{ price: 76543.21, volume: 1 }, { price: 76543.29, volume: 1 }], btc, 'buy').duplicate).toBe(true)
+    const ok = [{ price: 76543.2, volume: 0.001 }]
+    expect(conformLevels(ok, btc, 'buy').levels[0]).toBe(ok[0])
   })
 })

@@ -7,7 +7,7 @@ import type { LadderLevel, Side } from '../shared/ladder'
 import type { KeyCheck } from '../shared/ipc'
 import { tr } from '../shared/i18n'
 import {
-  ExchangeError, decimalsOf, localCheck, networkError, noKey, notPlacedText, plain, refFromClientId, refUuid, skippedText, sleep, uncertainText, unreadable,
+  ExchangeError, priceOut, volumeOut, decimalsOf, localCheck, networkError, noKey, notPlacedText, refFromClientId, refUuid, skippedText, sleep, uncertainText, unreadable,
   type ClosedOrder, type Credentials, type Exchange, type FetchLike, type OpenOrder, type PairInfo, type PlaceOptions, type SentOrder,
 } from './exchange'
 
@@ -205,7 +205,7 @@ export class Bitvavo implements Exchange {
       const clientOrderId = refUuid(opts.userref, l.index)
       try {
         const r = await this.priv('POST', '/order', {}, {
-          market: pairId, side, orderType: 'limit', amount: plain(l.volume), price: plain(l.price),
+          market: pairId, side, orderType: 'limit', amount: volumeOut(l.volume, opts.rules), price: priceOut(l.price, opts.rules),
           postOnly: !!opts.postOnly, clientOrderId, operatorId: OPERATOR_ID,
         }, ORDER_TIMEOUT_MS)
         if (r?.status === 'canceled' && r?.restatementReason === 'cancelPostOnly') {

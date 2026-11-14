@@ -4,7 +4,7 @@ import { tr } from '../shared/i18n'
 import { createHash, createHmac } from 'node:crypto'
 import type { LadderLevel, Side } from '../shared/ladder'
 import type { KeyCheck } from '../shared/ipc'
-import { ExchangeError, plain, same, sleep, type ClosedOrder, type Credentials, type Exchange, type FetchLike, type HttpInit, type OpenOrder, type PairInfo, type PlaceOptions, type SentOrder } from './exchange'
+import { ExchangeError, plain, priceOut, volumeOut, same, sleep, type ClosedOrder, type Credentials, type Exchange, type FetchLike, type HttpInit, type OpenOrder, type PairInfo, type PlaceOptions, type SentOrder } from './exchange'
 
 export const KRAKEN_URL = 'https://api.kraken.com'
 /** Kraken nimmt 2 bis 15 Orders pro Batch */
@@ -227,13 +227,15 @@ export class Kraken implements Exchange {
    */
   async placeLadder(pairId: string, side: Side, levels: LadderLevel[], opts: PlaceOptions): Promise<SentOrder[]> {
     const out: SentOrder[] = []
+    // Preise und Mengen genau mit den Nachkommastellen senden, die Kraken für dieses Paar erlaubt
+    const rules = opts.rules
     for (let i = 0; i < levels.length; i += BATCH_MAX) {
       const chunk = levels.slice(i, i + BATCH_MAX)
       const orders = chunk.map((l) => ({
         ordertype: 'limit',
         type: side,
-        price: plain(l.price),
-        volume: plain(l.volume),
+        price: priceOut(l.price, rules),
+        volume: volumeOut(l.volume, rules),
         userref: opts.userref,
         ...(opts.postOnly ? { oflags: 'post' } : {}),
       }))
