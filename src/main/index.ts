@@ -2,7 +2,8 @@ import { app, BrowserWindow, dialog, ipcMain, Notification, safeStorage, session
 import { readFileSync, writeFileSync } from 'node:fs'
 import { parseBackup, summarize } from '../shared/backup'
 import { localDate } from '../shared/dates'
-import { join } from 'node:path'
+import { join, resolve, sep } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { Kraken } from './kraken'
 import { Bitvavo } from './bitvavo'
 import { Coinbase } from './coinbase'
@@ -94,11 +95,23 @@ function createWindow(): void {
   else win.loadFile(join(__dirname, '../renderer/index.html'))
 }
 
-/** Gehört eine Adresse zur App selbst (gebaute Datei oder Entwicklungs-Server)? */
-function isOwnUrl(url: string): boolean {
+/** Ordner mit den gebauten Fenster-Dateien der App */
+const RENDERER_DIR = resolve(__dirname, '../renderer')
+
+/**
+ * Gehört eine Adresse zur App selbst (gebaute Datei oder Entwicklungs-Server)?
+ * Im fertigen Build zählt nur eine Datei aus dem eigenen Fenster-Ordner, nicht irgendeine Datei auf dem Mac.
+ */
+export function isOwnUrl(url: string): boolean {
   const dev = process.env['ELECTRON_RENDERER_URL']
-  if (dev) return url.startsWith(new URL(dev).origin)
-  return url.startsWith('file://')
+  try {
+    if (dev) return new URL(url).origin === new URL(dev).origin
+    const u = new URL(url)
+    if (u.protocol !== 'file:') return false
+    return resolve(fileURLToPath(u)).startsWith(RENDERER_DIR + sep)
+  } catch {
+    return false
+  }
 }
 
 function handle(channel: string, fn: (...args: any[]) => any): void {
@@ -590,6 +603,7 @@ app.whenReady().then(() => {
   applyLanguage()
   // Das Fenster braucht keine Kamera, kein Mikrofon, keinen Standort usw.
   session.defaultSession.setPermissionRequestHandler((_wc, _perm, cb) => cb(false))
+  session.defaultSession.setPermissionCheckHandler(() => false)
   createWindow()
   setTimeout(pollFills, 10_000)
   setInterval(pollFills, 60_000)

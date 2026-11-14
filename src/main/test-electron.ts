@@ -2,6 +2,7 @@
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 export const dir = mkdtempSync(join(tmpdir(), 'fehu-'))
 export const handlers = new Map<string, (...a: any[]) => any>()
@@ -14,4 +15,8 @@ export const electronMock = {
   systemPreferences: { canPromptTouchID: () => false },
 }
 /** Ruft einen IPC-Handler so auf, als käme der Aufruf aus dem App-Fenster */
-export const call = (ch: string, ...args: any[]) => handlers.get(ch)!({ senderFrame: { url: 'file:///app/index.html' } }, ...args)
+export const call = (ch: string, ...args: any[]) => handlers.get(ch)!({ senderFrame: { url: OWN_URL } }, ...args)
+/** Adresse des eigenen Fensters (gebaute index.html neben dem Hauptprozess) */
+export const OWN_URL = pathToFileURL(join(__dirname, '../renderer/index.html')).href
+/** Ruft einen IPC-Handler so auf, als käme der Aufruf von einer fremden Seite */
+export const callFrom = (url: string, ch: string, ...args: any[]) => handlers.get(ch)!({ senderFrame: { url } }, ...args)
