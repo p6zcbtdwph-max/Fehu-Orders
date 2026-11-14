@@ -1,11 +1,12 @@
 import { api } from '../api'
 import { useEffect, useState } from 'react'
-import { Check, ExternalLink, Fingerprint, Globe, KeyRound, ShieldAlert, ShieldCheck, X } from 'lucide-react'
+import { ArrowRightLeft, Check, ExternalLink, Fingerprint, Globe, KeyRound, ShieldAlert, ShieldCheck, X } from 'lucide-react'
 import type { KeyCheck } from '@shared/ipc'
 import { checkKeyFormat, normalizeCoinbase } from '@shared/safety'
-import { activeExchange, exchangeMeta } from '@shared/exchanges'
+import { EXCHANGE_IDS, exchangeMeta, exchangeName, type ExchangeId } from '@shared/exchanges'
 import { tr } from '@shared/i18n'
 import SectionCard from '../components/ui/SectionCard'
+import Segmented from '../components/ui/Segmented'
 
 function CheckList({ checks, exchange }: { checks: KeyCheck[]; exchange: string }) {
   return (
@@ -24,8 +25,51 @@ function CheckList({ checks, exchange }: { checks: KeyCheck[]; exchange: string 
   )
 }
 
-export default function KeyPage({ hasKey, onKeyChanged }: { hasKey: boolean; onKeyChanged: () => void }): JSX.Element {
-  const ex = exchangeMeta(activeExchange())
+interface Props {
+  /** Börse, mit der die App gerade arbeitet (links unten gewählt) */
+  active: ExchangeId
+  /** Welche Börsen schon einen Schlüssel haben */
+  keys: Partial<Record<ExchangeId, boolean>>
+  onKeyChanged: () => void
+  /** Diese Börse ab jetzt benutzen */
+  onUse: (ex: ExchangeId) => void
+}
+
+/**
+ * Schlüssel anlegen und verwalten ist getrennt vom Benutzen: Oben wählt man, für welche Börse
+ * man einen Schlüssel einrichtet. Mit welcher Börse die App arbeitet, bleibt links unten.
+ */
+export default function KeyPage({ active, keys, onKeyChanged, onUse }: Props): JSX.Element {
+  const [sel, setSel] = useState<ExchangeId>(active)
+  const name = exchangeName(sel)
+  return (
+    <div className="page page-narrow">
+      <header className="mb-5 page-header">
+        <div className="min-w-0 flex-1">
+          <h1 className="page-title">{tr('Schlüssel', 'API keys')}</h1>
+          <p className="page-subtitle">{tr('API-Schlüssel je Börse Schritt für Schritt anlegen und sicher hinterlegen. Hier wählst du nur, welchen Schlüssel du einrichtest. Mit welcher Börse die App arbeitet, wählst du links unten.', 'Create and store an API key per exchange step by step. Here you only choose which key you set up. Which exchange the app works with is chosen at the bottom left.')}</p>
+        </div>
+      </header>
+      <div className="mb-4 space-y-2">
+        <span className="label">{tr('Schlüssel einrichten für', 'Set up key for')}</span>
+        <Segmented<ExchangeId> block size="md" value={sel} onChange={setSel} aria-label={tr('Schlüssel einrichten für', 'Set up key for')}
+          options={EXCHANGE_IDS.map((id) => ({ id, label: exchangeName(id), icon: keys[id] ? Check : undefined, title: keys[id] ? tr('Schlüssel hinterlegt', 'Key saved') : tr('Noch kein Schlüssel', 'No key yet') }))} />
+        {sel === active ? (
+          <p className="text-xs text-ink-muted">{tr(`${name} ist die Börse, mit der die App gerade arbeitet.`, `${name} is the exchange the app is working with right now.`)}</p>
+        ) : (
+          <div className="notice notice-info flex flex-wrap items-center gap-2 text-sm">
+            <span className="min-w-0 flex-1">{tr(`Die App arbeitet gerade mit ${exchangeName(active)}. Einen Schlüssel für ${name} kannst du trotzdem hier anlegen, die App wechselt dabei nicht.`, `The app is working with ${exchangeName(active)} right now. You can still set up a ${name} key here, the app does not switch.`)}</span>
+            {keys[sel] && <button type="button" className="btn btn-secondary btn-sm" onClick={() => onUse(sel)}><ArrowRightLeft size={14} /> {tr(`${name} jetzt benutzen`, `Use ${name} now`)}</button>}
+          </div>
+        )}
+      </div>
+      <KeyPanel key={sel} exchange={sel} hasKey={!!keys[sel]} onKeyChanged={onKeyChanged} />
+    </div>
+  )
+}
+
+function KeyPanel({ exchange, hasKey, onKeyChanged }: { exchange: ExchangeId; hasKey: boolean; onKeyChanged: () => void }): JSX.Element {
+  const ex = exchangeMeta(exchange)
   const [key, setKey] = useState('')
   const [secret, setSecret] = useState('')
   const [noWithdraw, setNoWithdraw] = useState(false)
@@ -51,7 +95,7 @@ export default function KeyPage({ hasKey, onKeyChanged }: { hasKey: boolean; onK
     setMsg(null)
     setChecks(null)
     try {
-      const r = await api().saveKey(key, secret, { noWithdrawConfirmed: needsConfirm ? noWithdraw : undefined })
+      const r = await api().saveKey(key, secret, { noWithdrawConfirmed: needsConfirm ? noWithdraw : undefined, exchange })
       setChecks(r.checks)
       if (r.saved) {
         setKey('')
@@ -74,7 +118,7 @@ export default function KeyPage({ hasKey, onKeyChanged }: { hasKey: boolean; onK
     setMsg(null)
     setChecks(null)
     try {
-      const c = await api().verifyKey()
+      const c = await api().verifyKey(exchange)
       setChecks(c)
       setMsg(c.every((x) => x.ok) ? { ok: true, text: tr('Alle Rechte stimmen.', 'All permissions are correct.') } : { ok: false, text: tr('Bei den Rechten stimmt etwas nicht, siehe unten.', 'Something is wrong with the permissions, see below.') })
     } catch (e) {
@@ -84,7 +128,7 @@ export default function KeyPage({ hasKey, onKeyChanged }: { hasKey: boolean; onK
   }
 
   async function clear() {
-    await api().clearKey()
+    await api().clearKey(exchange)
     setConfirmClear(false)
     setChecks(null)
     setSource('status')
@@ -93,14 +137,6 @@ export default function KeyPage({ hasKey, onKeyChanged }: { hasKey: boolean; onK
   }
 
   return (
-    <div className="page page-narrow">
-      <header className="mb-5 page-header">
-        <div className="min-w-0 flex-1">
-          <h1 className="page-title">{tr('Schlüssel', 'API key')} · {ex.name}</h1>
-          <p className="page-subtitle">{tr(`${ex.name}-API-Schlüssel Schritt für Schritt anlegen und sicher hinterlegen. Die Börse wechselst du links unten.`, `Create a ${ex.name} API key step by step and store it safely. Switch the exchange at the bottom left.`)}</p>
-        </div>
-      </header>
-
       <div className="space-y-4">
         <SectionCard title={tr('Status', 'Status')}>
           <div className="space-y-3 text-sm">
@@ -212,6 +248,5 @@ export default function KeyPage({ hasKey, onKeyChanged }: { hasKey: boolean; onK
           </ul>
         </SectionCard>
       </div>
-    </div>
   )
 }

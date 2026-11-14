@@ -167,10 +167,11 @@ export interface Api {
   /** hasKey gilt für die aktive Börse, keys zeigt alle Börsen */
   keyStatus(): Promise<{ hasKey: boolean; encryption: boolean; touchId: boolean; exchange: ExchangeId; keys: Record<ExchangeId, boolean> }>
   /** Für die aktive Börse. noWithdrawConfirmed: Nutzer bestätigt, dass Auszahlungen aus sind (Bitvavo) */
-  saveKey(key: string, secret: string, opts?: { noWithdrawConfirmed?: boolean }): Promise<SaveKeyResult>
+  /** exchange: für welche Börse (Standard: die aktive) */
+  saveKey(key: string, secret: string, opts?: { noWithdrawConfirmed?: boolean; exchange?: ExchangeId }): Promise<SaveKeyResult>
   /** Rechte des gespeicherten Schlüssels erneut prüfen */
-  verifyKey(): Promise<KeyCheck[]>
-  clearKey(): Promise<void>
+  verifyKey(exchange?: ExchangeId): Promise<KeyCheck[]>
+  clearKey(exchange?: ExchangeId): Promise<void>
   pairs(): Promise<PairDto[]>
   price(pairId: string): Promise<number>
   /** Letzte Kurse mehrerer Paare auf einmal */

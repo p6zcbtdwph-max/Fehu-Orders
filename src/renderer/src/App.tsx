@@ -268,7 +268,7 @@ export default function App(): JSX.Element {
           onEdit={(d) => { setPrefill({ pairId: d.pairId, input: d.input, postOnly: d.postOnly, sendCount: d.sendCount, draft: d }); setPage('planner') }} />}
         {page === 'orders' && <OrdersPage hasKey={!!hasKey} onPlanSell={(p) => { setPrefill(p); setPage('planner') }} />}
         {page === 'log' && <LogPage />}
-        {page === 'key' && <KeyPage hasKey={!!hasKey} onKeyChanged={refreshKey} />}
+        {page === 'key' && <KeyPage active={exchange} keys={keys} onKeyChanged={refreshKey} onUse={switchExchange} />}
         {page === 'settings' && <SettingsPage hasKey={!!hasKey} onOpenKey={() => setPage('key')} />}
         </div>
       </main>
