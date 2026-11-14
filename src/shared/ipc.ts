@@ -27,6 +27,8 @@ export interface SendRequest {
   sendCount?: number
   /** Wird ein Entwurf freigegeben, merkt sich die App dort die Plan-Nummer */
   draftId?: string
+  /** Börse, für die Paar und Regeln geladen wurden. Weicht sie von der gewählten ab, sendet die App nichts. */
+  exchange?: ExchangeId
 }
 
 export interface SettingsDto {

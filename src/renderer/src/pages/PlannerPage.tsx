@@ -16,7 +16,7 @@ import { dateLocale, num, numberFormat, pct } from '../format'
 import { tr } from '@shared/i18n'
 import { parseNumber, parseWeightList, toInputText } from '@shared/number-format'
 import { useMoney } from '../money'
-import { exName, probeHint, probeOk } from '@shared/exchanges'
+import { activeExchange, exName, probeHint, probeOk } from '@shared/exchanges'
 
 const curves = (): { id: SizeCurve; label: string; title: string }[] => [
   { id: 'flat', label: tr('Gleich', 'Equal'), title: tr('Jede Stufe gleich groß', 'Every level the same size') },
@@ -103,6 +103,8 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
   const theme = useChartTheme()
   const { eur, fmtPrice, sym, usdHint } = useMoney()
   const [watchlist, setWatchlist] = useState<string[]>([])
+  /** Börse, für die die Paare geladen wurden (die Seite wird beim Börsenwechsel neu aufgebaut) */
+  const [pairsExchange] = useState(activeExchange)
   /** Wie viele Stufen jetzt gesendet werden (leer = alle) */
   const [sendCount, setSendCount] = useState<number | null>(null)
   const [pairs, setPairs] = useState<PairDto[]>([])
@@ -325,7 +327,7 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
     setResult(null)
     try {
       // Wird gerade ein Entwurf bearbeitet, gilt er nach dem echten Senden als freigegeben (sonst ließe er sich ein zweites Mal senden)
-      const r = await api().send({ pairId: pair.id, pairName: pair.name, side: input.side, input, levels: ladder.levels, validate, postOnly, sendCount: partial ? nowCount : undefined, draftId: validate ? undefined : draft?.id })
+      const r = await api().send({ pairId: pair.id, pairName: pair.name, side: input.side, input, levels: ladder.levels, validate, postOnly, sendCount: partial ? nowCount : undefined, draftId: validate ? undefined : draft?.id, exchange: pairsExchange })
       setResult(r)
       if (!validate && draft && r.orders.some((o) => o.txid || o.uncertain)) {
         setDraftMsg(tr(`Der Entwurf „${draft.name}“ ist jetzt freigegeben (Plan-Nummer ${r.userref}).`, `The draft “${draft.name}” is now released (plan number ${r.userref}).`))

@@ -20,6 +20,11 @@ export interface PairRules {
   costMin: number
   /** Erlaubter Preisschritt bei Kraken (z. B. 0.5). Fehlt er, gilt 1 Einheit der letzten Nachkommastelle. */
   tickSize?: number
+  /**
+   * Nur für Börsen, die Preise nach gültigen Ziffern begrenzen (ältere Bitvavo-Märkte ohne tickSize:
+   * „pricePrecision 5“ heißt 76543 erlaubt, 76543.2 nicht). Fehlt der Wert, zählen nur Nachkommastellen und tickSize.
+   */
+  priceSignificant?: number
 }
 
 export interface LadderInput {
@@ -168,24 +173,58 @@ function solveIncreasing(f: (x: number) => number, target: number, lo: number, h
 
 const clampCenter = (c: number) => Math.min(CENTER_MAX, Math.max(CENTER_MIN, c))
 
+/**
+ * Ganzzahl-Rundung mit Schutz vor Gleitkomma-Resten: liegt x so nah an einer ganzen Zahl, dass der Abstand nur
+ * Rechenungenauigkeit sein kann (z. B. 7085982107.9999990 statt 7085982108), gilt diese ganze Zahl.
+ * Die frühere Korrektur mit toFixed(6) reichte bei großen Zahlen (Preis × 10^Nachkommastellen über 10^9) nicht.
+ */
+export function snapRound(x: number, mode: 'down' | 'up' | 'nearest'): number {
+  const near = Math.round(x)
+  if (Math.abs(x - near) <= Math.abs(x) * 1e-12 + 1e-9) return near
+  return mode === 'down' ? Math.floor(x) : mode === 'up' ? Math.ceil(x) : near
+}
+
 function roundTo(value: number, decimals: number, mode: 'down' | 'up' | 'nearest'): number {
-  const f = Math.pow(10, decimals)
-  // kleine Korrektur gegen Gleitkomma-Reste wie 0.30000000000000004
-  const scaled = Number((value * f).toFixed(6))
-  const r = mode === 'down' ? Math.floor(scaled) : mode === 'up' ? Math.ceil(scaled) : Math.round(scaled)
-  return r / f
+  if (!Number.isFinite(value)) return value
+  const d = Math.max(0, Math.min(20, Math.floor(decimals)))
+  const f = Math.pow(10, d)
+  // Teilen durch 10^d (statt mal 10^-d) liefert die Gleitkommazahl, die dem Dezimalwert am nächsten liegt
+  return snapRound(value * f, mode) / f
 }
 
 /**
  * Rundet einen Preis auf Krakens Preisschritt (tick size) und die Nachkommastellen.
  * Kauf rundet ab, Verkauf auf: so wird nie schlechter gehandelt als berechnet.
  */
-export function roundPrice(value: number, rules: Pick<PairRules, 'priceDecimals' | 'tickSize'>, mode: 'down' | 'up'): number {
+export function roundPrice(value: number, rules: Pick<PairRules, 'priceDecimals' | 'tickSize' | 'priceSignificant'>, mode: 'down' | 'up'): number {
+  if (!Number.isFinite(value)) return value
+  const sig = rules.priceSignificant
+  if (sig && sig > 0 && !(rules.tickSize && rules.tickSize > 0) && value > 0) {
+    // Preisschritt aus den gültigen Ziffern: bei 5 Ziffern und 76543.2 ist der Schritt 1, bei 0.0123456 ist er 0.0000001
+    const digits = Math.floor(Math.log10(value)) + 1
+    const exp = Math.max(digits - Math.floor(sig), -Math.max(0, Math.floor(rules.priceDecimals)))
+    // Beim Aufrunden kann eine Stelle dazukommen (99999.5 → 100000), das passt dann immer noch
+    return roundToExp(value, exp, mode)
+  }
   const tick = rules.tickSize && rules.tickSize > 0 ? rules.tickSize : 0
   if (!tick || Math.abs(tick - Math.pow(10, -rules.priceDecimals)) < 1e-15) return roundTo(value, rules.priceDecimals, mode)
-  const steps = Number((value / tick).toFixed(6))
-  const n = mode === 'down' ? Math.floor(steps) : Math.ceil(steps)
-  return Number((n * tick).toFixed(rules.priceDecimals))
+  const n = snapRound(value / tick, mode)
+  return Number((n * tick).toFixed(Math.max(0, Math.min(20, Math.floor(rules.priceDecimals)))))
+}
+
+/** Kleinster erlaubter Preisschritt bei diesem Preis (tickSize, gültige Ziffern oder letzte Nachkommastelle) */
+export function priceStep(price: number, rules: Pick<PairRules, 'priceDecimals' | 'tickSize' | 'priceSignificant'>): number {
+  if (rules.tickSize && rules.tickSize > 0) return rules.tickSize
+  const sig = rules.priceSignificant
+  if (sig && sig > 0 && price > 0) return Math.pow(10, Math.max(Math.floor(Math.log10(price)) + 1 - Math.floor(sig), -Math.max(0, Math.floor(rules.priceDecimals))))
+  return Math.pow(10, -rules.priceDecimals)
+}
+
+/** Rundet auf Vielfache von 10^exp (exp darf negativ sein: -2 = auf Hundertstel) */
+function roundToExp(value: number, exp: number, mode: 'down' | 'up'): number {
+  if (exp <= 0) return roundTo(value, -exp, mode)
+  const f = Math.pow(10, exp)
+  return snapRound(value / f, mode) * f
 }
 
 /**
@@ -193,7 +232,7 @@ export function roundPrice(value: number, rules: Pick<PairRules, 'priceDecimals'
  * Ohne diesen Schritt würde aus 76543.2 durch Gleitkomma-Reste "76543.199999999997",
  * und Kraken lehnt das mit „price can only be specified up to 1 decimals“ ab.
  */
-export function priceText(price: number, rules: Pick<PairRules, 'priceDecimals' | 'tickSize'>): string {
+export function priceText(price: number, rules: Pick<PairRules, 'priceDecimals' | 'tickSize' | 'priceSignificant'>): string {
   return toText(snapNearest(price, rules), rules.priceDecimals)
 }
 
@@ -202,7 +241,7 @@ export function volumeText(volume: number, rules: Pick<PairRules, 'volumeDecimal
   return toText(roundTo(volume, rules.volumeDecimals, 'down'), rules.volumeDecimals)
 }
 
-function snapNearest(price: number, rules: Pick<PairRules, 'priceDecimals' | 'tickSize'>): number {
+function snapNearest(price: number, rules: Pick<PairRules, 'priceDecimals' | 'tickSize' | 'priceSignificant'>): number {
   const down = roundPrice(price, rules, 'down')
   const up = roundPrice(price, rules, 'up')
   return price - down <= up - price ? down : up
@@ -237,18 +276,30 @@ export function conformLevels<T extends Pick<LadderLevel, 'price' | 'volume'>>(l
  * rückt jede um einen Preisschritt weiter weg vom Kurs (Kauf tiefer, Verkauf höher), solange sie dabei
  * die letzte Stufe nicht erreicht. Geht das nicht, bleibt der doppelte Preis stehen und wird als Fehler gemeldet.
  */
-function separateLevels(prices: number[], rules: Pick<PairRules, 'priceDecimals' | 'tickSize'>, side: Side): number[] {
+function separateLevels(prices: number[], rules: Pick<PairRules, 'priceDecimals' | 'tickSize' | 'priceSignificant'>, side: Side): number[] {
   if (prices.length < 3) return prices
-  const tick = rules.tickSize && rules.tickSize > 0 ? rules.tickSize : Math.pow(10, -rules.priceDecimals)
   const dir = side === 'buy' ? -1 : 1
   const last = prices[prices.length - 1]
   const out = prices.slice()
   for (let i = 1; i < out.length - 1; i++) {
     if ((out[i] - out[i - 1]) * dir > 0) continue
-    const next = Number((out[i - 1] + dir * tick).toFixed(rules.priceDecimals))
+    const next = roundPrice(out[i - 1] + dir * priceStep(out[i - 1], rules), rules, side === 'buy' ? 'down' : 'up')
     if ((last - next) * dir > 0) out[i] = next
   }
   return out
+}
+
+/**
+ * Grund, warum die Börse eine Stufe ablehnen würde (Menge 0, unter Mindestmenge, unter Mindestbetrag), sonst undefined.
+ * Dieselbe Prüfung läuft im Planer und noch einmal direkt vor dem Senden, nach dem letzten Runden.
+ */
+export function levelProblem(price: number, volume: number, rules: Pick<PairRules, 'orderMin' | 'costMin'>): string | undefined {
+  if (!Number.isFinite(price) || !(price > 0)) return tr('Preis wird nach dem Runden 0 oder ist ungültig', 'Price becomes 0 after rounding or is invalid')
+  if (!Number.isFinite(volume) || volume <= 0) return tr('Menge wird nach dem Runden 0', 'Volume becomes 0 after rounding')
+  if (volume < rules.orderMin) return tr(`Menge unter Mindestmenge ${rules.orderMin}`, `Volume below minimum ${rules.orderMin}`)
+  // winzige Toleranz, damit 0.1 × 50 = 4.999999999 nicht als „unter 5 €“ gilt
+  if (price * volume < rules.costMin * (1 - 1e-9)) return tr(`Gegenwert unter Mindestbetrag ${rules.costMin}`, `Value below minimum cost ${rules.costMin}`)
+  return undefined
 }
 
 export function validateInput(input: LadderInput): string[] {
@@ -319,22 +370,22 @@ export function buildLadder(input: LadderInput, rules: PairRules): Ladder {
     const share = w / sum
     const price = prices[i]
     // Menge immer abrunden, damit Budget bzw. Bestand nie überschritten wird
-    const rawVolume = side === 'buy' ? (total * share) / price : total * share
+    // Preis 0 nach dem Runden (Preis kleiner als ein Preisschritt): keine Menge, die Stufe wird als Problem gemeldet
+    const rawVolume = !(price > 0) ? 0 : side === 'buy' ? (total * share) / price : total * share
     const volume = roundTo(rawVolume, rules.volumeDecimals, 'down')
     const cost = volume * price
-    let problem: string | undefined
-    if (volume <= 0) problem = tr('Menge wird nach dem Runden 0', 'Volume becomes 0 after rounding')
-    else if (volume < rules.orderMin) problem = tr(`Menge unter Mindestmenge ${rules.orderMin}`, `Volume below minimum ${rules.orderMin}`)
-    else if (cost < rules.costMin) problem = tr(`Gegenwert unter Mindestbetrag ${rules.costMin}`, `Value below minimum cost ${rules.costMin}`)
-    return { index: i, price, volume, cost, share, problem }
+    return { index: i, price, volume, cost, share, problem: levelProblem(price, volume, rules) }
   })
 
   const ok = levels.filter((l) => !l.problem)
   const totalVolume = ok.reduce((a, l) => a + l.volume, 0)
   const totalCost = ok.reduce((a, l) => a + l.cost, 0)
-  const dupes = new Set<number>()
-  levels.forEach((l, i) => i > 0 && l.price === levels[i - 1].price && dupes.add(l.price))
-  if (dupes.size) errors.push(tr('Mehrere Stufen haben nach dem Runden denselben Preis. Weniger Stufen oder größeren Preisbereich wählen.', 'Several levels have the same price after rounding. Choose fewer levels or a wider price range.'))
+  // Jede Stufe muss echt weiter weg vom Kurs liegen als die vorige (Kauf tiefer, Verkauf höher).
+  // Früher wurde nur mit der direkten Nachbarstufe verglichen: Passten nicht alle Stufen in den Preisbereich,
+  // sprang eine Stufe zurück auf einen schon belegten Preis, und der Planer meldete trotzdem „gültig“.
+  const dir = side === 'buy' ? -1 : 1
+  const unordered = levels.some((l, i) => i > 0 && !((l.price - levels[i - 1].price) * dir > 0))
+  if (unordered) errors.push(tr('Mehrere Stufen haben nach dem Runden denselben Preis. Weniger Stufen oder größeren Preisbereich wählen.', 'Several levels have the same price after rounding. Choose fewer levels or a wider price range.'))
   if (levels.some((l) => l.problem)) errors.push(tr('Einige Stufen sind zu klein für die Börse. Weniger Stufen oder mehr Betrag wählen.', 'Some levels are too small for the exchange. Choose fewer levels or a larger amount.'))
 
   return {
@@ -346,4 +397,31 @@ export function buildLadder(input: LadderInput, rules: PairRules): Ladder {
     errors,
     centers,
   }
+}
+
+/**
+ * Letzte Prüfung direkt vor dem Senden, nach dem letzten Runden auf die aktuellen Regeln des Paars.
+ * Fehlt etwas, wird gar nichts gesendet (error), statt dass die Börse einzelne Orders ablehnt:
+ * - jede Stufe braucht einen gültigen Preis und eine Menge über 0
+ * - keine zwei Stufen auf demselben Preis
+ * - jede Stufe erfüllt nach dem Runden noch Mindestmenge und Mindestbetrag
+ */
+export function prepareForSend<T extends Pick<LadderLevel, 'price' | 'volume'> & { index?: number }>(levels: T[], rules: PairRules, side: Side): { levels: T[]; error?: string } {
+  const bad = levels.filter((l) => !Number.isFinite(l.price) || !(l.price > 0) || !Number.isFinite(l.volume) || !(l.volume > 0))
+  if (bad.length) return { levels, error: tr(`${bad.length} Stufe(n) haben einen ungültigen Preis oder eine ungültige Menge. Es wurde nichts gesendet.`, `${bad.length} level(s) have an invalid price or volume. Nothing was sent.`) }
+  const r = conformLevels(levels, rules, side)
+  if (r.duplicate) return { levels: r.levels, error: tr('Nach dem Runden auf die erlaubten Preisschritte lägen mehrere Stufen auf demselben Preis. Es wurde nichts gesendet. Bitte im Planer weniger Stufen oder einen größeren Preisbereich wählen.', 'After rounding to the allowed price steps, several levels would have the same price. Nothing was sent. Please choose fewer levels or a wider price range in the planner.') }
+  const small = r.levels.map((l, i) => ({ i, p: levelProblem(l.price, l.volume, rules) })).filter((x) => x.p)
+  if (small.length) {
+    const first = small[0]
+    const n = (r.levels[first.i].index ?? first.i) + 1
+    return {
+      levels: r.levels,
+      error: tr(
+        `${small.length} Stufe(n) würde die Börse ablehnen (z. B. Stufe ${n}: ${first.p}). Es wurde nichts gesendet. Bitte im Planer weniger Stufen oder mehr Betrag wählen.`,
+        `The exchange would reject ${small.length} level(s) (e.g. level ${n}: ${first.p}). Nothing was sent. Please choose fewer levels or a larger amount in the planner.`,
+      ),
+    }
+  }
+  return { levels: r.levels }
 }

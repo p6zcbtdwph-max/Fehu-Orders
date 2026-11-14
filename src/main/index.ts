@@ -14,7 +14,7 @@ import {
 import type { DraftDto, LogEntry, PlanStatusDto, SaveKeyResult, SendRequest, SendResult, TemplateDto } from '../shared/ipc'
 import { alarmHit, checkKeyFormat, normalizeCoinbase, priceGuard } from '../shared/safety'
 import { planStatus, type OrderSnapshot } from '../shared/plan-status'
-import { conformLevels } from '../shared/ladder'
+import { prepareForSend } from '../shared/ladder'
 import { langFromLocale, setLang, tr } from '../shared/i18n'
 
 /** Sprache aus den Einstellungen, sonst die Systemsprache des Macs */
@@ -42,12 +42,24 @@ const clientFor = (ex: ExchangeId): Exchange => {
 const client = () => clientFor(activeEx())
 /** Für den Dollar-Kurs, ohne Schlüssel */
 const publicKraken = new Kraken(null)
-const pairCache = new Map<ExchangeId, PairInfo[]>()
-async function pairsFor(ex: ExchangeId): Promise<PairInfo[]> {
-  let p = pairCache.get(ex)
-  if (!p) pairCache.set(ex, (p = await clientFor(ex).pairs()))
-  return p
+/** Regeln der Paare, eine Stunde zwischengespeichert, damit geänderte Preisschritte der Börse ankommen */
+const PAIR_CACHE_MS = 60 * 60_000
+const pairCache = new Map<ExchangeId, { at: number; pairs: PairInfo[] }>()
+async function pairsFor(ex: ExchangeId, maxAgeMs = PAIR_CACHE_MS): Promise<PairInfo[]> {
+  const c = pairCache.get(ex)
+  if (c && Date.now() - c.at < maxAgeMs) return c.pairs
+  try {
+    const pairs = await clientFor(ex).pairs()
+    pairCache.set(ex, { at: Date.now(), pairs })
+    return pairs
+  } catch (e) {
+    // Börse gerade nicht erreichbar: für die Anzeige die letzten bekannten Regeln, sonst den Fehler
+    if (c) return c.pairs
+    throw e
+  }
 }
+/** Vor dem Senden: Regeln höchstens 10 Minuten alt */
+const SEND_RULES_MAX_AGE_MS = 10 * 60_000
 // Neuer Schlüssel kann ein anderes Konto sein: dann auch die geladenen geschlossenen Orders verwerfen
 const resetClient = (ex: ExchangeId) => {
   clients.delete(ex)
@@ -399,7 +411,9 @@ function checkLimit(levels: { price: number; volume: number }[], ex: ExchangeId)
   const { maxPlanEur } = getSettings()
   const first = !hasRealPlan(ex)
   const limit = sendLimit(maxPlanEur, first)
-  if (total > limit) {
+  // Ungültige Zahl (NaN) zählt als „zu viel“: lieber nichts senden als ohne Obergrenze
+  if (!Number.isFinite(total) || levels.some((l) => !(l.price > 0) || !(l.volume > 0))) throw new Error(tr('Eine Stufe hat einen ungültigen Preis oder eine ungültige Menge. Es wurde nichts gesendet.', 'A level has an invalid price or volume. Nothing was sent.'))
+  if (!(total <= limit)) {
     if (first && limit < maxPlanEur) {
       throw new Error(tr(
         `Diese Sendung hat einen Gegenwert von ${total.toFixed(2)} €. Auf ${exchangeName(ex)} hast du noch keinen echten Plan angelegt. Zur Sicherheit geht der erste Test dort mit höchstens ${limit} €. Danach gilt deine Obergrenze von ${maxPlanEur} €.`,
@@ -415,33 +429,46 @@ function checkLimit(levels: { price: number; volume: number }[], ex: ExchangeId)
 }
 
 /**
- * Bringt Preise und Mengen vor dem Senden auf die Regeln des Paars (Nachkommastellen, Preisschritt).
- * Lägen danach zwei Stufen auf demselben Preis, wird nichts gesendet.
+ * Bringt Preise und Mengen vor dem Senden auf die Regeln des Paars (Nachkommastellen, Preisschritt) und prüft danach
+ * Mindestmenge, Mindestbetrag und doppelte Preise. Passt etwas nicht, oder kennt die Börse das Paar nicht, wird nichts gesendet.
  */
-function conformToRules<T extends { price: number; volume: number }>(levels: T[], rules: PairInfo | undefined, side: 'buy' | 'sell', base: Omit<LogEntry, 'at' | 'success'>): T[] {
-  if (!rules) return levels
-  const r = conformLevels(levels, rules, side)
-  if (r.duplicate) {
-    const msg = tr(
-      `Nach dem Runden auf die erlaubten Preisschritte von ${rules.name} lägen mehrere Stufen auf demselben Preis. Es wurde nichts gesendet. Bitte im Planer weniger Stufen oder einen größeren Preisbereich wählen.`,
-      `After rounding to the allowed price steps of ${rules.name}, several levels would have the same price. Nothing was sent. Please choose fewer levels or a wider price range in the planner.`,
-    )
+function conformToRules<T extends { price: number; volume: number; index?: number }>(levels: T[], rules: PairInfo | undefined, side: 'buy' | 'sell', ex: ExchangeId, base: Omit<LogEntry, 'at' | 'success'>): T[] {
+  const fail = (msg: string): never => {
     addLog({ ...base, success: false, message: msg })
     throw new Error(msg)
   }
+  if (!rules) return fail(tr(`${exchangeName(ex)} kennt dieses Handelspaar gerade nicht (oder es ist nicht handelbar). Es wurde nichts gesendet.`, `${exchangeName(ex)} does not list this trading pair right now (or it cannot be traded). Nothing was sent.`))
+  const r = prepareForSend(levels, rules, side)
+  if (r.error) fail(`${rules.name}: ${r.error}`)
   return r.levels
 }
 
-handle('send', async (req: SendRequest): Promise<SendResult> => {
+/** Es läuft immer nur eine Sendung gleichzeitig (Doppelklick, zwei Fenster, Senden und „Rest senden“ zugleich) */
+let sending = false
+async function oneAtATime<T>(fn: () => Promise<T>): Promise<T> {
+  if (sending) throw new Error(tr('Es läuft gerade schon eine Sendung. Bitte warte, bis sie fertig ist.', 'A send is already running. Please wait until it has finished.'))
+  sending = true
+  try {
+    return await fn()
+  } finally {
+    sending = false
+  }
+}
+
+handle('send', (req: SendRequest): Promise<SendResult> => oneAtATime(async () => {
   const ex = activeEx()
-  const rules = (await pairsFor(ex)).find((p) => p.id === req.pairId)
-  const valid = conformToRules(req.levels.filter((l) => !l.problem), rules, req.side, { action: req.validate ? 'validate' : 'send', pair: req.pairName, side: req.side, count: 0, amount: 0 })
-  if (!valid.length) throw new Error(tr('Keine gültigen Stufen.', 'No valid levels.'))
-  const count = req.sendCount ? Math.max(1, Math.min(valid.length, Math.floor(req.sendCount))) : valid.length
-  const levels = valid.slice(0, count)
+  // Wurde inzwischen links unten die Börse gewechselt, gehören Paar und Regeln zur anderen Börse
+  if (req.exchange && req.exchange !== ex) throw new Error(tr(`Dieser Plan wurde für ${exchangeName(req.exchange)} berechnet, gewählt ist aber ${exchangeName(ex)}. Es wurde nichts gesendet.`, `This plan was calculated for ${exchangeName(req.exchange)}, but ${exchangeName(ex)} is selected. Nothing was sent.`))
+  if (req.side !== 'buy' && req.side !== 'sell') throw new Error(tr('Unbekannte Richtung (Kauf oder Verkauf).', 'Unknown side (buy or sell).'))
+  if (!Array.isArray(req.levels)) throw new Error(tr('Keine gültigen Stufen.', 'No valid levels.'))
   // Ein Entwurf gehört zu der Börse, auf der er geplant wurde (die Paar-Kennungen unterscheiden sich)
   const draft = req.draftId ? getDrafts().find((d) => d.id === req.draftId) : undefined
   if (draft && exchangeOf(draft) !== ex) throw new Error(tr(`Dieser Entwurf gehört zu ${exchangeName(exchangeOf(draft))}. Wechsle links unten auf ${exchangeName(exchangeOf(draft))}, um ihn freizugeben.`, `This draft belongs to ${exchangeName(exchangeOf(draft))}. Switch to ${exchangeName(exchangeOf(draft))} at the bottom left to release it.`))
+  const rules = (await pairsFor(ex, SEND_RULES_MAX_AGE_MS)).find((p) => p.id === req.pairId)
+  const valid = conformToRules(req.levels.filter((l) => !l.problem), rules, req.side, ex, { action: req.validate ? 'validate' : 'send', pair: req.pairName, side: req.side, count: 0, amount: 0 })
+  if (!valid.length) throw new Error(tr('Keine gültigen Stufen.', 'No valid levels.'))
+  const count = req.sendCount ? Math.max(1, Math.min(valid.length, Math.floor(req.sendCount))) : valid.length
+  const levels = valid.slice(0, count)
   const total = checkLimit(levels, ex)
   const base = { action: req.validate ? 'validate' : 'send', pair: req.pairName, side: req.side, count: levels.length, amount: total }
   if (!req.validate) await confirmWithTouchId(tr(`${levels.length} echte Orders über ${total.toFixed(2)} € an ${exchangeName(ex)} senden`, `send ${levels.length} real orders worth ${total.toFixed(2)} € to ${exchangeName(ex)}`), base)
@@ -462,22 +489,22 @@ handle('send', async (req: SendRequest): Promise<SendResult> => {
     if (ok.length + maybe.length > 0) {
       addPlan({
         exchange: ex, userref, createdAt: new Date().toISOString(), pairId: req.pairId, pairName: req.pairName, side: req.side, input: req.input,
-        sent: ok.length, failed: orders.length - ok.length, totalCost: total, levels: valid, sentIndices: [...ok, ...maybe].map((o) => o.index), postOnly: req.postOnly,
+        sent: ok.length, failed: orders.length - ok.length, totalCost: costOf([...ok, ...maybe]), levels: valid, sentIndices: [...ok, ...maybe].map((o) => o.index), postOnly: req.postOnly,
       })
       if (req.draftId) markDraftReleased(req.draftId, userref)
     }
   }
   return { userref, validate: req.validate, orders }
-})
+}))
 
 /** Restliche Stufen eines Plans nachschicken (gleiche userref, damit „Plan stornieren“ alles erfasst) */
-handle('plan:rest', async (userref: number, validate: boolean): Promise<SendResult> => {
+handle('plan:rest', (userref: number, validate: boolean): Promise<SendResult> => oneAtATime(async () => {
   const plan = getPlans().find((p) => p.userref === userref)
   if (!plan?.levels) throw new Error(tr('Für diesen Plan sind keine Stufen gespeichert.', 'No levels are stored for this plan.'))
   const sent = new Set(plan.sentIndices ?? [])
   const ex = exchangeOf(plan)
-  const rules = (await pairsFor(ex)).find((p) => p.id === plan.pairId)
-  const rest = conformToRules(plan.levels.filter((l) => !sent.has(l.index)), rules, plan.side, { action: validate ? 'validate' : 'rest', pair: plan.pairName, side: plan.side, count: 0, amount: 0, userref })
+  const rules = (await pairsFor(ex, SEND_RULES_MAX_AGE_MS)).find((p) => p.id === plan.pairId)
+  const rest = conformToRules(plan.levels.filter((l) => !sent.has(l.index)), rules, plan.side, ex, { action: validate ? 'validate' : 'rest', pair: plan.pairName, side: plan.side, count: 0, amount: 0, userref })
   if (!rest.length) throw new Error(tr('Alle Stufen dieses Plans sind schon gesendet.', 'All levels of this plan have already been sent.'))
   const total = checkLimit(rest, ex)
   const base = { action: validate ? 'validate' : 'rest', pair: plan.pairName, side: plan.side, count: rest.length, amount: total, userref }
@@ -495,12 +522,17 @@ handle('plan:rest', async (userref: number, validate: boolean): Promise<SendResu
     const ok = orders.filter((o) => o.txid)
     const maybe = orders.filter((o) => o.uncertain)
     updatePlan(userref, (p) => ({
-      ...p, sent: p.sent + ok.length, failed: p.failed + orders.length - ok.length, totalCost: p.totalCost + (ok.length ? total : 0),
+      ...p, sent: p.sent + ok.length, failed: p.failed + orders.length - ok.length, totalCost: p.totalCost + costOf([...ok, ...maybe]),
       sentIndices: [...(p.sentIndices ?? []), ...ok.map((o) => o.index), ...maybe.map((o) => o.index)],
     }))
   }
   return { userref, validate, orders }
-})
+}))
+
+/** Gegenwert der Orders, die wirklich angelegt wurden (oder vielleicht angelegt wurden) */
+function costOf(orders: { price: number; volume: number }[]): number {
+  return orders.reduce((a, o) => a + o.price * o.volume, 0)
+}
 
 /** Kursalarm: meldet einmal, wenn der Kurs die erste Stufe eines Entwurfs erreicht. Sendet nichts. */
 async function pollAlarms(): Promise<void> {

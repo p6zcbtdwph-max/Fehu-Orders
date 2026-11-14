@@ -168,9 +168,10 @@ export function localCheck(levels: LadderLevel[], side: Side, rules: PairInfo | 
     const base = { index: l.index, price: l.price, volume: l.volume }
     let error: string | undefined
     if (!rules) error = tr('Das Handelspaar ist gerade nicht handelbar.', 'This trading pair cannot be traded right now.')
+    else if (!(l.volume > 0) || !(l.price > 0) || !Number.isFinite(l.price * l.volume)) error = tr('Eine Order hat einen ungültigen Preis oder eine ungültige Menge.', 'An order has an invalid price or volume.')
     else if (l.volume < rules.orderMin) error = tr('Eine Order ist kleiner als die Mindestmenge.', 'An order is below the minimum volume.')
-    else if (l.price * l.volume < rules.costMin) error = tr('Eine Order liegt unter dem Mindestbetrag.', 'An order is below the minimum cost.')
-    else if (!onStep(l.price, rules.tickSize)) error = tr('Ein Preis passt nicht zu den erlaubten Preisschritten dieses Paars.', 'A price does not match the allowed price steps (tick size) of this pair.')
+    else if (l.price * l.volume < rules.costMin * (1 - 1e-9)) error = tr('Eine Order liegt unter dem Mindestbetrag.', 'An order is below the minimum cost.')
+    else if (!onStep(l.price, rules.tickSize) || !same(Number(priceText(l.price, rules)), l.price)) error = tr('Ein Preis passt nicht zu den erlaubten Preisschritten dieses Paars.', 'A price does not match the allowed price steps (tick size) of this pair.')
     else if (decimalsOf(l.volume) > rules.volumeDecimals) error = tr('Eine Menge hat zu viele Nachkommastellen.', 'A volume has too many decimal places.')
     else if (short) error = tr('Nicht genug freies Guthaben für alle Stufen zusammen.', 'Not enough free balance for all levels together.')
     return error ? { ...base, error } : base
