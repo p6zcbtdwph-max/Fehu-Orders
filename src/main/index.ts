@@ -5,11 +5,15 @@ import { localDate } from '../shared/dates'
 import { join } from 'node:path'
 import { Kraken, type ClosedOrder, type PairInfo } from './kraken'
 import {
-  addLog, addPlan, clearCredentials, exportAll, importAll, getLog, markAlarmFired, deleteDraft, deleteTemplate, getDrafts, markDraftReleased, saveDraft, getNotified, getPlans, getSettings, getTemplates, loadCredentials, newUserref, saveCredentials, saveSettings, saveTemplate, setNotified, updatePlan, type Settings,
+  addLog, addPlan, systemLocale, clearCredentials, exportAll, importAll, getLog, markAlarmFired, deleteDraft, deleteTemplate, getDrafts, markDraftReleased, saveDraft, getNotified, getPlans, getSettings, getTemplates, loadCredentials, newUserref, saveCredentials, saveSettings, saveTemplate, setNotified, updatePlan, type Settings,
 } from './store'
 import type { DraftDto, LogEntry, PlanStatusDto, SaveKeyResult, SendRequest, SendResult, TemplateDto } from '../shared/ipc'
 import { alarmHit, checkKeyFormat, priceGuard } from '../shared/safety'
 import { planStatus, type OrderSnapshot } from '../shared/plan-status'
+import { langFromLocale, setLang, tr } from '../shared/i18n'
+
+/** Sprache aus den Einstellungen, sonst die Systemsprache des Macs */
+const applyLanguage = () => setLang(getSettings().language ?? langFromLocale(systemLocale()))
 
 let pairCache: PairInfo[] | null = null
 let mainWindow: BrowserWindow | null = null
@@ -64,7 +68,7 @@ function handle(channel: string, fn: (...args: any[]) => any): void {
   // Fehler als einfache Meldung weitergeben, ohne Stacktrace oder Schlüssel
   ipcMain.handle(channel, async (e, ...args) => {
     // Nur das eigene App-Fenster darf Befehle schicken
-    if (!e.senderFrame || !isOwnUrl(e.senderFrame.url)) return { ok: false, error: 'Nicht erlaubt.' }
+    if (!e.senderFrame || !isOwnUrl(e.senderFrame.url)) return { ok: false, error: tr('Nicht erlaubt.', 'Not allowed.') }
     try {
       return { ok: true, value: await fn(...args) }
     } catch (e) {
@@ -85,14 +89,14 @@ handle('key:save', async (key: string, secret: string): Promise<SaveKeyResult> =
     saveCredentials(creds)
     resetClient()
   }
-  addLog({ action: 'key-save', success: saved, message: saved ? 'Schlüssel gespeichert' : `Nicht gespeichert: ${checks.filter((c) => !c.ok).map((c) => c.label).join(', ')}` })
+  addLog({ action: 'key-save', success: saved, message: saved ? tr('Schlüssel gespeichert', 'Key saved') : `${tr('Nicht gespeichert', 'Not saved')}: ${checks.filter((c) => !c.ok).map((c) => c.label).join(', ')}` })
   return { saved, checks }
 })
 handle('key:verify', () => client().checkPermissions())
 handle('key:clear', () => {
   clearCredentials()
   resetClient()
-  addLog({ action: 'key-clear', success: true, message: 'Schlüssel gelöscht' })
+  addLog({ action: 'key-clear', success: true, message: tr('Schlüssel gelöscht', 'Key deleted') })
 })
 handle('pairs', async () => (pairCache ??= await client().pairs()))
 handle('price', (pairId: string) => client().lastPrice(pairId))
@@ -100,14 +104,17 @@ handle('prices', (pairIds: string[]) => client().lastPrices(pairIds.filter((x) =
 handle('balances', () => client().balances())
 handle('orders:open', () => client().openOrders())
 handle('plans', () => getPlans())
-handle('settings', () => getSettings())
+handle('settings', () => ({ ...getSettings(), language: getSettings().language ?? langFromLocale(systemLocale()) }))
 handle('settings:save', (s: Partial<Settings>) => {
   const patch: Partial<Settings> = {}
   if (s.maxPlanEur !== undefined) patch.maxPlanEur = Math.max(1, Number(s.maxPlanEur) || 1)
   if (Array.isArray(s.watchlist)) patch.watchlist = s.watchlist.filter((x) => typeof x === 'string').slice(0, 50)
   if (s.currency === 'EUR' || s.currency === 'USD') patch.currency = s.currency
   if (s.numberFormat === 'de' || s.numberFormat === 'en') patch.numberFormat = s.numberFormat
-  return saveSettings(patch)
+  if (s.language === 'de' || s.language === 'en') patch.language = s.language
+  const saved = saveSettings(patch)
+  applyLanguage()
+  return saved
 })
 // Wechselkurs für die Dollar-Anzeige (1 EUR = x USD), eine Minute zwischengespeichert
 let usdCache: { at: number; rate: number } | null = null
@@ -131,17 +138,17 @@ async function logged<T>(base: Omit<LogEntry, 'at' | 'success'>, fn: () => Promi
 
 handle('plan:cancel', (userref: number) => {
   const plan = getPlans().find((p) => p.userref === userref)
-  return logged({ action: 'cancel-plan', userref, pair: plan?.pairName, side: plan?.side }, () => client().cancelPlan(userref), (n) => ({ count: n, message: `${n} Orders storniert` }))
+  return logged({ action: 'cancel-plan', userref, pair: plan?.pairName, side: plan?.side }, () => client().cancelPlan(userref), (n) => ({ count: n, message: tr(`${n} Orders storniert`, `${n} orders cancelled`) }))
 })
 handle('order:cancel', (txid: string) => logged({ action: 'cancel-order', message: txid }, () => client().cancelOrder(txid)))
-handle('orders:cancelAll', () => logged({ action: 'cancel-all' }, () => client().cancelAll(), (n) => ({ count: n, message: `Notbremse: ${n} Orders storniert` })))
+handle('orders:cancelAll', () => logged({ action: 'cancel-all' }, () => client().cancelAll(), (n) => ({ count: n, message: tr(`Notbremse: ${n} Orders storniert`, `Emergency stop: ${n} orders cancelled`) })))
 handle('system:status', () => client().systemStatus())
 handle('log', () => getLog())
 
 // Datensicherung: alles außer dem Schlüssel in eine Datei
 handle('backup:export', async () => {
-  const name = `fehu-orders-sicherung-${localDate()}.json`
-  const r = await dialog.showSaveDialog({ title: 'Fehu Orders sichern', defaultPath: join(app.getPath('documents'), name), filters: [{ name: 'Fehu-Orders-Sicherung', extensions: ['json'] }] })
+  const name = `${tr('fehu-orders-sicherung', 'fehu-orders-backup')}-${localDate()}.json`
+  const r = await dialog.showSaveDialog({ title: tr('Fehu Orders sichern', 'Back up Fehu Orders'), defaultPath: join(app.getPath('documents'), name), filters: [{ name: tr('Fehu-Orders-Sicherung', 'Fehu Orders backup'), extensions: ['json'] }] })
   if (r.canceled || !r.filePath) return null
   const data = exportAll()
   writeFileSync(r.filePath, JSON.stringify(data, null, 2))
@@ -150,18 +157,18 @@ handle('backup:export', async () => {
 // Schritt 1: Datei wählen und prüfen (noch nichts ändern)
 let pendingRestore: ReturnType<typeof parseBackup> | null = null
 handle('backup:pick', async () => {
-  const r = await dialog.showOpenDialog({ title: 'Sicherung wiederherstellen', properties: ['openFile'], filters: [{ name: 'Fehu-Orders-Sicherung', extensions: ['json'] }] })
+  const r = await dialog.showOpenDialog({ title: tr('Sicherung wiederherstellen', 'Restore backup'), properties: ['openFile'], filters: [{ name: tr('Fehu-Orders-Sicherung', 'Fehu Orders backup'), extensions: ['json'] }] })
   if (r.canceled || !r.filePaths[0]) return null
   pendingRestore = parseBackup(readFileSync(r.filePaths[0], 'utf8'))
   return summarize(pendingRestore)
 })
 // Schritt 2: nach Bestätigung einspielen
 handle('backup:restore', () => {
-  if (!pendingRestore) throw new Error('Bitte zuerst eine Sicherung auswählen.')
+  if (!pendingRestore) throw new Error(tr('Bitte zuerst eine Sicherung auswählen.', 'Please choose a backup first.'))
   const safety = importAll(pendingRestore)
   pendingRestore = null
   statusCache = null
-  addLog({ action: 'restore', success: true, message: 'Sicherung wiederhergestellt' })
+  addLog({ action: 'restore', success: true, message: tr('Sicherung wiederhergestellt', 'Backup restored') })
   return safety
 })
 
@@ -250,13 +257,13 @@ async function pollFills(): Promise<void> {
   for (const p of activePlans()) {
     const txids = cache?.executed.get(p.userref) ?? []
     const neu = txids.filter((t) => !known.includes(t))
-    if (neu.length) fresh.push({ pair: p.pairName, side: p.side === 'buy' ? 'Kauf' : 'Verkauf', count: neu.length })
+    if (neu.length) fresh.push({ pair: p.pairName, side: p.side === 'buy' ? tr('Kauf', 'buy') : tr('Verkauf', 'sell'), count: neu.length })
     known.push(...neu)
   }
   setNotified(known.length ? known : ['-'])
   if (firstRun || !fresh.length) return
   for (const f of fresh) {
-    if (Notification.isSupported()) new Notification({ title: 'Fehu Orders', body: `${f.count} ${f.count === 1 ? 'Order' : 'Orders'} ausgeführt: ${f.pair} ${f.side}` }).show()
+    if (Notification.isSupported()) new Notification({ title: 'Fehu Orders', body: tr(`${f.count} ${f.count === 1 ? 'Order' : 'Orders'} ausgeführt: ${f.pair} ${f.side}`, `${f.count} ${f.count === 1 ? 'order' : 'orders'} filled: ${f.pair} ${f.side}`) }).show()
   }
   mainWindow?.webContents.send('fills')
 }
@@ -270,7 +277,7 @@ async function freshPriceGuard(pairId: string, side: 'buy' | 'sell', levels: { p
   try {
     last = await client().lastPrice(pairId)
   } catch (e) {
-    const msg = `Der aktuelle Kurs konnte nicht geprüft werden, deshalb wurde nichts gesendet. ${(e as Error).message}`
+    const msg = `${tr('Der aktuelle Kurs konnte nicht geprüft werden, deshalb wurde nichts gesendet.', 'The current price could not be checked, so nothing was sent.')} ${(e as Error).message}`
     addLog({ ...base, success: false, message: msg })
     throw new Error(msg)
   }
@@ -285,7 +292,7 @@ function logResult(base: Omit<LogEntry, 'at' | 'success'>, orders: SendResult['o
   const ok = orders.filter((o) => o.txid || (base.action === 'validate' && !o.error)).length
   const failed = orders.filter((o) => o.error).length
   const firstError = orders.find((o) => o.error)?.error
-  addLog({ ...base, ok, failed, success: failed === 0, message: firstError ?? (base.action === 'validate' ? 'Probelauf ohne Fehler' : `${ok} Orders angelegt`) })
+  addLog({ ...base, ok, failed, success: failed === 0, message: firstError ?? (base.action === 'validate' ? tr('Probelauf ohne Fehler', 'Test run without errors') : tr(`${ok} Orders angelegt`, `${ok} orders placed`)) })
 }
 
 /** Hat dieser Mac Touch ID (und ist ein Finger eingerichtet)? */
@@ -307,7 +314,7 @@ async function confirmWithTouchId(reason: string, base: Omit<LogEntry, 'at' | 's
   try {
     await systemPreferences.promptTouchID(reason)
   } catch {
-    const msg = 'Touch ID wurde abgebrochen oder nicht erkannt. Es wurde nichts gesendet.'
+    const msg = tr('Touch ID wurde abgebrochen oder nicht erkannt. Es wurde nichts gesendet.', 'Touch ID was cancelled or not recognised. Nothing was sent.')
     addLog({ ...base, success: false, message: msg })
     throw new Error(msg)
   }
@@ -317,18 +324,23 @@ async function confirmWithTouchId(reason: string, base: Omit<LogEntry, 'at' | 's
 function checkLimit(levels: { price: number; volume: number }[]): number {
   const total = levels.reduce((a, l) => a + l.price * l.volume, 0)
   const { maxPlanEur } = getSettings()
-  if (total > maxPlanEur) throw new Error(`Diese Sendung hat einen Gegenwert von ${total.toFixed(2)} €. Deine Obergrenze ist ${maxPlanEur} €. Du kannst sie in den Einstellungen ändern.`)
+  if (total > maxPlanEur) {
+    throw new Error(tr(
+      `Diese Sendung hat einen Gegenwert von ${total.toFixed(2)} €. Deine Obergrenze pro Plan ist ${maxPlanEur} €. Zur Sicherheit steht sie anfangs auf 50 €, damit der erste echte Test klein bleibt. Ändern kannst du sie unter Einstellungen › Obergrenze pro Plan.`,
+      `This send is worth ${total.toFixed(2)} €. Your limit per plan is ${maxPlanEur} €. For safety it starts at 50 € so your first real test stays small. You can change it under Settings › Limit per plan.`,
+    ))
+  }
   return total
 }
 
 handle('send', async (req: SendRequest): Promise<SendResult> => {
   const valid = req.levels.filter((l) => !l.problem)
-  if (!valid.length) throw new Error('Keine gültigen Stufen.')
+  if (!valid.length) throw new Error(tr('Keine gültigen Stufen.', 'No valid levels.'))
   const count = req.sendCount ? Math.max(1, Math.min(valid.length, Math.floor(req.sendCount))) : valid.length
   const levels = valid.slice(0, count)
   const total = checkLimit(levels)
   const base = { action: req.validate ? 'validate' : 'send', pair: req.pairName, side: req.side, count: levels.length, amount: total }
-  if (!req.validate) await confirmWithTouchId(`${levels.length} echte Orders über ${total.toFixed(2)} € an Kraken senden`, base)
+  if (!req.validate) await confirmWithTouchId(tr(`${levels.length} echte Orders über ${total.toFixed(2)} € an Kraken senden`, `send ${levels.length} real orders worth ${total.toFixed(2)} € to Kraken`), base)
   await freshPriceGuard(req.pairId, req.side, levels, base)
   const userref = newUserref()
   let orders: SendResult['orders']
@@ -357,13 +369,13 @@ handle('send', async (req: SendRequest): Promise<SendResult> => {
 /** Restliche Stufen eines Plans nachschicken (gleiche userref, damit „Plan stornieren“ alles erfasst) */
 handle('plan:rest', async (userref: number, validate: boolean): Promise<SendResult> => {
   const plan = getPlans().find((p) => p.userref === userref)
-  if (!plan?.levels) throw new Error('Für diesen Plan sind keine Stufen gespeichert.')
+  if (!plan?.levels) throw new Error(tr('Für diesen Plan sind keine Stufen gespeichert.', 'No levels are stored for this plan.'))
   const sent = new Set(plan.sentIndices ?? [])
   const rest = plan.levels.filter((l) => !sent.has(l.index))
-  if (!rest.length) throw new Error('Alle Stufen dieses Plans sind schon gesendet.')
+  if (!rest.length) throw new Error(tr('Alle Stufen dieses Plans sind schon gesendet.', 'All levels of this plan have already been sent.'))
   const total = checkLimit(rest)
   const base = { action: validate ? 'validate' : 'rest', pair: plan.pairName, side: plan.side, count: rest.length, amount: total, userref }
-  if (!validate) await confirmWithTouchId(`${rest.length} weitere echte Orders über ${total.toFixed(2)} € an Kraken senden`, base)
+  if (!validate) await confirmWithTouchId(tr(`${rest.length} weitere echte Orders über ${total.toFixed(2)} € an Kraken senden`, `send ${rest.length} more real orders worth ${total.toFixed(2)} € to Kraken`), base)
   await freshPriceGuard(plan.pairId, plan.side, rest, base)
   let orders: SendResult['orders']
   try {
@@ -398,11 +410,11 @@ async function pollAlarms(): Promise<void> {
   if (!hit.length) return
   markAlarmFired(hit.map((d) => d.id))
   for (const d of hit) {
-    addLog({ action: 'alarm', pair: d.pairName, side: d.side, success: true, message: `Kursalarm „${d.name}“: Kurs ${prices[d.pairId]} hat die erste Stufe ${d.input.priceStart} erreicht` })
+    addLog({ action: 'alarm', pair: d.pairName, side: d.side, success: true, message: tr(`Kursalarm „${d.name}“: Kurs ${prices[d.pairId]} hat die erste Stufe ${d.input.priceStart} erreicht`, `Price alert “${d.name}”: price ${prices[d.pairId]} reached the first level ${d.input.priceStart}`) })
     if (!Notification.isSupported()) continue
     const n = new Notification({
-      title: `Kursalarm${d.scenario ? `: ${d.scenario}` : ''}`,
-      body: `${d.pairName} steht bei ${prices[d.pairId]} € und hat die erste Stufe von „${d.name}“ erreicht. Freigeben kannst du ihn unter Entwürfe.`,
+      title: `${tr('Kursalarm', 'Price alert')}${d.scenario ? `: ${d.scenario}` : ''}`,
+      body: tr(`${d.pairName} steht bei ${prices[d.pairId]} € und hat die erste Stufe von „${d.name}“ erreicht. Freigeben kannst du ihn unter Entwürfe.`, `${d.pairName} is at ${prices[d.pairId]} € and reached the first level of “${d.name}”. You can release it under Drafts.`),
     })
     n.on('click', () => {
       if (!mainWindow) createWindow()
@@ -415,6 +427,7 @@ async function pollAlarms(): Promise<void> {
 }
 
 app.whenReady().then(() => {
+  applyLanguage()
   // Das Fenster braucht keine Kamera, kein Mikrofon, keinen Standort usw.
   session.defaultSession.setPermissionRequestHandler((_wc, _perm, cb) => cb(false))
   createWindow()

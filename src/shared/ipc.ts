@@ -34,6 +34,8 @@ export interface SettingsDto {
   currency: 'EUR' | 'USD'
   /** de = 1.234,56, en = 1,234.56 */
   numberFormat: 'de' | 'en'
+  /** Sprache der App, fehlt sie, gilt die Systemsprache */
+  language?: 'de' | 'en'
 }
 
 export interface SendResult {

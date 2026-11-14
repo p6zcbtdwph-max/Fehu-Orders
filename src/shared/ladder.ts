@@ -1,6 +1,7 @@
 // Rechenkern: verteilt einen Betrag nach einer mathematischen Funktion auf
 // viele Limit-Orders in einem Preisbereich. Reine Funktionen ohne Netz,
 // damit alles mit Tests abgesichert ist.
+import { tr } from './i18n'
 
 export type Side = 'buy' | 'sell'
 /** Abstand der Preise: gleiche Euro-Schritte oder gleiche Prozent-Schritte */
@@ -127,19 +128,19 @@ export function roundPrice(value: number, rules: Pick<PairRules, 'priceDecimals'
 export function validateInput(input: LadderInput): string[] {
   const e: string[] = []
   const { priceStart, priceEnd, steps, total, ratio, side } = input
-  if (!(priceStart > 0) || !(priceEnd > 0)) e.push('Preise müssen größer als 0 sein.')
-  if (!Number.isInteger(steps) || steps < 1) e.push('Die Anzahl der Stufen muss eine ganze Zahl ab 1 sein.')
-  if (steps > MAX_STEPS) e.push(`Höchstens ${MAX_STEPS} Stufen.`)
-  if (!(total > 0)) e.push(side === 'buy' ? 'Der Gesamtbetrag muss größer als 0 sein.' : 'Die Gesamtmenge muss größer als 0 sein.')
-  if (!(ratio > 0)) e.push('Das Verhältnis muss größer als 0 sein.')
+  if (!(priceStart > 0) || !(priceEnd > 0)) e.push(tr('Preise müssen größer als 0 sein.', 'Prices must be greater than 0.'))
+  if (!Number.isInteger(steps) || steps < 1) e.push(tr('Die Anzahl der Stufen muss eine ganze Zahl ab 1 sein.', 'The number of levels must be a whole number of at least 1.'))
+  if (steps > MAX_STEPS) e.push(tr(`Höchstens ${MAX_STEPS} Stufen.`, `At most ${MAX_STEPS} levels.`))
+  if (!(total > 0)) e.push(side === 'buy' ? tr('Der Gesamtbetrag muss größer als 0 sein.', 'The total amount must be greater than 0.') : tr('Die Gesamtmenge muss größer als 0 sein.', 'The total volume must be greater than 0.'))
+  if (!(ratio > 0)) e.push(tr('Das Verhältnis muss größer als 0 sein.', 'The ratio must be greater than 0.'))
   if (input.curve === 'custom') {
     const w = input.customWeights ?? []
-    if (w.length !== steps) e.push(`Bei eigener Verteilung braucht es genau ${steps} Prozentwerte (jetzt ${w.length}).`)
-    if (w.some((x) => !(x > 0) || !Number.isFinite(x))) e.push('Jeder Prozentwert muss eine Zahl über 0 sein.')
+    if (w.length !== steps) e.push(tr(`Bei eigener Verteilung braucht es genau ${steps} Prozentwerte (jetzt ${w.length}).`, `A custom distribution needs exactly ${steps} percentages (now ${w.length}).`))
+    if (w.some((x) => !(x > 0) || !Number.isFinite(x))) e.push(tr('Jeder Prozentwert muss eine Zahl über 0 sein.', 'Every percentage must be a number above 0.'))
   }
   if (priceStart > 0 && priceEnd > 0 && steps > 1) {
-    if (side === 'buy' && priceEnd > priceStart) e.push('Beim Kauf liegt die letzte Stufe unter der ersten (tiefer kaufen).')
-    if (side === 'sell' && priceEnd < priceStart) e.push('Beim Verkauf liegt die letzte Stufe über der ersten (höher verkaufen).')
+    if (side === 'buy' && priceEnd > priceStart) e.push(tr('Beim Kauf liegt die letzte Stufe unter der ersten (tiefer kaufen).', 'When buying, the last level is below the first (buy lower).'))
+    if (side === 'sell' && priceEnd < priceStart) e.push(tr('Beim Verkauf liegt die letzte Stufe über der ersten (höher verkaufen).', 'When selling, the last level is above the first (sell higher).'))
   }
   return e
 }
@@ -166,9 +167,9 @@ export function buildLadder(input: LadderInput, rules: PairRules): Ladder {
     const volume = roundTo(rawVolume, rules.volumeDecimals, 'down')
     const cost = volume * price
     let problem: string | undefined
-    if (volume <= 0) problem = 'Menge wird nach dem Runden 0'
-    else if (volume < rules.orderMin) problem = `Menge unter Mindestmenge ${rules.orderMin}`
-    else if (cost < rules.costMin) problem = `Gegenwert unter Mindestbetrag ${rules.costMin}`
+    if (volume <= 0) problem = tr('Menge wird nach dem Runden 0', 'Volume becomes 0 after rounding')
+    else if (volume < rules.orderMin) problem = tr(`Menge unter Mindestmenge ${rules.orderMin}`, `Volume below minimum ${rules.orderMin}`)
+    else if (cost < rules.costMin) problem = tr(`Gegenwert unter Mindestbetrag ${rules.costMin}`, `Value below minimum cost ${rules.costMin}`)
     return { index: i, price, volume, cost, share, problem }
   })
 
@@ -177,8 +178,8 @@ export function buildLadder(input: LadderInput, rules: PairRules): Ladder {
   const totalCost = ok.reduce((a, l) => a + l.cost, 0)
   const dupes = new Set<number>()
   levels.forEach((l, i) => i > 0 && l.price === levels[i - 1].price && dupes.add(l.price))
-  if (dupes.size) errors.push('Mehrere Stufen haben nach dem Runden denselben Preis. Weniger Stufen oder größeren Preisbereich wählen.')
-  if (levels.some((l) => l.problem)) errors.push('Einige Stufen sind zu klein für die Börse. Weniger Stufen oder mehr Betrag wählen.')
+  if (dupes.size) errors.push(tr('Mehrere Stufen haben nach dem Runden denselben Preis. Weniger Stufen oder größeren Preisbereich wählen.', 'Several levels have the same price after rounding. Choose fewer levels or a wider price range.'))
+  if (levels.some((l) => l.problem)) errors.push(tr('Einige Stufen sind zu klein für die Börse. Weniger Stufen oder mehr Betrag wählen.', 'Some levels are too small for the exchange. Choose fewer levels or a larger amount.'))
 
   return {
     levels,
