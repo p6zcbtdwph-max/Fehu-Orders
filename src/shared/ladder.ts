@@ -188,6 +188,69 @@ export function roundPrice(value: number, rules: Pick<PairRules, 'priceDecimals'
   return Number((n * tick).toFixed(rules.priceDecimals))
 }
 
+/**
+ * Preis als Text mit genau den Nachkommastellen, die die Börse erlaubt (z. B. "76543.2").
+ * Ohne diesen Schritt würde aus 76543.2 durch Gleitkomma-Reste "76543.199999999997",
+ * und Kraken lehnt das mit „price can only be specified up to 1 decimals“ ab.
+ */
+export function priceText(price: number, rules: Pick<PairRules, 'priceDecimals' | 'tickSize'>): string {
+  return toText(snapNearest(price, rules), rules.priceDecimals)
+}
+
+/** Menge als Text mit höchstens den erlaubten Nachkommastellen (immer abgerundet) */
+export function volumeText(volume: number, rules: Pick<PairRules, 'volumeDecimals'>): string {
+  return toText(roundTo(volume, rules.volumeDecimals, 'down'), rules.volumeDecimals)
+}
+
+function snapNearest(price: number, rules: Pick<PairRules, 'priceDecimals' | 'tickSize'>): number {
+  const down = roundPrice(price, rules, 'down')
+  const up = roundPrice(price, rules, 'up')
+  return price - down <= up - price ? down : up
+}
+
+function toText(n: number, decimals: number): string {
+  const d = Math.max(0, Math.min(20, Math.floor(decimals)))
+  const s = n.toFixed(d)
+  return d > 0 ? s.replace(/0+$/, '').replace(/\.$/, '') : s
+}
+
+/**
+ * Letzte Sicherung vor dem Senden: bringt Preise und Mengen auf die aktuellen Regeln des Paars
+ * (wichtig für Entwürfe und „Rest senden“, deren Stufen mit älteren Regeln berechnet wurden).
+ * Kauf rundet den Preis ab, Verkauf auf, die Menge immer ab. duplicate: zwei Stufen hätten danach denselben Preis.
+ */
+export function conformLevels<T extends Pick<LadderLevel, 'price' | 'volume'>>(levels: T[], rules: PairRules, side: Side): { levels: T[]; duplicate: boolean; changed: number } {
+  let changed = 0
+  const out = levels.map((l) => {
+    const price = roundPrice(l.price, rules, side === 'buy' ? 'down' : 'up')
+    const volume = roundTo(l.volume, rules.volumeDecimals, 'down')
+    if (price === l.price && volume === l.volume) return l
+    changed++
+    return { ...l, price, volume, ...('cost' in l ? { cost: price * volume } : {}) }
+  })
+  const prices = new Set(out.map((l) => l.price))
+  return { levels: out, duplicate: prices.size < out.length, changed }
+}
+
+/**
+ * Fallen nach dem Runden Stufen auf denselben Preis (eng gesetzte Stufen, z. B. mit dem Schwerpunkt-Regler),
+ * rückt jede um einen Preisschritt weiter weg vom Kurs (Kauf tiefer, Verkauf höher), solange sie dabei
+ * die letzte Stufe nicht erreicht. Geht das nicht, bleibt der doppelte Preis stehen und wird als Fehler gemeldet.
+ */
+function separateLevels(prices: number[], rules: Pick<PairRules, 'priceDecimals' | 'tickSize'>, side: Side): number[] {
+  if (prices.length < 3) return prices
+  const tick = rules.tickSize && rules.tickSize > 0 ? rules.tickSize : Math.pow(10, -rules.priceDecimals)
+  const dir = side === 'buy' ? -1 : 1
+  const last = prices[prices.length - 1]
+  const out = prices.slice()
+  for (let i = 1; i < out.length - 1; i++) {
+    if ((out[i] - out[i - 1]) * dir > 0) continue
+    const next = Number((out[i - 1] + dir * tick).toFixed(rules.priceDecimals))
+    if ((last - next) * dir > 0) out[i] = next
+  }
+  return out
+}
+
 export function validateInput(input: LadderInput): string[] {
   const e: string[] = []
   const { priceStart, priceEnd, steps, total, ratio, side } = input
@@ -250,10 +313,11 @@ export function buildLadder(input: LadderInput, rules: PairRules): Ladder {
     positions,
   }
 
+  // Kauf: Preis abrunden, Verkauf: aufrunden. So wird nie schlechter gehandelt als berechnet.
+  const prices = separateLevels(ts.map((t) => roundPrice(priceAt(spacing, priceStart, priceEnd, t), rules, side === 'buy' ? 'down' : 'up')), rules, side)
   const levels: LadderLevel[] = weights.map((w, i) => {
     const share = w / sum
-    // Kauf: Preis abrunden, Verkauf: aufrunden. So wird nie schlechter gehandelt als berechnet.
-    const price = roundPrice(priceAt(spacing, priceStart, priceEnd, ts[i]), rules, side === 'buy' ? 'down' : 'up')
+    const price = prices[i]
     // Menge immer abrunden, damit Budget bzw. Bestand nie überschritten wird
     const rawVolume = side === 'buy' ? (total * share) / price : total * share
     const volume = roundTo(rawVolume, rules.volumeDecimals, 'down')

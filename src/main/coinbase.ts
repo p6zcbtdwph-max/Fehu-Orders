@@ -7,7 +7,7 @@ import type { LadderLevel, Side } from '../shared/ladder'
 import type { KeyCheck } from '../shared/ipc'
 import { tr } from '../shared/i18n'
 import {
-  ExchangeError, decimalsOf, localCheck, networkError, noKey, plain, refFromClientId, skippedText, sleep, uncertainText, unreadable,
+  ExchangeError, priceOut, volumeOut, decimalsOf, localCheck, networkError, noKey, refFromClientId, skippedText, sleep, uncertainText, unreadable,
   type ClosedOrder, type Credentials, type Exchange, type FetchLike, type OpenOrder, type PairInfo, type PlaceOptions, type SentOrder,
 } from './exchange'
 
@@ -208,8 +208,8 @@ export class Coinbase implements Exchange {
     })
   }
 
-  private config(l: LadderLevel, postOnly: boolean) {
-    return { limit_limit_gtc: { base_size: plain(l.volume), limit_price: plain(l.price), post_only: postOnly } }
+  private config(l: LadderLevel, postOnly: boolean, rules?: PairInfo) {
+    return { limit_limit_gtc: { base_size: volumeOut(l.volume, rules), limit_price: priceOut(l.price, rules), post_only: postOnly } }
   }
 
   private async createOnce(body: unknown): Promise<any> {
@@ -232,7 +232,7 @@ export class Coinbase implements Exchange {
           out.push(local[i])
           continue
         }
-        const r = await this.priv('POST', `${API}/orders/preview`, [], { product_id: pairId, side: SIDE, order_configuration: this.config(levels[i], !!opts.postOnly) })
+        const r = await this.priv('POST', `${API}/orders/preview`, [], { product_id: pairId, side: SIDE, order_configuration: this.config(levels[i], !!opts.postOnly, rules) })
         const errs: string[] = r?.errs ?? []
         out.push(errs.length ? { ...local[i], error: explainCoinbase(errs[0]) } : local[i])
         opts.onProgress?.(out.length)
@@ -245,7 +245,7 @@ export class Coinbase implements Exchange {
     for (let i = 0; i < levels.length; i++) {
       const l = levels[i]
       const base = { index: l.index, price: l.price, volume: l.volume }
-      const body = { client_order_id: `fehu-${opts.userref}-${l.index}-${salt}`, product_id: pairId, side: SIDE, order_configuration: this.config(l, !!opts.postOnly) }
+      const body = { client_order_id: `fehu-${opts.userref}-${l.index}-${salt}`, product_id: pairId, side: SIDE, order_configuration: this.config(l, !!opts.postOnly, opts.rules) }
       let stop = false
       try {
         let r: any

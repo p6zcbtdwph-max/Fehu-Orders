@@ -14,6 +14,7 @@ import {
 import type { DraftDto, LogEntry, PlanStatusDto, SaveKeyResult, SendRequest, SendResult, TemplateDto } from '../shared/ipc'
 import { alarmHit, checkKeyFormat, normalizeCoinbase, priceGuard } from '../shared/safety'
 import { planStatus, type OrderSnapshot } from '../shared/plan-status'
+import { conformLevels } from '../shared/ladder'
 import { langFromLocale, setLang, tr } from '../shared/i18n'
 
 /** Sprache aus den Einstellungen, sonst die Systemsprache des Macs */
@@ -413,12 +414,31 @@ function checkLimit(levels: { price: number; volume: number }[], ex: ExchangeId)
   return total
 }
 
+/**
+ * Bringt Preise und Mengen vor dem Senden auf die Regeln des Paars (Nachkommastellen, Preisschritt).
+ * Lägen danach zwei Stufen auf demselben Preis, wird nichts gesendet.
+ */
+function conformToRules<T extends { price: number; volume: number }>(levels: T[], rules: PairInfo | undefined, side: 'buy' | 'sell', base: Omit<LogEntry, 'at' | 'success'>): T[] {
+  if (!rules) return levels
+  const r = conformLevels(levels, rules, side)
+  if (r.duplicate) {
+    const msg = tr(
+      `Nach dem Runden auf die erlaubten Preisschritte von ${rules.name} lägen mehrere Stufen auf demselben Preis. Es wurde nichts gesendet. Bitte im Planer weniger Stufen oder einen größeren Preisbereich wählen.`,
+      `After rounding to the allowed price steps of ${rules.name}, several levels would have the same price. Nothing was sent. Please choose fewer levels or a wider price range in the planner.`,
+    )
+    addLog({ ...base, success: false, message: msg })
+    throw new Error(msg)
+  }
+  return r.levels
+}
+
 handle('send', async (req: SendRequest): Promise<SendResult> => {
-  const valid = req.levels.filter((l) => !l.problem)
+  const ex = activeEx()
+  const rules = (await pairsFor(ex)).find((p) => p.id === req.pairId)
+  const valid = conformToRules(req.levels.filter((l) => !l.problem), rules, req.side, { action: req.validate ? 'validate' : 'send', pair: req.pairName, side: req.side, count: 0, amount: 0 })
   if (!valid.length) throw new Error(tr('Keine gültigen Stufen.', 'No valid levels.'))
   const count = req.sendCount ? Math.max(1, Math.min(valid.length, Math.floor(req.sendCount))) : valid.length
   const levels = valid.slice(0, count)
-  const ex = activeEx()
   // Ein Entwurf gehört zu der Börse, auf der er geplant wurde (die Paar-Kennungen unterscheiden sich)
   const draft = req.draftId ? getDrafts().find((d) => d.id === req.draftId) : undefined
   if (draft && exchangeOf(draft) !== ex) throw new Error(tr(`Dieser Entwurf gehört zu ${exchangeName(exchangeOf(draft))}. Wechsle links unten auf ${exchangeName(exchangeOf(draft))}, um ihn freizugeben.`, `This draft belongs to ${exchangeName(exchangeOf(draft))}. Switch to ${exchangeName(exchangeOf(draft))} at the bottom left to release it.`))
@@ -426,7 +446,6 @@ handle('send', async (req: SendRequest): Promise<SendResult> => {
   const base = { action: req.validate ? 'validate' : 'send', pair: req.pairName, side: req.side, count: levels.length, amount: total }
   if (!req.validate) await confirmWithTouchId(tr(`${levels.length} echte Orders über ${total.toFixed(2)} € an ${exchangeName(ex)} senden`, `send ${levels.length} real orders worth ${total.toFixed(2)} € to ${exchangeName(ex)}`), base)
   await freshPriceGuard(ex, req.pairId, req.side, levels, base)
-  const rules = (await pairsFor(ex)).find((p) => p.id === req.pairId)
   const userref = newUserref()
   let orders: SendResult['orders']
   try {
@@ -456,14 +475,14 @@ handle('plan:rest', async (userref: number, validate: boolean): Promise<SendResu
   const plan = getPlans().find((p) => p.userref === userref)
   if (!plan?.levels) throw new Error(tr('Für diesen Plan sind keine Stufen gespeichert.', 'No levels are stored for this plan.'))
   const sent = new Set(plan.sentIndices ?? [])
-  const rest = plan.levels.filter((l) => !sent.has(l.index))
-  if (!rest.length) throw new Error(tr('Alle Stufen dieses Plans sind schon gesendet.', 'All levels of this plan have already been sent.'))
   const ex = exchangeOf(plan)
+  const rules = (await pairsFor(ex)).find((p) => p.id === plan.pairId)
+  const rest = conformToRules(plan.levels.filter((l) => !sent.has(l.index)), rules, plan.side, { action: validate ? 'validate' : 'rest', pair: plan.pairName, side: plan.side, count: 0, amount: 0, userref })
+  if (!rest.length) throw new Error(tr('Alle Stufen dieses Plans sind schon gesendet.', 'All levels of this plan have already been sent.'))
   const total = checkLimit(rest, ex)
   const base = { action: validate ? 'validate' : 'rest', pair: plan.pairName, side: plan.side, count: rest.length, amount: total, userref }
   if (!validate) await confirmWithTouchId(tr(`${rest.length} weitere echte Orders über ${total.toFixed(2)} € an ${exchangeName(ex)} senden`, `send ${rest.length} more real orders worth ${total.toFixed(2)} € to ${exchangeName(ex)}`), base)
   await freshPriceGuard(ex, plan.pairId, plan.side, rest, base)
-  const rules = (await pairsFor(ex)).find((p) => p.id === plan.pairId)
   let orders: SendResult['orders']
   try {
     orders = await clientFor(ex).placeLadder(plan.pairId, plan.side, rest, { validate, userref, postOnly: plan.postOnly ?? true, rules })

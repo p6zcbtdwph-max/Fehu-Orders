@@ -235,3 +235,29 @@ describe('Runde 2', () => {
     expect(await new Kraken(null, http).systemStatus()).toBe('maintenance')
   })
 })
+
+describe('Preise mit erlaubten Nachkommastellen (Plan 1794667241)', () => {
+  const btc = { id: 'XXBTZEUR', name: 'BTC/EUR', base: 'XXBT', quote: 'ZEUR', priceDecimals: 1, volumeDecimals: 8, orderMin: 0.00005, costMin: 0.5, tickSize: 0.1 }
+
+  it('plain zeigt keine Gleitkomma-Reste mehr', () => {
+    expect((76543.2).toFixed(12)).toBe('76543.199999999997')
+    expect(plain(76543.2)).toBe('76543.2')
+    expect(plain(90000.1)).toBe('90000.1')
+    expect(plain(12345.12345678)).toBe('12345.12345678')
+    expect(plain(0.00012345)).toBe('0.00012345')
+  })
+
+  it('sendet BTC/EUR-Preise mit höchstens 1 Nachkommastelle', async () => {
+    const { http, calls } = fakeHttp((_u, b) => ({ error: [], result: { orders: b.orders.map((_: any, i: number) => ({ txid: `T${i}` })) } }))
+    const k = new Kraken({ key: 'k', secret: Buffer.from('s').toString('base64') }, http, async () => {})
+    const prices = [76543.2, 75987.7, 75432.3, 74876.9, 74321.4, 73765.9, 73210.5, 72655.1, 72099.6, 71544.2]
+    const lv: LadderLevel[] = prices.map((price, i) => ({ index: i, price, volume: 0.000123456789, cost: 10, share: 0.1 }))
+    await k.placeLadder('XXBTZEUR', 'buy', lv, { validate: false, userref: 1794667241, rules: btc })
+    const sent = calls[0].body.orders
+    expect(sent.map((o: any) => o.price)).toEqual(prices.map(String))
+    for (const o of sent) {
+      expect(o.price).toMatch(/^\d+(\.\d)?$/)
+      expect(o.volume).toBe('0.00012345')
+    }
+  })
+})
