@@ -1,22 +1,29 @@
 import { RotateCcw } from 'lucide-react'
 import { CENTER_MAX, CENTER_MIN, type LadderCenters, type Side } from '@shared/ladder'
 import { num } from '../format'
+import { tr } from '@shared/i18n'
 
-// Alle Texte an einer Stelle, damit sie sich leicht übersetzen lassen (z. B. später Englisch).
-export const CENTER_TEXT = {
-  heading: 'Schwerpunkte',
-  intro: 'Wo im Preisbereich liegen deine Orders und dein Geld im Mittel? 0 % = erste Stufe (nah am Kurs), 100 % = letzte Stufe.',
-  orderLabel: 'Orderanzahl',
-  orderHint: 'Wo die Stufen dichter beieinander liegen. Erste und letzte Stufe bleiben fest.',
-  volumeLabel: { buy: 'Geldmenge', sell: 'Verkaufsmenge' } as Record<Side, string>,
-  volumeHint: { buy: 'Wo im Mittel dein Geld eingesetzt wird. Der Formelwert hängt auch von der Lage der Stufen ab.', sell: 'Wo im Mittel deine Menge verkauft wird. Der Formelwert hängt auch von der Lage der Stufen ab.' } as Record<Side, string>,
-  formula: 'Formel',
-  isFormula: 'wie die Formel',
-  reset: 'Zurück auf den Wert der Formel',
-  atPrice: 'bei',
-  needSteps: (n: number) => `Ab ${n} Stufen verstellbar.`,
-  legend: { buy: 'Punkte = Stufen (größer = mehr Geld), Striche = Schwerpunkte.', sell: 'Punkte = Stufen (größer = mehr Menge), Striche = Schwerpunkte.' } as Record<Side, string>,
-}
+// Alle Texte an einer Stelle, auf Deutsch und Englisch. Als Funktion, damit ein Sprachwechsel sofort greift.
+export const centerText = () => ({
+  heading: tr('Schwerpunkte', 'Centers of weight'),
+  intro: tr('Wo im Preisbereich liegen deine Orders und dein Geld im Mittel? 0 % = erste Stufe (nah am Kurs), 100 % = letzte Stufe.', 'Where in the price range do your orders and your money sit on average? 0 % = first level (close to the price), 100 % = last level.'),
+  orderLabel: tr('Orderanzahl', 'Number of orders'),
+  orderHint: tr('Wo die Stufen dichter beieinander liegen. Erste und letzte Stufe bleiben fest.', 'Where the levels sit closer together. The first and last level stay fixed.'),
+  volumeLabel: { buy: tr('Geldmenge', 'Amount of money'), sell: tr('Verkaufsmenge', 'Amount to sell') } as Record<Side, string>,
+  volumeHint: {
+    buy: tr('Wo im Mittel dein Geld eingesetzt wird. Der Formelwert hängt auch von der Lage der Stufen ab.', 'Where your money is put to work on average. The formula value also depends on where the levels sit.'),
+    sell: tr('Wo im Mittel deine Menge verkauft wird. Der Formelwert hängt auch von der Lage der Stufen ab.', 'Where your holdings are sold on average. The formula value also depends on where the levels sit.'),
+  } as Record<Side, string>,
+  formula: tr('Formel', 'Formula'),
+  isFormula: tr('wie die Formel', 'same as formula'),
+  reset: tr('Zurück auf den Wert der Formel', 'Back to the formula value'),
+  atPrice: tr('bei', 'at'),
+  needSteps: (n: number) => tr(`Ab ${n} Stufen verstellbar.`, `Adjustable from ${n} levels.`),
+  legend: {
+    buy: tr('Punkte = Stufen (größer = mehr Geld), Striche = Schwerpunkte.', 'Dots = levels (bigger = more money), lines = centers of weight.'),
+    sell: tr('Punkte = Stufen (größer = mehr Menge), Striche = Schwerpunkte.', 'Dots = levels (bigger = more volume), lines = centers of weight.'),
+  } as Record<Side, string>,
+})
 
 const percent = (c: number) => `${num(Math.round(c * 100), 0)} %`
 
@@ -33,6 +40,7 @@ interface SliderProps {
 }
 
 function CenterSlider({ label, hint, value, formulaValue, custom, disabledText, priceAt, onChange, tone }: SliderProps) {
+  const T = centerText()
   const disabled = !!disabledText
   return (
     <div className={disabled ? 'opacity-60' : undefined}>
@@ -44,7 +52,7 @@ function CenterSlider({ label, hint, value, formulaValue, custom, disabledText, 
         <span className="text-sm font-semibold tabular-nums">{percent(value)}</span>
       </div>
       <input type="range" className="range mt-1" min={CENTER_MIN * 100} max={CENTER_MAX * 100} step={1} disabled={disabled}
-        value={Math.round(value * 100)} aria-label={label} aria-valuetext={`${percent(value)}, ${CENTER_TEXT.atPrice} ${priceAt(value)}`}
+        value={Math.round(value * 100)} aria-label={label} aria-valuetext={`${percent(value)}, ${T.atPrice} ${priceAt(value)}`}
         onChange={(e) => {
           const v = Number(e.target.value) / 100
           // Wer den Regler auf den Formelwert zurückschiebt, bekommt wieder genau die Formel
@@ -52,10 +60,10 @@ function CenterSlider({ label, hint, value, formulaValue, custom, disabledText, 
         }} />
       <div className="flex items-center justify-between gap-2 text-xs text-ink-muted">
         <span>
-          {disabled ? disabledText : <>{CENTER_TEXT.atPrice} {priceAt(value)} · {custom ? `${CENTER_TEXT.formula} ${percent(formulaValue)}` : CENTER_TEXT.isFormula}</>}
+          {disabled ? disabledText : <>{T.atPrice} {priceAt(value)} · {custom ? `${T.formula} ${percent(formulaValue)}` : T.isFormula}</>}
         </span>
         {custom && !disabled && (
-          <button type="button" className="btn-mini" onClick={() => onChange(undefined)} aria-label={CENTER_TEXT.reset} title={CENTER_TEXT.reset}><RotateCcw size={13} /></button>
+          <button type="button" className="btn-mini" onClick={() => onChange(undefined)} aria-label={T.reset} title={T.reset}><RotateCcw size={13} /></button>
         )}
       </div>
       {!disabled && <span className="mt-0.5 block text-xs text-ink-faint">{hint}</span>}
@@ -100,19 +108,20 @@ export default function CenterSliders({ side, steps, centers, shares, orderCente
 }) {
   // Schwerpunkt in Prozent → Preis an dieser Stelle (nur zur Anzeige)
   const priceAt = (c: number) => formatPrice(priceStart + (priceEnd - priceStart) * c)
+  const T = centerText()
   return (
     <div className="space-y-3 rounded-lg border border-[var(--color-border)] p-3">
       <div>
-        <span className="label mb-0">{CENTER_TEXT.heading}</span>
-        <span className="block text-xs text-ink-muted">{CENTER_TEXT.intro}</span>
+        <span className="label mb-0">{T.heading}</span>
+        <span className="block text-xs text-ink-muted">{T.intro}</span>
       </div>
-      <CenterTrack centers={centers} shares={shares} firstLabel={formatPrice(priceStart)} lastLabel={formatPrice(priceEnd)} legend={CENTER_TEXT.legend[side]} />
-      <CenterSlider tone="order" label={CENTER_TEXT.orderLabel} hint={CENTER_TEXT.orderHint}
+      <CenterTrack centers={centers} shares={shares} firstLabel={formatPrice(priceStart)} lastLabel={formatPrice(priceEnd)} legend={T.legend[side]} />
+      <CenterSlider tone="order" label={T.orderLabel} hint={T.orderHint}
         value={orderCenter ?? centers.orderDefault} formulaValue={centers.orderDefault} custom={orderCenter !== undefined}
-        disabledText={steps < 3 ? CENTER_TEXT.needSteps(3) : undefined} priceAt={priceAt} onChange={(v) => onChange('orderCenter', v)} />
-      <CenterSlider tone="volume" label={CENTER_TEXT.volumeLabel[side]} hint={CENTER_TEXT.volumeHint[side]}
+        disabledText={steps < 3 ? T.needSteps(3) : undefined} priceAt={priceAt} onChange={(v) => onChange('orderCenter', v)} />
+      <CenterSlider tone="volume" label={T.volumeLabel[side]} hint={T.volumeHint[side]}
         value={volumeCenter ?? centers.volumeDefault} formulaValue={centers.volumeDefault} custom={volumeCenter !== undefined}
-        disabledText={steps < 2 ? CENTER_TEXT.needSteps(2) : undefined} priceAt={priceAt} onChange={(v) => onChange('volumeCenter', v)} />
+        disabledText={steps < 2 ? T.needSteps(2) : undefined} priceAt={priceAt} onChange={(v) => onChange('volumeCenter', v)} />
     </div>
   )
 }

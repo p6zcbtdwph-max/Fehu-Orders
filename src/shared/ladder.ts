@@ -202,7 +202,7 @@ export function validateInput(input: LadderInput): string[] {
     if (w.some((x) => !(x > 0) || !Number.isFinite(x))) e.push(tr('Jeder Prozentwert muss eine Zahl über 0 sein.', 'Every percentage must be a number above 0.'))
   }
   for (const c of [input.orderCenter, input.volumeCenter]) {
-    if (c !== undefined && !(c >= 0 && c <= 1)) e.push('Der Schwerpunkt muss zwischen 0 % und 100 % liegen.')
+    if (c !== undefined && !(c >= 0 && c <= 1)) e.push(tr('Der Schwerpunkt muss zwischen 0 % und 100 % liegen.', 'The center of weight must be between 0 % and 100 %.'))
   }
   if (priceStart > 0 && priceEnd > 0 && steps > 1) {
     if (side === 'buy' && priceEnd > priceStart) e.push(tr('Beim Kauf liegt die letzte Stufe unter der ersten (tiefer kaufen).', 'When buying, the last level is below the first (buy lower).'))
