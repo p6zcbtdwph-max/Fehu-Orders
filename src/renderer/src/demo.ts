@@ -1,5 +1,6 @@
 // Demo-Modus: dieselbe Schnittstelle wie die echte App, aber nur mit Beispieldaten im Speicher.
 // Hier gibt es keinen Netzwerkzugriff, es kann also keine echte Order entstehen.
+import { tr } from '@shared/i18n'
 import type { Api, DraftDto, KeyCheck, LogEntry, OpenOrderDto, PairDto, PlanDto, PlanStatusDto, SendResult, SettingsDto, TemplateDto } from '@shared/ipc'
 
 const P = (id: string, name: string, base: string, priceDecimals: number, orderMin: number, price: number) =>
@@ -23,7 +24,7 @@ const pairOf = (pairId: string) => MARKET.find((m) => m.pair.id === pairId)?.pai
 const round = (v: number, d: number) => Math.round(v * 10 ** d) / 10 ** d
 
 export function createDemoApi(): Api {
-  let settings: SettingsDto = { maxPlanEur: 5000, watchlist: ['BTC/EUR', 'ETH/EUR', 'SOL/EUR'], currency: 'EUR', numberFormat: 'de' }
+  let settings: SettingsDto = { maxPlanEur: 5000, watchlist: ['BTC/EUR', 'ETH/EUR', 'SOL/EUR'], currency: 'EUR', numberFormat: 'de', exchange: 'kraken' }
   const balances: Record<string, number> = { ZEUR: 2500, XXBT: 0.02, XETH: 0.5, SOL: 4 }
   let templates: TemplateDto[] = [
     { id: 'demo-1', name: 'Dip-Kauf 10 Stufen', pairName: 'BTC/EUR', postOnly: true,
@@ -34,23 +35,23 @@ export function createDemoApi(): Api {
   const addLog = (e: Omit<LogEntry, 'at'>) => log.unshift({ at: new Date().toISOString(), ...e })
   const now = new Date().toISOString()
   let drafts: DraftDto[] = [
-    { id: 'demo-d1', name: 'BTC Crash-Kauf', scenario: 'Crash', note: 'Nur freigeben, wenn BTC deutlich fällt.', createdAt: now, updatedAt: now,
+    { id: 'demo-d1', name: tr('BTC Crash-Kauf', 'BTC crash buy'), scenario: 'Crash', note: tr('Nur freigeben, wenn BTC deutlich fällt.', 'Only release if BTC falls sharply.'), createdAt: now, updatedAt: now,
       pairId: 'XXBTZEUR', pairName: 'BTC/EUR', side: 'buy', postOnly: true, priceAtSave: 80000, status: 'draft',
       input: { side: 'buy', priceStart: 70000, priceEnd: 55000, steps: 8, total: 400, spacing: 'geometric', curve: 'exp', ratio: 3 } },
-    { id: 'demo-d2', name: 'ETH Crash-Kauf', scenario: 'Crash', createdAt: now, updatedAt: now,
+    { id: 'demo-d2', name: tr('ETH Crash-Kauf', 'ETH crash buy'), scenario: 'Crash', createdAt: now, updatedAt: now,
       pairId: 'XETHZEUR', pairName: 'ETH/EUR', side: 'buy', postOnly: true, priceAtSave: 3000, status: 'draft',
       input: { side: 'buy', priceStart: 2600, priceEnd: 2000, steps: 6, total: 300, spacing: 'linear', curve: 'linear', ratio: 2 } },
-    { id: 'demo-d3', name: 'SOL Gewinne mitnehmen', scenario: 'Bullrun', createdAt: now, updatedAt: now,
+    { id: 'demo-d3', name: tr('SOL Gewinne mitnehmen', 'SOL take profits'), scenario: tr('Bullrun', 'Bull run'), createdAt: now, updatedAt: now,
       pairId: 'SOLEUR', pairName: 'SOL/EUR', side: 'sell', postOnly: true, priceAtSave: 150, status: 'draft',
       input: { side: 'sell', priceStart: 180, priceEnd: 260, steps: 5, total: 3, spacing: 'linear', curve: 'flat', ratio: 1 } },
   ]
-  const demoChecks: KeyCheck[] = [
-    { id: 'funds', label: 'Guthaben abfragen', krakenLabel: 'Query Funds', required: true, ok: true },
-    { id: 'open', label: 'Offene Orders abfragen', krakenLabel: 'Query Open Orders & Trades', required: true, ok: true },
-    { id: 'closed', label: 'Geschlossene Orders abfragen', krakenLabel: 'Query Closed Orders & Trades', required: true, ok: true },
-    { id: 'create', label: 'Orders erstellen', krakenLabel: 'Create & Modify Orders', required: true, ok: true },
-    { id: 'cancel', label: 'Orders stornieren', krakenLabel: 'Cancel & Close Orders', required: true, ok: true },
-    { id: 'withdraw', label: 'Keine Auszahlungen', krakenLabel: 'Withdraw Funds', required: true, ok: true },
+  const demoChecks = (): KeyCheck[] => [
+    { id: 'funds', label: tr('Guthaben abfragen', 'Query funds'), exchangeLabel: 'Query Funds', required: true, ok: true },
+    { id: 'open', label: tr('Offene Orders abfragen', 'Query open orders'), exchangeLabel: 'Query Open Orders & Trades', required: true, ok: true },
+    { id: 'closed', label: tr('Geschlossene Orders abfragen', 'Query closed orders'), exchangeLabel: 'Query Closed Orders & Trades', required: true, ok: true },
+    { id: 'create', label: tr('Orders erstellen', 'Create orders'), exchangeLabel: 'Create & Modify Orders', required: true, ok: true },
+    { id: 'cancel', label: tr('Orders stornieren', 'Cancel orders'), exchangeLabel: 'Cancel & Close Orders', required: true, ok: true },
+    { id: 'withdraw', label: tr('Keine Auszahlungen', 'No withdrawals'), exchangeLabel: 'Withdraw Funds', required: true, ok: true },
   ]
   const plans: PlanDto[] = []
   const fills = new Map<number, PlanStatusDto>()
@@ -82,9 +83,9 @@ export function createDemoApi(): Api {
   const wait = <T,>(v: T, ms = 150) => new Promise<T>((r) => setTimeout(() => r(v), ms))
 
   return {
-    keyStatus: () => wait({ hasKey: true, encryption: true, touchId: true }, 0),
-    saveKey: async () => { throw new Error('Im Demo-Modus brauchst du keinen Schlüssel. Beende zuerst die Demo.') },
-    verifyKey: () => wait(demoChecks.map((c) => ({ ...c })), 600),
+    keyStatus: () => wait({ hasKey: true, encryption: true, touchId: true, exchange: settings.exchange, keys: { kraken: true, bitvavo: true, coinbase: true } }, 0),
+    saveKey: async () => { throw new Error(tr('Im Demo-Modus brauchst du keinen Schlüssel. Beende zuerst die Demo.', 'You need no key in demo mode. End the demo first.')) },
+    verifyKey: () => wait(demoChecks().map((c) => ({ ...c })), 600),
     clearKey: async () => {},
     pairs: () => wait(MARKET.map((m) => m.pair)),
     price: (pairId) => wait(round(priceOf(pairId) * (1 + (Math.random() - 0.5) * 0.004), pairOf(pairId)?.priceDecimals ?? 2)),
@@ -97,11 +98,11 @@ export function createDemoApi(): Api {
       const amount = chosen.reduce((a, l) => a + l.cost, 0)
       const last = priceOf(req.pairId)
       if (chosen.some((l) => (req.side === 'buy' ? l.price >= last : l.price <= last))) {
-        const msg = `Der Kurs steht gerade bei ${last} €. Stufen auf der falschen Seite, es wurde nichts gesendet.`
+        const msg = tr(`Der Kurs steht gerade bei ${last} €. Stufen auf der falschen Seite, es wurde nichts gesendet.`, `The price is currently ${last} €. Levels on the wrong side, nothing was sent.`)
         addLog({ action: req.validate ? 'validate' : 'send', pair: req.pairName, side: req.side, count: chosen.length, amount, success: false, message: msg })
         throw new Error(msg)
       }
-      addLog({ action: req.validate ? 'validate' : 'send', pair: req.pairName, side: req.side, count: chosen.length, ok: chosen.length, failed: 0, amount, success: true, message: req.validate ? 'Probelauf ohne Fehler' : `${chosen.length} Orders angelegt` })
+      addLog({ action: req.validate ? 'validate' : 'send', pair: req.pairName, side: req.side, count: chosen.length, ok: chosen.length, failed: 0, amount, success: true, message: req.validate ? tr('Probelauf ohne Fehler', 'Test run without errors') : tr(`${chosen.length} Orders angelegt`, `${chosen.length} orders placed`) })
       if (req.validate) return wait({ userref: 0, validate: true, orders: chosen.map((l) => ({ index: l.index, price: l.price, volume: l.volume })) }, 400)
       const plan: PlanDto = { userref: nextRef++, createdAt: new Date().toISOString(), pairId: req.pairId, pairName: req.pairName, side: req.side, input: req.input,
         sent: chosen.length, failed: 0, totalCost: chosen.reduce((a, l) => a + l.cost, 0), levels: req.levels, sentIndices: chosen.map((l) => l.index), postOnly: req.postOnly }
@@ -112,7 +113,7 @@ export function createDemoApi(): Api {
     },
     async sendRest(userref, validate) {
       const plan = plans.find((p) => p.userref === userref)
-      if (!plan?.levels) throw new Error('Plan nicht gefunden')
+      if (!plan?.levels) throw new Error(tr('Plan nicht gefunden', 'Plan not found'))
       const rest = plan.levels.filter((l) => !l.problem && !plan.sentIndices?.includes(l.index))
       if (validate) return wait({ userref, validate: true, orders: rest.map((l) => ({ index: l.index, price: l.price, volume: l.volume })) }, 400)
       const placed = place(plan, rest.map((l) => plan.levels!.indexOf(l)))
@@ -123,20 +124,20 @@ export function createDemoApi(): Api {
     async cancelPlan(userref) {
       const n = orders.filter((o) => o.userref === userref).length
       orders = orders.filter((o) => o.userref !== userref)
-      addLog({ action: 'cancel-plan', userref, success: true, count: n, message: `${n} Orders storniert` })
+      addLog({ action: 'cancel-plan', userref, success: true, count: n, message: tr(`${n} Orders storniert`, `${n} orders cancelled`) })
       return wait(n)
     },
     async cancelAll() {
       const n = orders.length
       orders = []
-      addLog({ action: 'cancel-all', success: true, count: n, message: `Notbremse: ${n} Orders storniert` })
+      addLog({ action: 'cancel-all', success: true, count: n, message: tr(`Notbremse: ${n} Orders storniert`, `Emergency stop: ${n} orders cancelled`) })
       return wait(n)
     },
     systemStatus: () => wait('online'),
     log: () => wait(log.map((e) => ({ ...e }))),
-    backupExport: async () => { throw new Error('Im Demo-Modus gibt es nichts zu sichern. Beende zuerst die Demo.') },
-    backupPick: async () => { throw new Error('Im Demo-Modus kannst du keine Sicherung einspielen. Beende zuerst die Demo.') },
-    backupRestore: async () => { throw new Error('Im Demo-Modus nicht möglich.') },
+    backupExport: async () => { throw new Error(tr('Im Demo-Modus gibt es nichts zu sichern. Beende zuerst die Demo.', 'There is nothing to back up in demo mode. End the demo first.')) },
+    backupPick: async () => { throw new Error(tr('Im Demo-Modus kannst du keine Sicherung einspielen. Beende zuerst die Demo.', 'You cannot restore a backup in demo mode. End the demo first.')) },
+    backupRestore: async () => { throw new Error(tr('Im Demo-Modus nicht möglich.', 'Not possible in demo mode.')) },
     async cancelOrder(txid) {
       orders = orders.filter((o) => o.txid !== txid)
       await wait(null)

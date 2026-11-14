@@ -1,8 +1,10 @@
 // Kraken-Anbindung (Spot, REST). Läuft nur im Hauptprozess, der Schlüssel
 // verlässt ihn nie. Doku: https://docs.kraken.com/api/
+import { tr } from '../shared/i18n'
 import { createHash, createHmac } from 'node:crypto'
-import type { LadderLevel, PairRules, Side } from '../shared/ladder'
+import type { LadderLevel, Side } from '../shared/ladder'
 import type { KeyCheck } from '../shared/ipc'
+import { ExchangeError, plain, same, sleep, type ClosedOrder, type Credentials, type Exchange, type FetchLike, type HttpInit, type OpenOrder, type PairInfo, type PlaceOptions, type SentOrder } from './exchange'
 
 export const KRAKEN_URL = 'https://api.kraken.com'
 /** Kraken nimmt 2 bis 15 Orders pro Batch */
@@ -15,74 +17,9 @@ export const ORDER_TIMEOUT_MS = 30_000
 /** Abfragen, die nichts verändern. Nur diese werden nach einer Bremse von Kraken automatisch wiederholt. */
 const READ_ONLY = new Set(['Balance', 'BalanceEx', 'OpenOrders', 'ClosedOrders', 'TradeVolume', 'QueryOrders'])
 
-export interface Credentials {
-  key: string
-  secret: string
-}
-
-export interface PairInfo extends PairRules {
-  /** Interner Name, z. B. XXBTZEUR */
-  id: string
-  /** Anzeigename, z. B. BTC/EUR */
-  name: string
-  base: string
-  quote: string
-}
-
-export interface SentOrder {
-  index: number
-  price: number
-  volume: number
-  txid?: string
-  error?: string
-  /** Verbindung brach ab und es ließ sich nicht klären, ob Kraken die Order angelegt hat */
-  uncertain?: boolean
-}
-
-export interface ClosedOrder {
-  txid: string
-  status: string
-  side: Side
-  volume: number
-  filled: number
-  cost: number
-  fee: number
-  /** Durchschnittlicher Ausführungspreis */
-  price: number
-  /** Limitpreis der Order */
-  limitPrice: number
-  userref: number
-}
-
-export interface OpenOrder {
-  txid: string
-  pair: string
-  side: Side
-  price: number
-  volume: number
-  filled: number
-  cost: number
-  fee: number
-  userref: number
-}
-
-interface HttpInit {
-  method?: string
-  headers?: Record<string, string>
-  body?: string
-  signal?: AbortSignal
-}
-type FetchLike = (url: string, init?: HttpInit) => Promise<{ status?: number; text(): Promise<string> }>
-
-/**
- * kind: api = Kraken hat geantwortet und abgelehnt, rate = Kraken bremst,
- * network = keine oder keine lesbare Antwort (bei Orders unklar, ob angelegt)
- */
-export class KrakenError extends Error {
-  constructor(message: string, public kind: 'api' | 'rate' | 'network' = 'api', public codes: string[] = []) {
-    super(message)
-  }
-}
+export type { Credentials, PairInfo, SentOrder, ClosedOrder, OpenOrder } from './exchange'
+/** Fehler von Kraken, siehe ExchangeError */
+export class KrakenError extends ExchangeError {}
 
 /** Signatur nach Kraken-Vorgabe: HMAC-SHA512(Pfad + SHA256(Nonce + Daten)) mit dem Base64-dekodierten Geheimnis */
 export function sign(path: string, nonce: string, body: string, secret: string): string {
@@ -94,41 +31,34 @@ export function sign(path: string, nonce: string, body: string, secret: string):
 
 /** Übersetzt Krakens Fehlercodes in verständliche Sätze */
 export function explainError(code: string): string {
-  if (code.includes('Invalid key')) return 'Der API-Schlüssel ist ungültig. Prüfe, ob du ihn vollständig kopiert hast.'
-  if (code.includes('Invalid signature')) return 'Der private Schlüssel passt nicht zum API-Schlüssel. Prüfe, ob beide vollständig und nicht vertauscht sind.'
-  if (code.includes('Permission denied')) return 'Dem API-Schlüssel fehlt eine Berechtigung. Unter „Schlüssel“ siehst du, welche Häkchen nötig sind. Hast du bei Kraken eine IP-Beschränkung eingerichtet, hat sich vielleicht deine IP-Adresse geändert.'
-  if (code.includes('Insufficient funds')) return 'Nicht genug Guthaben.'
-  if (code.includes('Invalid nonce')) return 'Zeitstempel abgelehnt. Bitte noch einmal versuchen.'
-  if (code.includes('Temporary lockout')) return 'Kraken hat den Schlüssel nach zu vielen Fehlversuchen kurz gesperrt. Bitte etwa 15 Minuten warten.'
-  if (code.includes('Rate limit') || code.includes('Too many requests')) return 'Zu viele Anfragen. Kraken bremst kurz, bitte in einer Minute noch einmal versuchen.'
-  if (code.includes('Orders limit exceeded')) return 'Zu viele offene Orders für dein Konto (die Grenze hängt von der Verifizierungsstufe ab).'
-  if (code.includes('Order minimum not met')) return 'Eine Order ist kleiner als die Mindestmenge.'
-  if (code.includes('Cost minimum not met')) return 'Eine Order liegt unter dem Mindestbetrag.'
-  if (code.includes('Tick size')) return 'Ein Preis passt nicht zu den erlaubten Preisschritten dieses Paars.'
-  if (code.includes('Unknown asset pair')) return 'Dieses Handelspaar kennt Kraken nicht.'
-  if (code.includes('Unknown order')) return 'Diese Order gibt es bei Kraken nicht (mehr).'
-  if (code.includes('Market in cancel_only') || code.includes('Market in post_only') || code.includes('Market in limit_only')) return 'Der Markt ist gerade eingeschränkt.'
-  if (code.includes('Unavailable') || code.includes('Busy') || code.includes('Internal error')) return 'Kraken ist gerade überlastet oder in Wartung. Bitte später noch einmal versuchen.'
-  if (code.includes('Deadline')) return 'Kraken hat die Orders nicht rechtzeitig angenommen. Geht die Uhr deines Macs richtig?'
-  if (code.includes('Invalid arguments')) return `Kraken lehnt eine Angabe ab (${code.split(':').slice(2).join(':') || 'unbekannt'}).`
+  if (code.includes('Invalid key')) return tr('Der API-Schlüssel ist ungültig. Prüfe, ob du ihn vollständig kopiert hast.', 'The API key is invalid. Check that you copied it completely.')
+  if (code.includes('Invalid signature')) return tr('Der private Schlüssel passt nicht zum API-Schlüssel. Prüfe, ob beide vollständig und nicht vertauscht sind.', 'The private key does not match the API key. Check that both are complete and not swapped.')
+  if (code.includes('Permission denied')) return tr('Dem API-Schlüssel fehlt eine Berechtigung. Unter „Schlüssel“ siehst du, welche Häkchen nötig sind. Hast du bei Kraken eine IP-Beschränkung eingerichtet, hat sich vielleicht deine IP-Adresse geändert.', 'The API key is missing a permission. Under “Key” you can see which boxes need to be ticked. If you set up an IP restriction at Kraken, your IP address may have changed.')
+  if (code.includes('Insufficient funds')) return tr('Nicht genug Guthaben.', 'Insufficient funds.')
+  if (code.includes('Invalid nonce')) return tr('Zeitstempel abgelehnt. Bitte noch einmal versuchen.', 'Timestamp (nonce) rejected. Please try again.')
+  if (code.includes('Temporary lockout')) return tr('Kraken hat den Schlüssel nach zu vielen Fehlversuchen kurz gesperrt. Bitte etwa 15 Minuten warten.', 'Kraken temporarily locked the key after too many failed attempts. Please wait about 15 minutes.')
+  if (code.includes('Rate limit') || code.includes('Too many requests')) return tr('Zu viele Anfragen. Kraken bremst kurz, bitte in einer Minute noch einmal versuchen.', 'Too many requests. Kraken is slowing things down, please try again in a minute.')
+  if (code.includes('Orders limit exceeded')) return tr('Zu viele offene Orders für dein Konto (die Grenze hängt von der Verifizierungsstufe ab).', 'Too many open orders for your account (the limit depends on your verification level).')
+  if (code.includes('Order minimum not met')) return tr('Eine Order ist kleiner als die Mindestmenge.', 'An order is below the minimum volume.')
+  if (code.includes('Cost minimum not met')) return tr('Eine Order liegt unter dem Mindestbetrag.', 'An order is below the minimum cost.')
+  if (code.includes('Tick size')) return tr('Ein Preis passt nicht zu den erlaubten Preisschritten dieses Paars.', 'A price does not match the allowed price steps (tick size) of this pair.')
+  if (code.includes('Unknown asset pair')) return tr('Dieses Handelspaar kennt Kraken nicht.', 'Kraken does not know this trading pair.')
+  if (code.includes('Unknown order')) return tr('Diese Order gibt es bei Kraken nicht (mehr).', 'This order does not exist (any more) at Kraken.')
+  if (code.includes('Market in cancel_only') || code.includes('Market in post_only') || code.includes('Market in limit_only')) return tr('Der Markt ist gerade eingeschränkt.', 'The market is currently restricted.')
+  if (code.includes('Unavailable') || code.includes('Busy') || code.includes('Internal error')) return tr('Kraken ist gerade überlastet oder in Wartung. Bitte später noch einmal versuchen.', 'Kraken is overloaded or under maintenance right now. Please try again later.')
+  if (code.includes('Deadline')) return tr('Kraken hat die Orders nicht rechtzeitig angenommen. Geht die Uhr deines Macs richtig?', 'Kraken did not accept the orders in time. Is your Mac’s clock correct?')
+  if (code.includes('Invalid arguments')) return tr(`Kraken lehnt eine Angabe ab (${code.split(':').slice(2).join(':') || 'unbekannt'}).`, `Kraken rejects a value (${code.split(':').slice(2).join(':') || 'unknown'}).`)
   return code
 }
 
 const isRateCode = (c: string) => c.includes('Rate limit') || c.includes('Too many requests')
 const isBusyCode = (c: string) => c.includes('EService:Unavailable') || c.includes('EService:Busy')
 
-/** Zahl ohne wissenschaftliche Schreibweise (5e-7 wird 0.0000005), ohne überflüssige Nullen */
-export function plain(n: number): string {
-  if (!Number.isFinite(n)) throw new KrakenError('Ungültige Zahl in einer Order.')
-  const s = n.toFixed(12).replace(/0+$/, '').replace(/\.$/, '')
-  return s === '-0' ? '0' : s
-}
+export { plain }
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
-/** Gleicher Preis nach dem Runden (Kraken liefert Preise als Text) */
-const same = (a: number, b: number) => Math.abs(a - b) <= Math.max(Math.abs(a), Math.abs(b)) * 1e-9
 
-export class Kraken {
+export class Kraken implements Exchange {
+  readonly id = 'kraken' as const
   private lastNonce = 0
   /** Private Anfragen laufen nacheinander, damit die Zeitstempel in der richtigen Reihenfolge ankommen */
   private queue: Promise<unknown> = Promise.resolve()
@@ -161,8 +91,8 @@ export class Kraken {
       text = await res.text()
     } catch (e) {
       const name = (e as Error)?.name
-      if (name === 'TimeoutError' || name === 'AbortError') throw new KrakenError(`Kraken hat nicht innerhalb von ${Math.round(timeoutMs / 1000)} Sekunden geantwortet.`, 'network')
-      throw new KrakenError('Keine Verbindung zu Kraken. Prüfe deine Internetverbindung.', 'network')
+      if (name === 'TimeoutError' || name === 'AbortError') throw new KrakenError(tr(`Kraken hat nicht innerhalb von ${Math.round(timeoutMs / 1000)} Sekunden geantwortet.`, `Kraken did not answer within ${Math.round(timeoutMs / 1000)} seconds.`), 'network')
+      throw new KrakenError(tr('Keine Verbindung zu Kraken. Prüfe deine Internetverbindung.', 'No connection to Kraken. Check your internet connection.'), 'network')
     }
     let data: any
     try {
@@ -171,8 +101,8 @@ export class Kraken {
       const status = res.status ?? 0
       throw new KrakenError(
         status >= 500 || status === 0
-          ? `Kraken ist gerade nicht erreichbar oder in Wartung (Fehler ${status || 'unbekannt'}). Bitte später noch einmal versuchen.`
-          : `Kraken hat unerwartet geantwortet (Fehler ${status}).`,
+          ? tr(`Kraken ist gerade nicht erreichbar oder in Wartung (Fehler ${status || 'unbekannt'}). Bitte später noch einmal versuchen.`, `Kraken is unreachable or under maintenance right now (error ${status || 'unknown'}). Please try again later.`)
+          : tr(`Kraken hat unerwartet geantwortet (Fehler ${status}).`, `Kraken sent an unexpected answer (error ${status}).`),
         'network',
       )
     }
@@ -192,7 +122,7 @@ export class Kraken {
 
   async privatePost(endpoint: string, params: Record<string, unknown> = {}, json = false): Promise<any> {
     const creds = this.creds
-    if (!creds) throw new KrakenError('Kein API-Schlüssel hinterlegt.')
+    if (!creds) throw new KrakenError(tr('Kein API-Schlüssel hinterlegt.', 'No API key saved.'))
     const path = `/0/private/${endpoint}`
     const isOrder = endpoint === 'AddOrder' || endpoint === 'AddOrderBatch'
     const once = () => {
@@ -295,7 +225,7 @@ export class Kraken {
    * Kraken alles, legt aber nichts an (Probelauf). userref markiert alle Orders
    * eines Plans, damit sie gemeinsam storniert werden können.
    */
-  async placeLadder(pairId: string, side: Side, levels: LadderLevel[], opts: { validate: boolean; userref: number; postOnly?: boolean; onProgress?: (done: number) => void }): Promise<SentOrder[]> {
+  async placeLadder(pairId: string, side: Side, levels: LadderLevel[], opts: PlaceOptions): Promise<SentOrder[]> {
     const out: SentOrder[] = []
     for (let i = 0; i < levels.length; i += BATCH_MAX) {
       const chunk = levels.slice(i, i + BATCH_MAX)
@@ -328,16 +258,16 @@ export class Kraken {
           const found = await this.findPlaced(opts.userref, chunk, new Set(out.map((o) => o.txid).filter(Boolean) as string[]))
           chunk.forEach((l) => {
             const base = { index: l.index, price: l.price, volume: l.volume }
-            if (!found) out.push({ ...base, uncertain: true, error: `${err.message} Unklar, ob diese Order angelegt wurde. Bitte unter „Offene Orders“ nachsehen.` })
+            if (!found) out.push({ ...base, uncertain: true, error: tr(`${err.message} Unklar, ob diese Order angelegt wurde. Bitte unter „Offene Orders“ nachsehen.`, `${err.message} Unclear whether this order was placed. Please check under “Open orders”.`) })
             else if (found.has(l.index)) out.push({ ...base, txid: found.get(l.index) })
-            else out.push({ ...base, error: `${err.message} Diese Order wurde nicht angelegt.` })
+            else out.push({ ...base, error: tr(`${err.message} Diese Order wurde nicht angelegt.`, `${err.message} This order was not placed.`) })
           })
         } else {
           // Wird ein Paket abgelehnt, gilt das für alle Orders darin
           chunk.forEach((l) => out.push({ index: l.index, price: l.price, volume: l.volume, error: err.message }))
         }
         // Danach abbrechen, damit nicht ein halber Plan ohne Rückmeldung weiterläuft
-        levels.slice(i + BATCH_MAX).forEach((l) => out.push({ index: l.index, price: l.price, volume: l.volume, error: 'Nicht gesendet, weil ein vorheriges Paket fehlschlug.' }))
+        levels.slice(i + BATCH_MAX).forEach((l) => out.push({ index: l.index, price: l.price, volume: l.volume, error: tr('Nicht gesendet, weil ein vorheriges Paket fehlschlug.', 'Not sent because a previous batch failed.') }))
         opts.onProgress?.(out.length)
         return out
       }
@@ -418,7 +348,7 @@ export class Kraken {
    * Alle geschlossenen Orders seit einem Zeitpunkt (Unix-Sekunden), seitenweise zu je 50.
    * Eine Abfrage für alle Pläne statt einer pro Plan schont Krakens Anfrage-Grenze.
    */
-  async closedOrdersSince(start: number, maxPages = 10): Promise<ClosedOrder[]> {
+  async closedOrdersSince(start: number, maxPages = 10, _pairIds: string[] = []): Promise<ClosedOrder[]> {
     const out: ClosedOrder[] = []
     for (let page = 0; page < maxPages; page++) {
       // Ab der 5. Seite kurz warten, damit Krakens Anfrage-Zähler (2 Punkte pro Seite) nicht überläuft
@@ -451,7 +381,7 @@ export class Kraken {
    * Prüft, welche Rechte der Schlüssel hat. Alles nur lesend oder mit validate,
    * es wird nichts angelegt oder storniert. Ein falscher Schlüssel wirft sofort einen Fehler.
    */
-  async checkPermissions(): Promise<KeyCheck[]> {
+  async checkPermissions(_opts?: { noWithdrawConfirmed?: boolean }): Promise<KeyCheck[]> {
     const denied = (e: unknown) => !!(e as KrakenError).codes?.some((c) => c.includes('Permission denied'))
     const fatal = (e: unknown) => {
       const k = e as KrakenError
@@ -469,24 +399,24 @@ export class Kraken {
       }
     }
     const checks: KeyCheck[] = []
-    const add = (id: string, label: string, krakenLabel: string, r: { ok: boolean; detail?: string }) =>
-      checks.push({ id, label, krakenLabel, required: true, ok: r.ok, detail: r.detail })
+    const add = (id: string, label: string, exchangeLabel: string, r: { ok: boolean; detail?: string }) =>
+      checks.push({ id, label, exchangeLabel, required: true, ok: r.ok, detail: r.detail })
 
-    add('funds', 'Guthaben abfragen', 'Query Funds', await probe(() => this.privatePost('Balance'), false))
-    add('open', 'Offene Orders abfragen', 'Query Open Orders & Trades', await probe(() => this.privatePost('OpenOrders'), false))
-    add('closed', 'Geschlossene Orders abfragen', 'Query Closed Orders & Trades', await probe(() => this.privatePost('ClosedOrders'), false))
-    add('create', 'Orders erstellen', 'Create & Modify Orders',
+    add('funds', tr('Guthaben abfragen', 'Query funds'), 'Query Funds', await probe(() => this.privatePost('Balance'), false))
+    add('open', tr('Offene Orders abfragen', 'Query open orders'), 'Query Open Orders & Trades', await probe(() => this.privatePost('OpenOrders'), false))
+    add('closed', tr('Geschlossene Orders abfragen', 'Query closed orders'), 'Query Closed Orders & Trades', await probe(() => this.privatePost('ClosedOrders'), false))
+    add('create', tr('Orders erstellen', 'Create orders'), 'Create & Modify Orders',
       await probe(() => this.privatePost('AddOrder', { pair: 'XXBTZEUR', type: 'buy', ordertype: 'limit', price: '1', volume: '0.0001', validate: true }), true))
-    add('cancel', 'Orders stornieren', 'Cancel & Close Orders', await probe(() => this.privatePost('CancelOrder', { txid: 'OFEHU0-CHECK0-NOTREAL' }), true))
+    add('cancel', tr('Orders stornieren', 'Cancel orders'), 'Cancel & Close Orders', await probe(() => this.privatePost('CancelOrder', { txid: 'OFEHU0-CHECK0-NOTREAL' }), true))
 
     // Auszahlungen dürfen NICHT erlaubt sein
-    let withdraw: KeyCheck = { id: 'withdraw', label: 'Keine Auszahlungen', krakenLabel: 'Withdraw Funds', required: true, ok: true }
+    let withdraw: KeyCheck = { id: 'withdraw', label: tr('Keine Auszahlungen', 'No withdrawals'), exchangeLabel: 'Withdraw Funds', required: true, ok: true }
     try {
       await this.privatePost('WithdrawMethods')
-      withdraw = { ...withdraw, ok: false, detail: 'Dieser Schlüssel darf Geld abheben. Lege bitte einen neuen Schlüssel ohne „Withdraw Funds“ an.' }
+      withdraw = { ...withdraw, ok: false, detail: tr('Dieser Schlüssel darf Geld abheben. Lege bitte einen neuen Schlüssel ohne „Withdraw Funds“ an.', 'This key can withdraw money. Please create a new key without “Withdraw Funds”.') }
     } catch (e) {
       if (fatal(e)) throw e
-      if (!denied(e)) withdraw = { ...withdraw, detail: 'Konnte nicht sicher geprüft werden. Kontrolliere bei Kraken, dass „Withdraw Funds“ aus ist.' }
+      if (!denied(e)) withdraw = { ...withdraw, detail: tr('Konnte nicht sicher geprüft werden. Kontrolliere bei Kraken, dass „Withdraw Funds“ aus ist.', 'Could not be checked reliably. Make sure “Withdraw Funds” is off at Kraken.') }
     }
     checks.push(withdraw)
     return checks
