@@ -516,13 +516,13 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
                   <LineChart data={candles.map(([t, c]) => ({ t: t * 1000, c }))}>
                     <CartesianGrid {...theme.grid} />
                     <XAxis dataKey="t" type="number" scale="time" domain={['dataMin', 'dataMax']} {...theme.axis}
-                      tickFormatter={(v) => new Date(v).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })} />
+                      tickFormatter={(v) => new Date(v).toLocaleDateString(dateLocale(), { day: '2-digit', month: '2-digit' })} />
                     <YAxis {...theme.axis} width={70} tickFormatter={(v) => fmtPrice(v, 0)}
                       domain={[
                         (min: number) => Math.min(min, ...sendable.map((l) => l.price)) * 0.98,
                         (max: number) => Math.max(max, ...sendable.map((l) => l.price)) * 1.02,
                       ]} />
-                    <Tooltip {...theme.tooltip} labelFormatter={(v) => new Date(Number(v)).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })}
+                    <Tooltip {...theme.tooltip} labelFormatter={(v) => new Date(Number(v)).toLocaleString(dateLocale(), { dateStyle: 'short', timeStyle: 'short' })}
                       formatter={(v) => [fmtPrice(Number(v), pair?.priceDecimals ?? 2), 'Kurs']} />
                     {sendable.map((l) => (
                       <ReferenceLine key={l.index} y={l.price} stroke={input.side === 'buy' ? theme.status.good : theme.status.critical} strokeOpacity={later.has(l.index) ? 0.15 : 0.35 + 0.65 * (l.share / Math.max(...sendable.map((x) => x.share)))} strokeDasharray="4 3" />

@@ -21,7 +21,7 @@ export const ACTION_LABEL: Record<string, string> = {
   restore: 'Sicherung eingespielt',
 }
 
-const fmtTime = (iso: string) => new Date(iso).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'medium' })
+const fmtTime = (iso: string) => new Date(iso).toLocaleString(dateLocale(), { dateStyle: 'short', timeStyle: 'medium' })
 
 /** CSV für Excel/Numbers: Semikolon, Komma als Dezimalzeichen, BOM für Umlaute */
 export function toCsv(entries: LogEntry[]): string {

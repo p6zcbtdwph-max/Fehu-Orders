@@ -12,7 +12,7 @@ export default function SettingsPage({ hasKey, onOpenKey }: { hasKey: boolean; o
   const [backupMsg, setBackupMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [restore, setRestore] = useState<BackupSummary | null>(null)
   const [busy, setBusy] = useState(false)
-  const date = (iso: string) => (iso ? new Date(iso).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' }) : 'unbekannt')
+  const date = (iso: string) => (iso ? new Date(iso).toLocaleString(dateLocale(), { dateStyle: 'medium', timeStyle: 'short' }) : 'unbekannt')
 
   async function doExport() {
     setBackupMsg(null)

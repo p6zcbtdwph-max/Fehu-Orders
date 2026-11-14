@@ -8,11 +8,12 @@ import type { Credentials } from './kraken'
 import type { LadderInput, LadderLevel, Side } from '../shared/ladder'
 import type { DraftDto, LogEntry } from '../shared/ipc'
 import { makeBackup, type BackupData } from '../shared/backup'
+import { tr, type Lang } from '../shared/i18n'
 
 const file = (name: string) => join(app.getPath('userData'), name)
 
 export function saveCredentials(c: Credentials): void {
-  if (!safeStorage.isEncryptionAvailable()) throw new Error('Der Schlüsselbund ist nicht verfügbar. Der Schlüssel wird nicht unverschlüsselt gespeichert.')
+  if (!safeStorage.isEncryptionAvailable()) throw new Error(tr('Der Schlüsselbund ist nicht verfügbar. Der Schlüssel wird nicht unverschlüsselt gespeichert.', 'The macOS keychain is not available. The key is never stored unencrypted.'))
   const f = file('kraken-key.bin')
   writeFileSync(`${f}.tmp`, safeStorage.encryptString(JSON.stringify(c)), { mode: 0o600 })
   renameSync(`${f}.tmp`, f)
@@ -42,6 +43,8 @@ export interface Settings {
   currency: 'EUR' | 'USD'
   /** Zahlenformat für Eingaben und Anzeige: de = 1.234,56, en = 1,234.56 */
   numberFormat: 'de' | 'en'
+  /** Sprache der App. Fehlt sie, gilt die Systemsprache des Macs. */
+  language?: Lang
 }
 
 export const DEFAULT_SETTINGS: Settings = { maxPlanEur: 50, watchlist: ['BTC/EUR', 'ETH/EUR'], currency: 'EUR', numberFormat: 'de' }
@@ -117,6 +120,7 @@ export function cleanSettings(raw: Record<string, unknown>): Settings {
   if (Array.isArray(raw.watchlist)) s.watchlist = raw.watchlist.filter((x): x is string => typeof x === 'string').slice(0, 50)
   if (raw.currency === 'EUR' || raw.currency === 'USD') s.currency = raw.currency
   if (raw.numberFormat === 'de' || raw.numberFormat === 'en') s.numberFormat = raw.numberFormat
+  if (raw.language === 'de' || raw.language === 'en') s.language = raw.language
   return s
 }
 

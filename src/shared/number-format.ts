@@ -1,11 +1,13 @@
 // Zahlenformat für Eingaben und Anzeige: Deutsch (1.234,56) oder Amerikanisch (1,234.56).
 // Rein, ohne Oberfläche, damit es testbar ist.
+import { tr } from './i18n'
 
 export type NumberFormat = 'de' | 'en'
 
-export const NUMBER_FORMATS: { id: NumberFormat; label: string; example: string; locale: string }[] = [
-  { id: 'de', label: 'Deutsch', example: '1.234,56', locale: 'de-DE' },
-  { id: 'en', label: 'Amerikanisch', example: '1,234.56', locale: 'en-US' },
+/** Funktion statt fester Liste, damit die Namen in der gewählten Sprache erscheinen */
+export const NUMBER_FORMATS = (): { id: NumberFormat; label: string; example: string; locale: string }[] => [
+  { id: 'de', label: tr('Deutsch', 'German'), example: '1.234,56', locale: 'de-DE' },
+  { id: 'en', label: tr('Amerikanisch', 'US'), example: '1,234.56', locale: 'en-US' },
 ]
 
 export const localeOf = (f: NumberFormat): string => (f === 'en' ? 'en-US' : 'de-DE')

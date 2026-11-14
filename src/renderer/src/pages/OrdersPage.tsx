@@ -179,7 +179,7 @@ export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; on
                     return (
                       <Fragment key={p.userref}>
                       <tr className={hasActions(p, st, open) ? '[&>td]:border-b-0' : ''}>
-                        <td className="whitespace-nowrap tabular-nums">{new Date(p.createdAt).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })}</td>
+                        <td className="whitespace-nowrap tabular-nums">{new Date(p.createdAt).toLocaleString(dateLocale(), { dateStyle: 'short', timeStyle: 'short' })}</td>
                         <td className="whitespace-nowrap">{p.pairName} <span className="text-ink-muted">{p.side === 'buy' ? 'Kauf' : 'Verkauf'}</span></td>
                         <td className="num">{p.levels ? `${p.sent} / ${p.levels.length}` : p.sent}</td>
                         <td className="num">{orders ? open : '–'}</td>

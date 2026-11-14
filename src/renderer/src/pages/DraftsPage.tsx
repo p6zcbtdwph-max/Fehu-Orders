@@ -105,7 +105,7 @@ export default function DraftsPage({ hasKey, onEdit, onNeedKey }: { hasKey: bool
                           <span className="font-medium text-ink">{d.name}</span>
                           {d.note && <span className="block text-xs text-ink-muted">{d.note}</span>}
                           {d.alarmFiredAt
-                            ? <span className="mt-1 block"><Badge tone="accent"><BellRing size={12} className="mr-1 inline" />Kursalarm ausgelöst {new Date(d.alarmFiredAt).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })}</Badge></span>
+                            ? <span className="mt-1 block"><Badge tone="accent"><BellRing size={12} className="mr-1 inline" />Kursalarm ausgelöst {new Date(d.alarmFiredAt).toLocaleString(dateLocale(), { dateStyle: 'short', timeStyle: 'short' })}</Badge></span>
                             : d.alarm && <span className="mt-1 flex items-center gap-1 text-xs text-ink-muted"><Bell size={12} /> Alarm bei {fmtPrice(first, dec)} {sym}</span>}
                           {ev && ev.wrong.length > 0 && <span className="mt-1 block"><Badge tone="danger">{ev.wrong.length} Stufen auf falscher Kursseite</Badge></span>}
                           {ev && !ev.ladder.valid && <span className="mt-1 block"><Badge tone="warning">Passt nicht mehr zu Krakens Regeln</Badge></span>}
@@ -145,7 +145,7 @@ export default function DraftsPage({ hasKey, onEdit, onNeedKey }: { hasKey: bool
                       <td>{d.name}</td>
                       <td className="text-ink-muted">{d.scenario || '–'}</td>
                       <td className="whitespace-nowrap">{d.pairName} <span className="text-ink-muted">{d.side === 'buy' ? 'Kauf' : 'Verkauf'}</span></td>
-                      <td className="whitespace-nowrap tabular-nums">{d.releasedAt ? new Date(d.releasedAt).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' }) : '–'}</td>
+                      <td className="whitespace-nowrap tabular-nums">{d.releasedAt ? new Date(d.releasedAt).toLocaleString(dateLocale(), { dateStyle: 'short', timeStyle: 'short' }) : '–'}</td>
                       <td className="num">{d.userref ?? '–'}</td>
                       <td className="text-right"><button type="button" className="btn-mini" aria-label="Aus der Liste löschen" title="Aus der Liste löschen" onClick={() => setRemove(d)}><Trash2 size={14} /></button></td>
                     </tr>

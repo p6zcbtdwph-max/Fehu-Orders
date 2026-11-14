@@ -1,5 +1,6 @@
 // Datensicherung: Pläne, Entwürfe, Vorlagen, Einstellungen, Protokoll in einer Datei.
 // Der API-Schlüssel kommt nie hinein. Rein, ohne Dateizugriff, damit es testbar ist.
+import { tr } from './i18n'
 
 export const BACKUP_APP = 'fehu-orders'
 export const BACKUP_VERSION = 1
@@ -33,10 +34,10 @@ export function parseBackup(text: string): BackupData {
   try {
     raw = JSON.parse(text)
   } catch {
-    throw new Error('Die Datei ist keine Fehu-Orders-Sicherung (kein gültiges Format).')
+    throw new Error(tr('Die Datei ist keine Fehu-Orders-Sicherung (kein gültiges Format).', 'This file is not a Fehu Orders backup (invalid format).'))
   }
-  if (raw?.app !== BACKUP_APP) throw new Error('Die Datei ist keine Fehu-Orders-Sicherung.')
-  if (typeof raw.version !== 'number' || raw.version > BACKUP_VERSION) throw new Error('Diese Sicherung stammt aus einer neueren App-Version. Bitte zuerst die App aktualisieren.')
+  if (raw?.app !== BACKUP_APP) throw new Error(tr('Die Datei ist keine Fehu-Orders-Sicherung.', 'This file is not a Fehu Orders backup.'))
+  if (typeof raw.version !== 'number' || raw.version > BACKUP_VERSION) throw new Error(tr('Diese Sicherung stammt aus einer neueren App-Version. Bitte zuerst die App aktualisieren.', 'This backup comes from a newer app version. Please update the app first.'))
   const arr = (x: unknown) => (Array.isArray(x) ? x : [])
   const data: BackupData = {
     app: BACKUP_APP,
@@ -55,7 +56,7 @@ export function parseBackup(text: string): BackupData {
 export function makeBackup(parts: Omit<BackupData, 'app' | 'version' | 'createdAt'>): BackupData {
   const data: BackupData = { app: BACKUP_APP, version: BACKUP_VERSION, createdAt: new Date().toISOString(), ...parts }
   const text = JSON.stringify(data)
-  if (FORBIDDEN.some((w) => text.includes(`"${w}"`))) throw new Error('Interner Fehler: Die Sicherung enthielt Schlüsseldaten und wurde nicht geschrieben.')
+  if (FORBIDDEN.some((w) => text.includes(`"${w}"`))) throw new Error(tr('Interner Fehler: Die Sicherung enthielt Schlüsseldaten und wurde nicht geschrieben.', 'Internal error: the backup contained key data and was not written.'))
   return data
 }
 

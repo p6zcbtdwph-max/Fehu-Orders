@@ -1,5 +1,6 @@
 // Schutz vor typischen Fehlern: Schlüssel falsch kopiert, Preis auf der falschen Seite des Kurses.
 // Rein, ohne Netz, damit es testbar ist.
+import { tr } from './i18n'
 import type { Side } from './ladder'
 
 function base64Bytes(s: string): number | null {
@@ -20,13 +21,13 @@ export function checkKeyFormat(key: string, secret: string): string[] {
   const s = secret.trim()
   const e: string[] = []
   if (!k || !s) return e
-  if (/\s/.test(k) || /\s/.test(s)) e.push('Im Schlüssel steckt ein Leerzeichen oder Zeilenumbruch. Kopiere ihn noch einmal am Stück.')
-  if (k === s) return [...e, 'API-Schlüssel und privater Schlüssel sind gleich. Du hast vermutlich zweimal dasselbe eingefügt.']
+  if (/\s/.test(k) || /\s/.test(s)) e.push(tr('Im Schlüssel steckt ein Leerzeichen oder Zeilenumbruch. Kopiere ihn noch einmal am Stück.', 'The key contains a space or line break. Copy it again in one piece.'))
+  if (k === s) return [...e, tr('API-Schlüssel und privater Schlüssel sind gleich. Du hast vermutlich zweimal dasselbe eingefügt.', 'API key and private key are identical. You probably pasted the same thing twice.')]
   const kBytes = base64Bytes(k)
   const sBytes = base64Bytes(s)
-  if (kBytes === 64 && sBytes !== 64) return [...e, 'Die beiden Felder sind vermutlich vertauscht: Der lange Schlüssel mit „==“ am Ende gehört ins Feld „Privater Schlüssel“.']
-  if (sBytes !== 64) e.push('Der private Schlüssel sieht unvollständig aus. Er ist 88 Zeichen lang und endet meist auf „==“.')
-  if (k.length < 40) e.push('Der API-Schlüssel ist zu kurz. Kopiere ihn bitte vollständig.')
+  if (kBytes === 64 && sBytes !== 64) return [...e, tr('Die beiden Felder sind vermutlich vertauscht: Der lange Schlüssel mit „==“ am Ende gehört ins Feld „Privater Schlüssel“.', 'The two fields are probably swapped: the long key ending in “==” belongs in the “Private key” field.')]
+  if (sBytes !== 64) e.push(tr('Der private Schlüssel sieht unvollständig aus. Er ist 88 Zeichen lang und endet meist auf „==“.', 'The private key looks incomplete. It is 88 characters long and usually ends in “==”.'))
+  if (k.length < 40) e.push(tr('Der API-Schlüssel ist zu kurz. Kopiere ihn bitte vollständig.', 'The API key is too short. Please copy it completely.'))
   return e
 }
 
@@ -44,7 +45,10 @@ export function wrongSide(side: Side, prices: number[], last: number | null | un
 export function priceGuard(side: Side, prices: number[], last: number, fmt: (n: number) => string = String): string | null {
   const w = wrongSide(side, prices, last)
   if (!w.length) return null
-  return `Der Kurs steht gerade bei ${fmt(last)}. ${w.length} ${w.length === 1 ? 'Stufe liegt' : 'Stufen liegen'} ${side === 'buy' ? 'beim oder über dem' : 'beim oder unter dem'} Kurs und ${w.length === 1 ? 'würde' : 'würden'} sofort ausgeführt oder storniert. Es wurde nichts gesendet. Passe die Preise an.`
+  return tr(
+    `Der Kurs steht gerade bei ${fmt(last)}. ${w.length} ${w.length === 1 ? 'Stufe liegt' : 'Stufen liegen'} ${side === 'buy' ? 'beim oder über dem' : 'beim oder unter dem'} Kurs und ${w.length === 1 ? 'würde' : 'würden'} sofort ausgeführt oder storniert. Es wurde nichts gesendet. Passe die Preise an.`,
+    `The price is currently ${fmt(last)}. ${w.length} ${w.length === 1 ? 'level is' : 'levels are'} ${side === 'buy' ? 'at or above' : 'at or below'} the price and would be filled or cancelled immediately. Nothing was sent. Please adjust the prices.`,
+  )
 }
 
 /** Kursalarm: hat der Kurs die erste Stufe erreicht? Kauf: Kurs fällt darauf oder darunter. Verkauf: steigt darauf oder darüber. */
@@ -53,7 +57,7 @@ export function alarmHit(side: Side, firstPrice: number, last: number | null | u
   return side === 'buy' ? last <= firstPrice : last >= firstPrice
 }
 
-const SUFFIX: Record<string, string> = { F: 'Earn (flexibel)', S: 'Earn (gebunden)', M: 'Earn', B: 'Earn', P: 'Earn', HOLD: 'zurückgehalten' }
+const SUFFIX: Record<string, () => string> = { F: () => tr('Earn (flexibel)', 'Earn (flexible)'), S: () => tr('Earn (gebunden)', 'Earn (bonded)'), M: () => 'Earn', B: () => 'Earn', P: () => 'Earn', HOLD: () => tr('zurückgehalten', 'on hold') }
 
 /**
  * Lesbarer Name eines Kraken-Assets: XXBT → BTC, ZEUR → EUR, XBT.F → BTC (Earn).
@@ -66,7 +70,7 @@ export function assetLabel(code: string): { name: string; earn?: string } {
   if (name === 'XBT') name = 'BTC'
   if (name === 'XDG') name = 'DOGE'
   if (name.length > 4 && /^ETH2$/.test(name)) name = 'ETH'
-  return suffix ? { name, earn: SUFFIX[suffix] ?? suffix } : { name }
+  return suffix ? { name, earn: SUFFIX[suffix]?.() ?? suffix } : { name }
 }
 
 /** Vorschlag für den ersten echten Test: zwei kleine Kauf-Stufen 20 % unter dem Kurs, knapp über Krakens Minimum */
