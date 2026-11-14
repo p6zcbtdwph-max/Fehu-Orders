@@ -418,7 +418,8 @@ export class Kraken implements Exchange {
       withdraw = { ...withdraw, ok: false, detail: tr('Dieser Schlüssel darf Geld abheben. Lege bitte einen neuen Schlüssel ohne „Withdraw Funds“ an.', 'This key can withdraw money. Please create a new key without “Withdraw Funds”.') }
     } catch (e) {
       if (fatal(e)) throw e
-      if (!denied(e)) withdraw = { ...withdraw, detail: tr('Konnte nicht sicher geprüft werden. Kontrolliere bei Kraken, dass „Withdraw Funds“ aus ist.', 'Could not be checked reliably. Make sure “Withdraw Funds” is off at Kraken.') }
+      // Nur ein klares „Permission denied“ zählt als sicher. Jede andere Antwort heißt: unklar, also nicht speichern.
+      if (!denied(e)) withdraw = { ...withdraw, ok: false, detail: tr('Konnte nicht sicher geprüft werden, deshalb wurde der Schlüssel nicht gespeichert. Kontrolliere bei Kraken, dass „Withdraw Funds“ aus ist, und versuche es gleich noch einmal.', 'Could not be checked reliably, so the key was not saved. Make sure “Withdraw Funds” is off at Kraken and try again in a moment.') }
     }
     checks.push(withdraw)
     return checks
