@@ -1,6 +1,7 @@
 // Gemeinsame Typen für Fenster und Hauptprozess
 import type { LadderInput, LadderLevel, Side } from './ladder'
 import type { BackupSummary } from './backup'
+import type { ExchangeId } from './exchanges'
 
 export interface PairDto {
   id: string
@@ -34,6 +35,8 @@ export interface SettingsDto {
   currency: 'EUR' | 'USD'
   /** de = 1.234,56, en = 1,234.56 */
   numberFormat: 'de' | 'en'
+  /** Börse, mit der die App gerade arbeitet */
+  exchange: ExchangeId
   /** Sprache der App, fehlt sie, gilt die Systemsprache */
   language?: 'de' | 'en'
 }
@@ -57,6 +60,8 @@ export interface OpenOrderDto {
 }
 
 export interface PlanDto {
+  /** Fehlt bei Plänen aus der Zeit, als es nur Kraken gab */
+  exchange?: ExchangeId
   userref: number
   createdAt: string
   pairId: string
@@ -84,8 +89,8 @@ export interface KeyCheck {
   id: string
   /** Deutsche Beschreibung */
   label: string
-  /** So heißt das Häkchen bei Kraken */
-  krakenLabel: string
+  /** So heißt das Häkchen bei der Börse (Englisch, wie auf deren Seite) */
+  exchangeLabel: string
   required: boolean
   ok: boolean
   detail?: string
@@ -96,9 +101,11 @@ export interface SaveKeyResult {
   checks: KeyCheck[]
 }
 
-/** Zwischengespeicherte Order-Gruppe, die erst nach Freigabe an Kraken geht */
+/** Zwischengespeicherte Order-Gruppe, die erst nach Freigabe an die Börse geht */
 export interface DraftDto {
   id: string
+  /** Börse des Entwurfs. Fehlt bei älteren Entwürfen (dann Kraken). */
+  exchange?: ExchangeId
   name: string
   /** Szenario zum Gruppieren, z. B. „Crash unter 60.000 €“ */
   scenario: string
@@ -157,8 +164,10 @@ export interface PlanStatusDto {
 
 export interface Api {
   /** touchId: Mac kann Touch ID abfragen, dann ist es vor jedem echten Senden Pflicht */
-  keyStatus(): Promise<{ hasKey: boolean; encryption: boolean; touchId: boolean }>
-  saveKey(key: string, secret: string): Promise<SaveKeyResult>
+  /** hasKey gilt für die aktive Börse, keys zeigt alle Börsen */
+  keyStatus(): Promise<{ hasKey: boolean; encryption: boolean; touchId: boolean; exchange: ExchangeId; keys: Record<ExchangeId, boolean> }>
+  /** Für die aktive Börse. noWithdrawConfirmed: Nutzer bestätigt, dass Auszahlungen aus sind (Bitvavo) */
+  saveKey(key: string, secret: string, opts?: { noWithdrawConfirmed?: boolean }): Promise<SaveKeyResult>
   /** Rechte des gespeicherten Schlüssels erneut prüfen */
   verifyKey(): Promise<KeyCheck[]>
   clearKey(): Promise<void>
@@ -171,9 +180,9 @@ export interface Api {
   send(req: SendRequest): Promise<SendResult>
   cancelPlan(userref: number): Promise<number>
   cancelOrder(txid: string): Promise<void>
-  /** Notbremse: alle offenen Orders des Kontos stornieren */
+  /** Notbremse: alle offenen Orders auf allen verbundenen Börsen stornieren */
   cancelAll(): Promise<number>
-  /** Krakens Systemstatus (online, maintenance, cancel_only …) */
+  /** Systemstatus der aktiven Börse (online, maintenance, cancel_only …) */
   systemStatus(): Promise<string>
   log(): Promise<LogEntry[]>
   /** Sicherung speichern (Dialog). null = abgebrochen */

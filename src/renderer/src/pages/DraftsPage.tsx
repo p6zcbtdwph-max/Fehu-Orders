@@ -7,8 +7,9 @@ import { wrongSide } from '@shared/safety'
 import SectionCard from '../components/ui/SectionCard'
 import Modal from '../components/ui/Modal'
 import Badge from '../components/ui/Badge'
-import { num, pct } from '../format'
+import { dateLocale, num, pct } from '../format'
 import { useMoney } from '../money'
+import { exName, probeOk } from '@shared/exchanges'
 
 /** Was ein Entwurf jetzt bedeuten würde: Stufen nach den aktuellen Regeln des Paars */
 function evaluate(d: DraftDto, pair: PairDto | undefined, last: number | undefined) {
@@ -68,7 +69,7 @@ export default function DraftsPage({ hasKey, onEdit, onNeedKey }: { hasKey: bool
       <header className="mb-5 page-header">
         <div className="min-w-0 flex-1 basis-64">
           <h1 className="page-title">Entwürfe</h1>
-          <p className="page-subtitle">Order-Gruppen zwischenspeichern, für Szenarien zurückhalten und erst nach deiner Freigabe an Kraken senden.</p>
+          <p className="page-subtitle">Order-Gruppen zwischenspeichern, für Szenarien zurückhalten und erst nach deiner Freigabe an {exName()} senden.</p>
         </div>
         <button type="button" className="btn btn-secondary ml-auto" onClick={load}><RefreshCw size={16} /> Kurse aktualisieren</button>
       </header>
@@ -80,7 +81,7 @@ export default function DraftsPage({ hasKey, onEdit, onNeedKey }: { hasKey: bool
         {open.length === 0 && (
           <SectionCard title="Noch keine Entwürfe">
             <div className="space-y-2 text-sm text-ink-muted">
-              <p>Plane im <strong className="text-ink">Planer</strong> eine Staffel und klicke oben auf <strong className="text-ink">Als Entwurf</strong>. Sie wird dann hier gespeichert, ohne dass etwas an Kraken geht. Ein Entwurf sperrt auch kein Guthaben. Erst beim Freigeben muss der volle Betrag auf deinem Kraken-Konto bereitliegen.</p>
+              <p>Plane im <strong className="text-ink">Planer</strong> eine Staffel und klicke oben auf <strong className="text-ink">Als Entwurf</strong>. Sie wird dann hier gespeichert, ohne dass etwas an {exName()} geht. Ein Entwurf sperrt auch kein Guthaben. Erst beim Freigeben muss der volle Betrag auf deinem {exName()}-Konto bereitliegen.</p>
               <p>Mit einem <strong className="text-ink">Szenario</strong> wie „Crash“ oder „Bullrun“ hältst du passende Gruppen zusammen und gibst sie frei, wenn es so weit ist.</p>
             </div>
           </SectionCard>
@@ -108,7 +109,7 @@ export default function DraftsPage({ hasKey, onEdit, onNeedKey }: { hasKey: bool
                             ? <span className="mt-1 block"><Badge tone="accent"><BellRing size={12} className="mr-1 inline" />Kursalarm ausgelöst {new Date(d.alarmFiredAt).toLocaleString(dateLocale(), { dateStyle: 'short', timeStyle: 'short' })}</Badge></span>
                             : d.alarm && <span className="mt-1 flex items-center gap-1 text-xs text-ink-muted"><Bell size={12} /> Alarm bei {fmtPrice(first, dec)} {sym}</span>}
                           {ev && ev.wrong.length > 0 && <span className="mt-1 block"><Badge tone="danger">{ev.wrong.length} Stufen auf falscher Kursseite</Badge></span>}
-                          {ev && !ev.ladder.valid && <span className="mt-1 block"><Badge tone="warning">Passt nicht mehr zu Krakens Regeln</Badge></span>}
+                          {ev && !ev.ladder.valid && <span className="mt-1 block"><Badge tone="warning">Passt nicht mehr zu den Regeln von {exName()}</Badge></span>}
                         </td>
                         <td className="whitespace-nowrap">{d.pairName} <span className="text-ink-muted">{d.side === 'buy' ? 'Kauf' : 'Verkauf'}</span></td>
                         <td className="num">{ev ? (ev.count < ev.sendable.length ? `${ev.count} von ${ev.sendable.length}` : ev.count) : d.input.steps}</td>
@@ -163,7 +164,7 @@ export default function DraftsPage({ hasKey, onEdit, onNeedKey }: { hasKey: bool
           onClose={(sent) => {
             setRelease(null)
             if (sent) {
-              setNotice(`„${release.name}“ wurde freigegeben und an Kraken gesendet (Plan-Nummer ${sent.userref}).`)
+              setNotice(`„${release.name}“ wurde freigegeben und an ${exName()} gesendet (Plan-Nummer ${sent.userref}).`)
               load()
             }
           }} />
@@ -175,7 +176,7 @@ export default function DraftsPage({ hasKey, onEdit, onNeedKey }: { hasKey: bool
             <button type="button" className="btn btn-secondary" onClick={() => setRemove(null)}>Abbrechen</button>
             <button type="button" className="btn btn-danger" onClick={() => doRemove(remove)}>Löschen</button>
           </>}>
-          <p className="text-sm">„{remove.name}“ wird aus der App gelöscht. {remove.status === 'released' ? 'Die Orders bei Kraken bleiben davon unberührt.' : 'Bei Kraken ändert sich nichts.'}</p>
+          <p className="text-sm">„{remove.name}“ wird aus der App gelöscht. {remove.status === 'released' ? `Die Orders bei ${exName()} bleiben davon unberührt.` : `Bei ${exName()} ändert sich nichts.`}</p>
         </Modal>
       )}
     </div>
@@ -241,7 +242,7 @@ function ReleaseModal({ draft, pair, last, hasKey, onNeedKey, onClose }: {
       <div className="space-y-2 text-sm">
         <p><strong>{draft.name}</strong>{draft.scenario && <span className="text-ink-muted"> · {draft.scenario}</span>}</p>
         {draft.note && <p className="text-ink-muted">{draft.note}</p>}
-        {!pair && <p className="notice notice-danger">Das Handelspaar {draft.pairName} gibt es bei Kraken gerade nicht.</p>}
+        {!pair && <p className="notice notice-danger">Das Handelspaar {draft.pairName} gibt es bei {exName()} gerade nicht.</p>}
         {ev && (
           <>
             <p>
@@ -260,17 +261,17 @@ function ReleaseModal({ draft, pair, last, hasKey, onNeedKey, onClose }: {
             {shortfall && <p className="notice notice-danger">Nicht genug verfügbares Guthaben: nötig {draft.side === 'buy' ? eur(need) : `${num(need, pair?.volumeDecimals)} ${draft.pairName.split('/')[0]}`}, verfügbar {draft.side === 'buy' ? eur(have ?? 0) : num(have ?? 0, pair?.volumeDecimals)}.</p>}
           </>
         )}
-        {!hasKey && <p className="notice notice-info">Zum Freigeben brauchst du einen Kraken-API-Schlüssel. <button type="button" className="btn-link" onClick={onNeedKey}>Schlüssel anlegen</button></p>}
+        {!hasKey && <p className="notice notice-info">Zum Freigeben brauchst du einen {exName()}-API-Schlüssel. <button type="button" className="btn-link" onClick={onNeedKey}>Schlüssel anlegen</button></p>}
         {err && <p className="notice notice-danger">{err}</p>}
         {result && (
           <div className={`notice ${failed.length ? 'notice-warning' : 'notice-success'}`}>
             {result.validate
-              ? failed.length ? `Probelauf: ${failed.length} Orders würden abgelehnt. Grund: ${failed[0].error}` : `Probelauf erfolgreich: Kraken würde alle ${ok} Orders annehmen. Es wurde nichts angelegt.`
+              ? failed.length ? `Probelauf: ${failed.length} Orders würden abgelehnt. Grund: ${failed[0].error}` : probeOk(ok)
               : `${ok} Orders angelegt${failed.length ? `, ${failed.length} fehlgeschlagen (${failed[0].error})` : ''}. Plan-Nummer ${result.userref}.`}
             {result.orders.some((o) => o.uncertain) && <p className="mt-1 text-xs font-medium">Die Verbindung brach ab. Schau unter „Offene Orders“ nach, was wirklich angelegt wurde.</p>}
           </div>
         )}
-        {!result && !err && <p className="text-xs text-ink-muted">Erst der Knopf „Freigeben und senden“ legt die Orders echt bei Kraken an. Ab dann sperrt Kraken den vollen Betrag auf deinem Konto, bis die Orders ausgeführt oder storniert sind. Der Probelauf prüft nur.</p>}
+        {!result && !err && <p className="text-xs text-ink-muted">Erst der Knopf „Freigeben und senden“ legt die Orders echt bei {exName()} an. Ab dann sperrt {exName()} den vollen Betrag auf deinem Konto, bis die Orders ausgeführt oder storniert sind. Der Probelauf prüft nur.</p>}
       </div>
     </Modal>
   )

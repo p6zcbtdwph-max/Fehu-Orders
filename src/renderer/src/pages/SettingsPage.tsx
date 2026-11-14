@@ -5,6 +5,8 @@ import type { BackupSummary } from '@shared/backup'
 import SectionCard from '../components/ui/SectionCard'
 import Modal from '../components/ui/Modal'
 import { NumberField } from './PlannerPage'
+import { dateLocale } from '../format'
+import { exName } from '@shared/exchanges'
 
 export default function SettingsPage({ hasKey, onOpenKey }: { hasKey: boolean; onOpenKey: () => void }): JSX.Element {
   const [maxPlan, setMaxPlan] = useState(500)
@@ -59,7 +61,7 @@ export default function SettingsPage({ hasKey, onOpenKey }: { hasKey: boolean; o
         </div>
       </header>
       <div className="space-y-4">
-        <SectionCard title="Kraken-API-Schlüssel">
+        <SectionCard title={`${exName()}-API-Schlüssel`}>
           <div className="flex flex-wrap items-center gap-3 text-sm">
             <p className="flex-1 text-ink-muted">{hasKey ? 'Ein Schlüssel ist hinterlegt.' : 'Noch kein Schlüssel hinterlegt.'} Anlegen, prüfen und löschen geht im Reiter „Schlüssel“.</p>
             <button type="button" className="btn btn-secondary" onClick={onOpenKey}>Zum Reiter Schlüssel</button>
@@ -96,7 +98,7 @@ export default function SettingsPage({ hasKey, onOpenKey }: { hasKey: boolean; o
           </>}>
           <div className="space-y-2 text-sm">
             <p>Sicherung vom <strong>{date(restore.createdAt)}</strong> mit {restore.plans} Plänen, {restore.drafts} Entwürfen, {restore.templates} Vorlagen und {restore.log} Protokoll-Einträgen.</p>
-            <p className="text-ink-muted">Sie ersetzt den aktuellen Stand in der App. Der jetzige Stand wird vorher automatisch im App-Ordner gesichert. Bei Kraken ändert sich nichts, dein Schlüssel bleibt wie er ist.</p>
+            <p className="text-ink-muted">Sie ersetzt den aktuellen Stand in der App. Der jetzige Stand wird vorher automatisch im App-Ordner gesichert. Bei der Börse ändert sich nichts, deine Schlüssel bleiben wie sie sind.</p>
           </div>
         </Modal>
       )}

@@ -6,7 +6,8 @@ import { MoneyProvider, type Currency } from './money'
 import { num, setNumberFormat } from './format'
 import { NUMBER_FORMATS, type NumberFormat } from '@shared/number-format'
 import { LANGS, langFromLocale, setLang, tr, type Lang } from '@shared/i18n'
-import { AlertTriangle, ClipboardList, GraduationCap, KeyRound, Languages, ListOrdered, PlayCircle, ScrollText, Settings, SlidersHorizontal } from 'lucide-react'
+import { EXCHANGE_IDS, exchangeName, exName, setActiveExchange, type ExchangeId } from '@shared/exchanges'
+import { AlertTriangle, ArrowLeftRight, ClipboardList, GraduationCap, KeyRound, Languages, ListOrdered, PlayCircle, ScrollText, Settings, SlidersHorizontal } from 'lucide-react'
 import logoUrl from './assets/logo.png'
 import PlannerPage, { type Prefill } from './pages/PlannerPage'
 import OrdersPage from './pages/OrdersPage'
@@ -35,14 +36,17 @@ const navLabel = (id: PageId): string => ({
   settings: tr('Einstellungen', 'Settings'),
 })[id]
 
-/** Hinweise zu Krakens Systemstatus. „online“ zeigt nichts. */
-const systemText = (s: string): string | undefined => ({
-  maintenance: tr('Kraken ist gerade in Wartung. Orders können weder angelegt noch storniert werden.', 'Kraken is under maintenance. Orders can neither be placed nor cancelled.'),
-  cancel_only: tr('Kraken erlaubt gerade nur Stornieren. Neue Orders werden abgelehnt.', 'Kraken currently only allows cancelling. New orders will be rejected.'),
-  reduce_only: tr('Kraken erlaubt gerade nur eingeschränkten Handel. Neue Orders können abgelehnt werden.', 'Kraken currently only allows restricted trading. New orders may be rejected.'),
-  post_only: tr('Kraken nimmt gerade nur Limit-Orders ins Orderbuch an (Post-only).', 'Kraken currently only accepts limit orders into the order book (post-only).'),
-  unreachable: tr('Kraken ist gerade nicht erreichbar. Prüfe deine Internetverbindung.', 'Kraken cannot be reached right now. Check your internet connection.'),
-} as Record<string, string>)[s]
+/** Hinweise zum Systemstatus der aktiven Börse. „online“ zeigt nichts. */
+const systemText = (st: string): string | undefined => {
+  const n = exName()
+  return ({
+    maintenance: tr(`${n} ist gerade in Wartung. Orders können weder angelegt noch storniert werden.`, `${n} is under maintenance. Orders can neither be placed nor cancelled.`),
+    cancel_only: tr(`${n} erlaubt gerade nur Stornieren. Neue Orders werden abgelehnt.`, `${n} currently only allows cancelling. New orders will be rejected.`),
+    reduce_only: tr(`${n} erlaubt gerade nur eingeschränkten Handel. Neue Orders können abgelehnt werden.`, `${n} currently only allows restricted trading. New orders may be rejected.`),
+    post_only: tr(`${n} nimmt gerade nur Limit-Orders ins Orderbuch an (Post-only).`, `${n} currently only accepts limit orders into the order book (post-only).`),
+    unreachable: tr(`${n} ist gerade nicht erreichbar. Prüfe deine Internetverbindung.`, `${n} cannot be reached right now. Check your internet connection.`),
+  } as Record<string, string>)[st]
+}
 
 const GUIDE_SEEN = 'fehu-orders-guide-seen'
 const LANG_KEY = 'fehu-orders-lang'
@@ -70,6 +74,10 @@ export default function App(): JSX.Element {
   // Modul-Werte vor dem Zeichnen setzen, damit alle Seiten im selben Durchlauf Sprache und Format nutzen
   setLang(lng)
   setNumberFormat(numFmt)
+  const [exchange, setExchangeState] = useState<ExchangeId>('kraken')
+  const [keys, setKeys] = useState<Partial<Record<ExchangeId, boolean>>>({})
+  // Auch die Börse als Modulwert, damit Texte wie „An Kraken senden“ den richtigen Namen zeigen
+  setActiveExchange(exchange)
   const [demo, setDemoState] = useState(isDemo())
   // Beim allerersten Start öffnet sich die Einführung von selbst
   const [guideStep, setGuideStep] = useState<number | null>(() => {
@@ -80,6 +88,7 @@ export default function App(): JSX.Element {
     api().settings().then((s) => {
       setCurrencyState(s.currency ?? 'EUR')
       setNumFmtState(s.numberFormat === 'en' ? 'en' : 'de')
+      if (s.exchange) setExchangeState(s.exchange)
     })
   }, [demo])
 
@@ -94,6 +103,15 @@ export default function App(): JSX.Element {
     setPrefill(null)
     setPage('planner')
     api().keyStatus().then((s) => setHasKey(s.hasKey))
+  }
+
+  /** Andere Börse wählen: Paare, Guthaben, Pläne und Entwürfe gehören jeweils zu einer Börse */
+  const switchExchange = (ex: ExchangeId) => {
+    if (ex === exchange) return
+    setExchangeState(ex)
+    setPrefill(null)
+    setHasKey(null)
+    api().saveSettings({ exchange: ex }).then(refreshKey).catch(refreshKey)
   }
 
   // Wechselkurs nur laden, solange Dollar gewählt ist, und jede Minute auffrischen
@@ -141,14 +159,17 @@ export default function App(): JSX.Element {
     load()
     const t = setInterval(load, 120_000)
     return () => clearInterval(t)
-  }, [demo])
+  }, [demo, exchange])
 
   // Klick auf einen Kursalarm öffnet die Entwürfe
   useEffect(() => api().onOpenPage((p) => {
     if (NAV_IDS.some((n) => n.id === p)) setPage(p as PageId)
   }), [demo])
 
-  const refreshKey = () => api().keyStatus().then((s) => setHasKey(s.hasKey))
+  const refreshKey = () => api().keyStatus().then((s) => {
+    setHasKey(s.hasKey)
+    setKeys(s.keys ?? {})
+  })
   useEffect(() => {
     refreshKey()
   }, [])
@@ -191,6 +212,13 @@ export default function App(): JSX.Element {
           </button>
         </div>
         <div className="space-y-2 border-t border-line px-4 py-3 text-xs text-ink-muted" style={noDrag}>
+          <div className="space-y-1">
+            <span className="flex items-center gap-1.5" title={tr('Mit welcher Börse die App gerade arbeitet. Schlüssel, Pläne und Entwürfe gelten je Börse.', 'Which exchange the app is working with. Keys, plans and drafts belong to one exchange each.')}>
+              <ArrowLeftRight size={13} /> {tr('Börse', 'Exchange')}
+            </span>
+            <Segmented<ExchangeId> block className="[&>.segmented-item]:min-w-0 [&>.segmented-item]:px-1" value={exchange} onChange={switchExchange} aria-label={tr('Börse', 'Exchange')}
+              options={EXCHANGE_IDS.map((id) => ({ id, label: exchangeName(id), title: keys[id] ? tr(`${exchangeName(id)}: Schlüssel hinterlegt`, `${exchangeName(id)}: key saved`) : tr(`${exchangeName(id)}: noch kein Schlüssel`, `${exchangeName(id)}: no key yet`) }))} />
+          </div>
           <div className="flex items-center justify-between gap-2">
             <span className="flex items-center gap-1.5"><Languages size={13} /> {tr('Sprache', 'Language')}</span>
             <Segmented<Lang> value={lng} onChange={switchLang} aria-label={tr('Sprache', 'Language')}
@@ -209,9 +237,9 @@ export default function App(): JSX.Element {
               options={NUMBER_FORMATS().map((f) => ({ id: f.id, label: f.label, title: `${f.label}: ${f.example}` }))} />
           </div>
           <span className="flex items-center gap-2">
-            {demo ? <><PlayCircle size={14} className="text-warning-fg" /> {tr('Demo: nichts geht an Kraken', 'Demo: nothing goes to Kraken')}</> : <>
+            {demo ? <><PlayCircle size={14} className="text-warning-fg" /> {tr(`Demo: nichts geht an ${exName()}`, `Demo: nothing goes to ${exName()}`)}</> : <>
             <KeyRound size={14} className={hasKey ? 'text-success-fg' : 'text-warning-fg'} />
-            {hasKey === null ? '…' : hasKey ? tr('Kraken verbunden', 'Kraken connected') : tr('Kein API-Schlüssel', 'No API key')}</>}
+            {hasKey === null ? '…' : hasKey ? tr(`${exName()} verbunden`, `${exName()} connected`) : tr('Kein API-Schlüssel', 'No API key')}</>}
           </span>
         </div>
       </aside>
@@ -228,12 +256,12 @@ export default function App(): JSX.Element {
           <div className="page !pb-0">
             <p className="notice notice-warning flex flex-wrap items-center gap-x-3 gap-y-1">
               <PlayCircle size={16} className="flex-shrink-0" />
-              <span className="flex-1">{tr(<><strong>Demo-Modus.</strong> Beispielkurse und erfundenes Guthaben. Es wird nichts an Kraken gesendet, probier ruhig alles aus.</>, <><strong>Demo mode.</strong> Sample prices and made-up balances. Nothing is sent to Kraken, so feel free to try everything.</>)}</span>
+              <span className="flex-1">{tr(<><strong>Demo-Modus.</strong> Beispielkurse und erfundenes Guthaben. Es wird nichts an {exName()} gesendet, probier ruhig alles aus.</>, <><strong>Demo mode.</strong> Sample prices and made-up balances. Nothing is sent to {exName()}, so feel free to try everything.</>)}</span>
               <button type="button" className="btn-link" onClick={() => switchDemo(false)}>{tr('Demo beenden', 'End demo')}</button>
             </p>
           </div>
         )}
-        <div key={demo ? 'demo' : 'live'} className="contents">
+        <div key={`${demo ? 'demo' : 'live'}-${exchange}`} className="contents">
         {/* Der Planer bleibt beim Reiterwechsel erhalten (nur versteckt), damit keine Eingaben verloren gehen */}
         <div className={page === 'planner' ? 'contents' : 'hidden'}><PlannerPage hasKey={!!hasKey} onNeedKey={() => setPage('key')} prefill={prefill} onPrefillUsed={() => setPrefill(null)} onOpenDrafts={() => setPage('drafts')} onOpenOrders={() => setPage('orders')} /></div>
         {page === 'drafts' && <DraftsPage hasKey={!!hasKey} onNeedKey={() => setPage('key')}

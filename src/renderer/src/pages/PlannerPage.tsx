@@ -11,9 +11,10 @@ import SectionCard from '../components/ui/SectionCard'
 import Segmented from '../components/ui/Segmented'
 import Modal from '../components/ui/Modal'
 import { useChartTheme } from '../utils/chartTheme'
-import { num, numberFormat, pct } from '../format'
+import { dateLocale, num, numberFormat, pct } from '../format'
 import { parseNumber, parseWeightList, toInputText } from '@shared/number-format'
 import { useMoney } from '../money'
+import { exName, FIRST_TEST_MAX_EUR, probeHint, probeOk } from '@shared/exchanges'
 
 const CURVES: { id: SizeCurve; label: string; title: string }[] = [
   { id: 'flat', label: 'Gleich', title: 'Jede Stufe gleich groß' },
@@ -294,7 +295,7 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
     await api().saveDraft(d)
     setDraft(d)
     setDraftForm(null)
-    setDraftMsg(`Entwurf „${d.name}“ gespeichert. Es wurde nichts an Kraken gesendet.`)
+    setDraftMsg(`Entwurf „${d.name}“ gespeichert. Es wurde nichts an ${exName()} gesendet.`)
   }
 
   async function run(validate: boolean) {
@@ -326,7 +327,7 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
       <header className="mb-5 page-header">
         <div className="min-w-0 flex-1 basis-64">
           <h1 className="page-title">Planer</h1>
-          <p className="page-subtitle">Viele Limit-Orders auf einmal planen, prüfen und an Kraken senden.</p>
+          <p className="page-subtitle">Viele Limit-Orders auf einmal planen, prüfen und an {exName()} senden.</p>
         </div>
         <div className="ml-auto flex flex-shrink-0 items-center gap-2" data-guide="actions">
           <button type="button" className="btn btn-ghost" onClick={openFirstTest} title="Einen kleinen, sicheren Plan für den ersten echten Test laden">
@@ -335,11 +336,11 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
           <button type="button" className="btn btn-secondary" disabled={!ladder?.valid || !!busy} onClick={openDraftForm} title="Zwischenspeichern und später im Reiter „Entwürfe“ freigeben">
             <ClipboardList size={16} /> Als Entwurf
           </button>
-          <button type="button" className="btn btn-secondary" disabled={!hasKey || !ladder?.valid || !!busy} onClick={() => run(true)} title="Kraken prüft alle Orders, legt aber nichts an">
+          <button type="button" className="btn btn-secondary" disabled={!hasKey || !ladder?.valid || !!busy} onClick={() => run(true)} title={probeHint()}>
             <FlaskConical size={16} /> {busy === 'validate' ? 'Prüfe …' : 'Probelauf'}
           </button>
           <button type="button" data-primary-action className="btn btn-primary" disabled={!hasKey || !ladder?.valid || !!busy || !!shortfall} onClick={() => setConfirm(true)}>
-            <Send size={16} /> An Kraken senden
+            <Send size={16} /> An {exName()} senden
           </button>
         </div>
       </header>
@@ -360,7 +361,7 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
       )}
       {!hasKey && (
         <p className="notice notice-info mb-4">
-          Planen geht auch ohne Schlüssel. Zum Prüfen und Senden brauchst du einen Kraken-API-Schlüssel.{' '}
+          Planen geht auch ohne Schlüssel. Zum Prüfen und Senden brauchst du einen {exName()}-API-Schlüssel.{' '}
           <button type="button" className="btn-link" onClick={onNeedKey}>Schlüssel hinterlegen</button>
         </p>
       )}
@@ -483,7 +484,7 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
             <p className="notice notice-info flex items-start gap-2 text-xs">
               <Info size={14} className="mt-0.5 flex-shrink-0" />
               <span>
-                <strong>Jede Order braucht echtes Guthaben.</strong> Kraken sperrt beim Senden den vollen Betrag aller gesendeten Stufen ({input.side === 'buy' ? 'beim Kaufen Euro' : `beim Verkaufen ${base}`}), auch für Stufen weit weg vom Kurs, die vielleicht nie ausgeführt werden. Das Geld bleibt gesperrt, bis die Order ausgeführt oder storniert ist, und steht so lange nicht für andere Orders bereit. Mehr Orders als Guthaben geht nicht.{' '}
+                <strong>Jede Order braucht echtes Guthaben.</strong> {exName()} sperrt beim Senden den vollen Betrag aller gesendeten Stufen ({input.side === 'buy' ? 'beim Kaufen Euro' : `beim Verkaufen ${base}`}), auch für Stufen weit weg vom Kurs, die vielleicht nie ausgeführt werden. Das Geld bleibt gesperrt, bis die Order ausgeführt oder storniert ist, und steht so lange nicht für andere Orders bereit. Mehr Orders als Guthaben geht nicht.{' '}
                 {partial ? `Mit „Davon jetzt senden“ sperrst du nur ${eur(nowCost)} für die ${nowCount} Stufen nah am Kurs.` : 'Tipp: Mit „Davon jetzt senden“ sperrst du erst einmal nur die Stufen nah am Kurs, oder du speicherst den Plan als Entwurf. Entwürfe sperren kein Geld.'}
               </span>
             </p>
@@ -493,7 +494,7 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
               <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" />
               <span>
                 {wrong.length === 1 ? '1 Stufe liegt' : `${wrong.length} Stufen liegen`} {input.side === 'buy' ? 'beim oder über dem' : 'beim oder unter dem'} aktuellen Kurs.{' '}
-                {postOnly ? 'Mit Post-only storniert Kraken diese Orders sofort wieder.' : 'Diese Orders würden sofort zum Marktpreis ausgeführt.'}{' '}
+                {postOnly ? `Mit Post-only storniert ${exName()} diese Orders sofort wieder.` : 'Diese Orders würden sofort zum Marktpreis ausgeführt.'}{' '}
                 {input.side === 'buy' ? 'Beim Kaufen liegen alle Stufen unter dem Kurs.' : 'Beim Verkaufen liegen alle Stufen über dem Kurs.'}
               </span>
             </p>
@@ -502,7 +503,7 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
           {result && (
             <div className={`notice ${failed.length ? 'notice-warning' : 'notice-success'}`}>
               {result.validate
-                ? failed.length ? `Probelauf: ${failed.length} Orders würden abgelehnt.` : `Probelauf erfolgreich: Kraken würde alle ${ok} Orders annehmen. Es wurde nichts angelegt.`
+                ? failed.length ? `Probelauf: ${failed.length} Orders würden abgelehnt.` : probeOk(ok)
                 : `${ok} Orders angelegt${failed.length ? `, ${failed.length} fehlgeschlagen` : ''}. Plan-Nummer ${result.userref}.`}
               {result.orders.some((o) => o.uncertain) && <p className="mt-1 text-xs font-medium">Die Verbindung brach ab. Schau unter „Offene Orders“ nach, was wirklich angelegt wurde, bevor du noch einmal sendest.</p>}
               {failed.length > 0 && <p className="mt-1 text-xs">Grund: {failed[0].error}</p>}
@@ -631,7 +632,7 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
               <span className="label">Notiz (optional)</span>
               <input className="input w-full" value={draftForm.note} placeholder="z. B. nur freigeben, wenn BTC unter 60.000 € fällt" onChange={(e) => setDraftForm({ ...draftForm, note: e.target.value })} />
             </label>
-            <p className="text-xs text-ink-muted">{input.side === 'buy' ? 'Kauf' : 'Verkauf'} {pair.name}, {nowCount} {partial ? `von ${sendable.length} ` : ''}Stufen, {eur(nowCost)}. Es geht nichts an Kraken. Freigeben kannst du den Entwurf im Reiter „Entwürfe“.</p>
+            <p className="text-xs text-ink-muted">{input.side === 'buy' ? 'Kauf' : 'Verkauf'} {pair.name}, {nowCount} {partial ? `von ${sendable.length} ` : ''}Stufen, {eur(nowCost)}. Es geht nichts an {exName()}. Freigeben kannst du den Entwurf im Reiter „Entwürfe“.</p>
           </div>
         </Modal>
       )}
@@ -650,10 +651,11 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
                 {limit !== null && limit > 50
                   ? <>Sie steht bei {eur(limit)}. <button type="button" className="btn-link" onClick={() => api().saveSettings({ maxPlanEur: 50 }).then((s) => setLimit(s.maxPlanEur))}>Auf 50 € senken</button></>
                   : limit !== null ? <>Sie steht bei {eur(limit)}. Passt.</> : null}
+                {' '}Solange auf {exName()} noch kein echter Plan angelegt wurde, nimmt die App dort ohnehin höchstens {eur(FIRST_TEST_MAX_EUR)} an, egal wie hoch die Obergrenze steht.
               </li>
-              <li><strong>Mini-Plan laden:</strong> BTC/EUR kaufen, 2 Stufen etwa 20 % unter dem Kurs, knapp über Krakens Mindestbetrag (meist unter 15 €). So tief wird der Kurs kaum fallen, die Orders bleiben also nur liegen.</li>
-              <li><strong>Probelauf</strong> klicken. Kraken prüft alles, legt aber nichts an.</li>
-              <li><strong>An Kraken senden</strong> und bestätigen.</li>
+              <li><strong>Mini-Plan laden:</strong> BTC/EUR kaufen, 2 Stufen etwa 20 % unter dem Kurs, knapp über dem Mindestbetrag von {exName()} (meist unter 15 €). So tief wird der Kurs kaum fallen, die Orders bleiben also nur liegen.</li>
+              <li><strong>Probelauf</strong> klicken. {probeHint()}.</li>
+              <li><strong>An {exName()} senden</strong> und bestätigen.</li>
               <li>Unter <strong>Offene Orders</strong> nachsehen, ob beide Orders da sind, und den Plan <strong>stornieren</strong>.</li>
               <li>Im <strong>Protokoll</strong> siehst du danach jeden Schritt mit Uhrzeit.</li>
             </ol>
@@ -674,8 +676,8 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
             <p>Gegenwert jetzt: <strong>{eur(nowCost)}</strong>{feeEur !== null && <> plus ca. {eur(feeEur)} Gebühren</>}</p>
             {wrong.length > 0 && <p className="notice notice-danger">Achtung: {wrong.length} {wrong.length === 1 ? 'Stufe liegt' : 'Stufen liegen'} auf der falschen Seite des Kurses ({fmtPrice(last ?? 0, pair.priceDecimals)} {sym}) und {postOnly ? 'werden sofort wieder storniert' : 'würden sofort ausgeführt'}.</p>}
             {partial && <p className="text-ink-muted">Die restlichen {sendable.length - nowCount} Stufen bleiben im Plan. Du kannst sie später unter „Offene Orders“ mit „Rest senden“ nachschicken.</p>}
-            <p>Kraken sperrt dafür jetzt <strong>{input.side === 'buy' ? eur(nowCost) : `${num(toSend.reduce((a, l) => a + l.volume, 0), pair.volumeDecimals)} ${base}`}</strong> von deinem Guthaben, bis die Orders ausgeführt oder storniert sind.</p>
-            <p className="text-ink-muted">Die Orders werden echt bei Kraken angelegt. Du kannst sie unter „Offene Orders“ jederzeit stornieren, solange sie noch nicht ausgeführt sind. Dann ist das Geld sofort wieder frei.</p>
+            <p>{exName()} sperrt dafür jetzt <strong>{input.side === 'buy' ? eur(nowCost) : `${num(toSend.reduce((a, l) => a + l.volume, 0), pair.volumeDecimals)} ${base}`}</strong> von deinem Guthaben, bis die Orders ausgeführt oder storniert sind.</p>
+            <p className="text-ink-muted">Die Orders werden echt bei {exName()} angelegt. Du kannst sie unter „Offene Orders“ jederzeit stornieren, solange sie noch nicht ausgeführt sind. Dann ist das Geld sofort wieder frei.</p>
             <p className="text-xs text-ink-muted">Hat dein Mac Touch ID, fragt er nach dem Klick noch nach deinem Finger.</p>
           </div>
         </Modal>

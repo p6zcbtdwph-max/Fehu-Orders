@@ -5,7 +5,7 @@ import type { LogEntry } from '@shared/ipc'
 import SectionCard from '../components/ui/SectionCard'
 import Badge from '../components/ui/Badge'
 import Segmented from '../components/ui/Segmented'
-import { localDate, num } from '../format'
+import { dateLocale, localDate, num } from '../format'
 import { useMoney } from '../money'
 
 export const ACTION_LABEL: Record<string, string> = {

@@ -7,8 +7,9 @@ import { profitLadderSuggestion } from '@shared/plan-status'
 import type { Prefill } from './PlannerPage'
 import SectionCard from '../components/ui/SectionCard'
 import Modal from '../components/ui/Modal'
-import { num } from '../format'
+import { dateLocale, num } from '../format'
 import { useMoney } from '../money'
+import { activeExchange, exName, probeOk } from '@shared/exchanges'
 
 export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; onPlanSell: (p: Prefill) => void }): JSX.Element {
   const [orders, setOrders] = useState<OpenOrderDto[] | null>(null)
@@ -42,7 +43,8 @@ export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; on
 
   // Guthaben nach Coin zusammenfassen: normal handelbar und in Earn getrennt
   const balanceRows = Object.entries(balances).reduce<Record<string, { spot: number; earn: number; earnLabel?: string }>>((acc, [code, v]) => {
-    const { name, earn } = assetLabel(code)
+    // Nur Kraken hat Kürzel wie XXBT oder BTC.F, die anderen Börsen nennen Coins schon lesbar
+    const { name, earn } = activeExchange() === 'kraken' ? assetLabel(code) : { name: code, earn: undefined }
     const row = (acc[name] ??= { spot: 0, earn: 0 })
     if (earn) { row.earn += v; row.earnLabel = earn } else row.spot += v
     return acc
@@ -112,7 +114,7 @@ export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; on
       const ok = r.orders.length - failed.length
       setRestMsg(failed.length
         ? { ok: false, text: `${validate ? 'Probelauf' : 'Senden'}: ${failed.length} von ${r.orders.length} Orders abgelehnt. Grund: ${failed[0].error}` }
-        : { ok: true, text: validate ? `Probelauf erfolgreich: Kraken würde alle ${ok} Orders annehmen.` : `${ok} weitere Orders angelegt.` })
+        : { ok: true, text: validate ? probeOk(ok) : `${ok} weitere Orders angelegt.` })
       if (r.orders.some((o) => o.uncertain)) setRestMsg({ ok: false, text: 'Die Verbindung brach beim Senden ab. Klicke auf „Aktualisieren“ und prüfe, was wirklich angelegt wurde, bevor du noch einmal sendest.' })
       if (!validate) {
         setRestPlan(null)
@@ -134,14 +136,14 @@ export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; on
       <header className="mb-5 page-header">
         <div className="min-w-0 flex-1 basis-64">
           <h1 className="page-title">Offene Orders</h1>
-          <p className="page-subtitle">Was gerade bei Kraken liegt, nach Plänen gruppiert.</p>
+          <p className="page-subtitle">Was gerade bei {exName()} liegt, nach Plänen gruppiert.</p>
         </div>
         <div className="ml-auto flex flex-shrink-0 gap-2">
-          {hasKey && <button type="button" className="btn btn-outline text-danger-fg" onClick={() => { setBrakeMsg(null); setBrake(true) }} title="Alle offenen Orders bei Kraken auf einmal stornieren"><OctagonX size={16} /> Notbremse</button>}
+          {hasKey && <button type="button" className="btn btn-outline text-danger-fg" onClick={() => { setBrakeMsg(null); setBrake(true) }} title="Alle offenen Orders auf allen verbundenen Börsen auf einmal stornieren"><OctagonX size={16} /> Notbremse</button>}
           <button type="button" className="btn btn-secondary" onClick={load}><RefreshCw size={16} /> Aktualisieren</button>
         </div>
       </header>
-      {!hasKey && <p className="notice notice-info mb-4">Hinterlege zuerst im Reiter „Schlüssel“ einen Kraken-API-Schlüssel.</p>}
+      {!hasKey && <p className="notice notice-info mb-4">Hinterlege zuerst im Reiter „Schlüssel“ einen {exName()}-API-Schlüssel.</p>}
       {error && <p className="notice notice-danger mb-4">{error}</p>}
       {brakeMsg && <p className="notice notice-success mb-4">{brakeMsg}</p>}
       {restMsg && !restPlan && <p className={`notice mb-4 ${restMsg.ok ? 'notice-success' : 'notice-danger'}`}>{restMsg.text}</p>}
@@ -194,7 +196,7 @@ export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; on
                           <td colSpan={7} className="pt-0">
                             <span className="inline-flex gap-2">
                               {restLevels(p).length > 0 && (
-                                <button type="button" className="btn btn-secondary btn-sm whitespace-nowrap" onClick={() => { setRestMsg(null); setRestPlan(p) }} title="Die noch nicht gesendeten Stufen dieses Plans an Kraken schicken">
+                                <button type="button" className="btn btn-secondary btn-sm whitespace-nowrap" onClick={() => { setRestMsg(null); setRestPlan(p) }} title={`Die noch nicht gesendeten Stufen dieses Plans an ${exName()} schicken`}>
                                   <Send size={14} /> Rest senden ({restLevels(p).length})
                                 </button>
                               )}
@@ -266,7 +268,7 @@ export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; on
             <button type="button" className="btn btn-danger" disabled={busy} onClick={emergencyStop}>{busy ? 'Storniere …' : 'Alle stornieren'}</button>
           </>}>
           <div className="space-y-2 text-sm">
-            <p>Storniert <strong>alle offenen Orders</strong> in deinem Kraken-Konto auf einmal{orders ? ` (gerade ${orders.length})` : ''}, auch solche, die du nicht mit dieser App angelegt hast.</p>
+            <p>Storniert <strong>alle offenen Orders</strong> auf <strong>allen Börsen</strong>, für die ein Schlüssel hinterlegt ist, auf einmal{orders ? ` (bei ${exName()} gerade ${orders.length})` : ''}, auch solche, die du nicht mit dieser App angelegt hast.</p>
             <p className="text-ink-muted">Bereits ausgeführte Käufe und Verkäufe bleiben bestehen. Noch nicht gesendete Stufen deiner Pläne bleiben in der App und gehen nicht raus.</p>
           </div>
         </Modal>
@@ -278,7 +280,7 @@ export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; on
             <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => setCancelPlan(null)}>Abbrechen</button>
             <button type="button" className="btn btn-danger" disabled={busy} onClick={() => doCancelPlan(cancelPlan)}>{busy ? 'Storniere …' : 'Stornieren'}</button>
           </>}>
-          <p className="text-sm">Alle noch offenen Orders dieses Plans ({cancelPlan.pairName}, {openByPlan(cancelPlan.userref)} Stück) werden bei Kraken storniert. Bereits ausgeführte Käufe oder Verkäufe bleiben bestehen.</p>
+          <p className="text-sm">Alle noch offenen Orders dieses Plans ({cancelPlan.pairName}, {openByPlan(cancelPlan.userref)} Stück) werden bei {exName()} storniert. Bereits ausgeführte Käufe oder Verkäufe bleiben bestehen.</p>
         </Modal>
       )}
     </div>
