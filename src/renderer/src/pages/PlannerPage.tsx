@@ -10,6 +10,7 @@ import PairPicker from '../components/PairPicker'
 import CenterSliders from '../components/CenterSliders'
 import SectionCard from '../components/ui/SectionCard'
 import Segmented from '../components/ui/Segmented'
+import { SendSuccessModal } from '../components/SendSuccess'
 import Modal from '../components/ui/Modal'
 import { useChartTheme } from '../utils/chartTheme'
 import { dateLocale, num, numberFormat, pct } from '../format'
@@ -116,6 +117,8 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
   const [busy, setBusy] = useState<'validate' | 'send' | null>(null)
   const [confirm, setConfirm] = useState(false)
   const [result, setResult] = useState<SendResult | null>(null)
+  /** Rückmeldungsfenster nach dem echten Senden */
+  const [sentInfo, setSentInfo] = useState<{ result: SendResult; pairName: string; side: 'buy' | 'sell'; priceDecimals: number } | null>(null)
   const [sendError, setSendError] = useState<string | null>(null)
   const [customText, setCustomText] = useState('')
   const [templates, setTemplates] = useState<TemplateDto[]>([])
@@ -329,6 +332,7 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
       // Wird gerade ein Entwurf bearbeitet, gilt er nach dem echten Senden als freigegeben (sonst ließe er sich ein zweites Mal senden)
       const r = await api().send({ pairId: pair.id, pairName: pair.name, side: input.side, input, levels: ladder.levels, validate, postOnly, sendCount: partial ? nowCount : undefined, draftId: validate ? undefined : draft?.id, exchange: pairsExchange })
       setResult(r)
+      if (!validate) setSentInfo({ result: r, pairName: pair.name, side: input.side, priceDecimals: pair.priceDecimals })
       if (!validate && draft && r.orders.some((o) => o.txid || o.uncertain)) {
         setDraftMsg(tr(`Der Entwurf „${draft.name}“ ist jetzt freigegeben (Plan-Nummer ${r.userref}).`, `The draft “${draft.name}” is now released (plan number ${r.userref}).`))
         setDraft(null)
@@ -735,6 +739,8 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
           </div>
         </Modal>
       )}
+
+      {sentInfo && <SendSuccessModal {...sentInfo} onClose={() => setSentInfo(null)} onOpenOrders={onOpenOrders} />}
 
       {confirm && ladder && pair && (
         <Modal title={tr('Orders wirklich senden?', 'Really send the orders?')} size="sm" onClose={() => !busy && setConfirm(false)}

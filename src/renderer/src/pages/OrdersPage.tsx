@@ -2,11 +2,12 @@ import { api } from '../api'
 import { Fragment, useEffect, useState } from 'react'
 import { OctagonX, RefreshCw, Send, TrendingUp, X } from 'lucide-react'
 import { assetLabel } from '@shared/safety'
-import type { OpenOrderDto, PlanDto, PlanStatusDto } from '@shared/ipc'
+import type { OpenOrderDto, PlanDto, PlanStatusDto, SendResult } from '@shared/ipc'
 import { profitLadderSuggestion } from '@shared/plan-status'
 import type { Prefill } from './PlannerPage'
 import SectionCard from '../components/ui/SectionCard'
 import Modal from '../components/ui/Modal'
+import { SendSuccessModal } from '../components/SendSuccess'
 import { dateLocale, num } from '../format'
 import { tr } from '@shared/i18n'
 import { useMoney } from '../money'
@@ -19,6 +20,7 @@ export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; on
   const [decimals, setDecimals] = useState<Record<string, number>>({})
   const dec = (pairId: string) => decimals[pairId] ?? 2
   const [balances, setBalances] = useState<Record<string, number>>({})
+  const [restSent, setRestSent] = useState<{ result: SendResult; pairName: string; side: 'buy' | 'sell'; priceDecimals: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [cancelPlan, setCancelPlan] = useState<PlanDto | null>(null)
   const [busy, setBusy] = useState(false)
@@ -119,6 +121,8 @@ export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; on
       if (r.orders.some((o) => o.uncertain)) setRestMsg({ ok: false, text: tr('Die Verbindung brach beim Senden ab. Klicke auf „Aktualisieren“ und prüfe, was wirklich angelegt wurde, bevor du noch einmal sendest.', 'The connection dropped while sending. Click “Refresh” and check what was really placed before you send again.') })
       if (!validate) {
         setRestPlan(null)
+        setRestMsg(null)
+        setRestSent({ result: r, pairName: p.pairName, side: p.side, priceDecimals: dec(p.pairId) })
         load()
       }
     } catch (e) {
@@ -243,6 +247,8 @@ export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; on
           </SectionCard>
         )}
       </div>
+
+      {restSent && <SendSuccessModal {...restSent} onClose={() => setRestSent(null)} />}
 
       {restPlan && (
         <Modal title={tr('Restliche Stufen senden?', 'Send the remaining levels?')} size="sm" onClose={() => !busy && setRestPlan(null)}

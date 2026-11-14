@@ -493,6 +493,7 @@ handle('send', (req: SendRequest): Promise<SendResult> => oneAtATime(async () =>
       })
       if (req.draftId) markDraftReleased(req.draftId, userref)
     }
+    return { userref, validate: req.validate, orders, check: await checkPlaced(ex, orders) }
   }
   return { userref, validate: req.validate, orders }
 }))
@@ -525,9 +526,27 @@ handle('plan:rest', (userref: number, validate: boolean): Promise<SendResult> =>
       ...p, sent: p.sent + ok.length, failed: p.failed + orders.length - ok.length, totalCost: p.totalCost + costOf([...ok, ...maybe]),
       sentIndices: [...(p.sentIndices ?? []), ...ok.map((o) => o.index), ...maybe.map((o) => o.index)],
     }))
+    return { userref, validate, orders, check: await checkPlaced(ex, orders) }
   }
   return { userref, validate, orders }
 }))
+
+/**
+ * Nachkontrolle nach dem echten Senden: fragt die offenen Orders ab und zählt, wie viele der eben angelegten dort stehen.
+ * Klappt die Abfrage nicht, gibt es keine Nachkontrolle (undefined), das Senden selbst ist davon nicht betroffen.
+ */
+async function checkPlaced(ex: ExchangeId, orders: SendResult['orders']): Promise<SendResult['check']> {
+  const placed = orders.filter((o) => o.txid).map((o) => o.txid as string)
+  if (!placed.length) return undefined
+  try {
+    // Kurz warten, damit die Börse die neuen Orders sicher in der Liste führt
+    if (!process.env.VITEST) await new Promise((r) => setTimeout(r, 1500))
+    const open = new Set((await clientFor(ex).openOrders()).map((o) => o.txid))
+    return { found: placed.filter((t) => open.has(t)).length, placed: placed.length }
+  } catch {
+    return undefined
+  }
+}
 
 /** Gegenwert der Orders, die wirklich angelegt wurden (oder vielleicht angelegt wurden) */
 function costOf(orders: { price: number; volume: number }[]): number {

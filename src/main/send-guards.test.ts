@@ -6,6 +6,7 @@ import * as store from './store'
 
 const posted: any[] = []
 let orderDelay = 0
+const filledIds = new Set<string>()
 vi.stubGlobal('fetch', async (url: string, init: any) => {
   const method = init?.method ?? 'GET'
   const path = url.replace('https://api.bitvavo.com/v2', '').split('?')[0]
@@ -19,7 +20,8 @@ vi.stubGlobal('fetch', async (url: string, init: any) => {
   }
   if (path === '/ticker/price') body = { market: 'BTC-EUR', price: '50000' }
   if (path === '/markets') body = [{ market: 'BTC-EUR', status: 'trading', base: 'BTC', quote: 'EUR', minOrderInBaseAsset: '0.00001', minOrderInQuoteAsset: '5', quantityDecimals: 8, tickSize: '1' }]
-  if (path === '/ordersOpen') body = []
+  // Offene Orders: alle angelegten außer denen, die der Test als „schon ausgeführt“ markiert
+  if (path === '/ordersOpen') body = posted.map((o, i) => ({ market: 'BTC-EUR', orderId: `o-${i + 1}`, side: o.side, price: o.price, amount: o.amount, clientOrderId: o.clientOrderId })).filter((_, i) => !filledIds.has(`o-${i + 1}`))
   return { status: 200, text: async () => JSON.stringify(body) }
 })
 await import('./index')
@@ -97,5 +99,24 @@ describe('Sicherungen vor dem Senden', () => {
     const again = await call('plan:rest', userref, false)
     expect(again.ok).toBe(false)
     expect(again.error).toMatch(/schon gesendet/)
+  })
+
+  it('nach dem Senden prüft die App nach, ob alle Orders wirklich offen bei der Börse stehen', async () => {
+    posted.length = 0
+    const r = await send(lv(2, 49000, 0.0004))
+    expect(r.ok).toBe(true)
+    expect(r.value.check).toEqual({ found: 2, placed: 2 })
+    // eine Order wurde sofort ausgeführt: sie fehlt in den offenen Orders
+    posted.length = 0
+    filledIds.add('o-2')
+    const r2 = await send(lv(2, 49000, 0.0004))
+    filledIds.clear()
+    expect(r2.value.check).toEqual({ found: 1, placed: 2 })
+  })
+
+  it('beim Probelauf gibt es keine Nachkontrolle', async () => {
+    const r = await call('send', { pairId: 'BTC-EUR', pairName: 'BTC/EUR', side: 'buy', input: {} as any, levels: lv(2, 49000, 0.0004), validate: true, postOnly: true })
+    expect(r.ok).toBe(true)
+    expect(r.value.check).toBeUndefined()
   })
 })

@@ -109,7 +109,7 @@ export function createDemoApi(): Api {
       plans.unshift(plan)
       const placed = place(plan, plan.sentIndices!.map((i) => req.levels.findIndex((l) => l.index === i)))
       if (req.draftId) drafts = drafts.map((d) => (d.id === req.draftId ? { ...d, status: 'released', releasedAt: new Date().toISOString(), userref: plan.userref } : d))
-      return wait({ userref: plan.userref, validate: false, orders: placed }, 500)
+      return wait({ userref: plan.userref, validate: false, orders: placed, check: { found: placed.filter((o) => o.txid).length, placed: placed.filter((o) => o.txid).length } }, 500)
     },
     async sendRest(userref, validate) {
       const plan = plans.find((p) => p.userref === userref)
@@ -119,7 +119,7 @@ export function createDemoApi(): Api {
       const placed = place(plan, rest.map((l) => plan.levels!.indexOf(l)))
       plan.sentIndices = [...(plan.sentIndices ?? []), ...rest.map((l) => l.index)]
       plan.sent += rest.length
-      return wait({ userref, validate: false, orders: placed }, 500)
+      return wait({ userref, validate: false, orders: placed, check: { found: placed.filter((o) => o.txid).length, placed: placed.filter((o) => o.txid).length } }, 500)
     },
     async cancelPlan(userref) {
       const n = orders.filter((o) => o.userref === userref).length
