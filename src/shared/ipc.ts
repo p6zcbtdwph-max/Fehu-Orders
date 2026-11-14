@@ -47,6 +47,11 @@ export interface SendResult {
   userref: number
   validate: boolean
   orders: { index: number; price: number; volume: number; txid?: string; error?: string; uncertain?: boolean }[]
+  /**
+   * Nachkontrolle direkt nach dem echten Senden: wie viele der angelegten Orders die Börse in den offenen Orders zeigt.
+   * Fehlt, wenn die Abfrage nicht klappte (dann bleibt nur die Antwort der Börse beim Anlegen).
+   */
+  check?: { found: number; placed: number }
 }
 
 export interface OpenOrderDto {

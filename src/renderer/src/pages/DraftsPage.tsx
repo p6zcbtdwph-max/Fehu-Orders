@@ -6,6 +6,7 @@ import type { DraftDto, PairDto, SendResult } from '@shared/ipc'
 import { wrongSide } from '@shared/safety'
 import SectionCard from '../components/ui/SectionCard'
 import Modal from '../components/ui/Modal'
+import { SendSummary } from '../components/SendSuccess'
 import Badge from '../components/ui/Badge'
 import { dateLocale, num, pct } from '../format'
 import { tr } from '@shared/i18n'
@@ -251,6 +252,7 @@ function ReleaseModal({ draft, pair, last, hasKey, onNeedKey, onClose }: {
         <button type="button" className="btn btn-secondary" disabled={blocked} onClick={() => run(true)}><FlaskConical size={16} /> {busy === 'validate' ? tr('Prüfe …', 'Checking …') : tr('Probelauf', 'Test run')}</button>
         <button type="button" className="btn btn-primary" disabled={blocked} onClick={() => run(false)}><Rocket size={16} /> {busy === 'send' ? tr('Sende …', 'Sending …') : tr(`Freigeben und ${ev?.count ?? 0} Orders senden`, `Release and send ${ev?.count ?? 0} orders`)}</button>
       </>}>
+      {sentOk && result ? <SendSummary result={result} pairName={draft.pairName} side={draft.side} priceDecimals={dec} /> : (
       <div className="space-y-2 text-sm">
         <p><strong>{draft.name}</strong>{draft.scenario && <span className="text-ink-muted"> · {draft.scenario}</span>}</p>
         {draft.note && <p className="text-ink-muted">{draft.note}</p>}
@@ -288,6 +290,7 @@ function ReleaseModal({ draft, pair, last, hasKey, onNeedKey, onClose }: {
         )}
         {!result && !err && <p className="text-xs text-ink-muted">{tr(`Erst der Knopf „Freigeben und senden“ legt die Orders echt bei ${exName()} an. Ab dann sperrt ${exName()} den vollen Betrag auf deinem Konto, bis die Orders ausgeführt oder storniert sind. Der Probelauf prüft nur.`, `Only the “Release and send” button really places the orders at ${exName()}. From then on ${exName()} locks the full amount in your account until the orders are filled or cancelled. The test run only checks.`)}</p>}
       </div>
+      )}
     </Modal>
   )
 }
