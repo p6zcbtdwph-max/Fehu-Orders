@@ -7,6 +7,7 @@ import type { DraftDto, PairDto, SendResult, TemplateDto } from '@shared/ipc'
 import { firstTestInput, wrongSide } from '@shared/safety'
 import KpiStrip from '../components/ui/KpiStrip'
 import PairPicker from '../components/PairPicker'
+import CenterSliders from '../components/CenterSliders'
 import SectionCard from '../components/ui/SectionCard'
 import Segmented from '../components/ui/Segmented'
 import Modal from '../components/ui/Modal'
@@ -127,7 +128,13 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
 
   const pair = pairs.find((p) => p.id === pairId)
   const set = <K extends keyof LadderInput>(k: K, v: LadderInput[K]) => {
-    setInput((s) => ({ ...s, [k]: v }))
+    setInput((s) => {
+      const next = { ...s, [k]: v }
+      // Neue Formel: Regler springen auf deren Standardwert, damit man ihn sieht
+      if (k === 'spacing') next.orderCenter = undefined
+      if (k === 'curve') next.volumeCenter = undefined
+      return next
+    })
     setResult(null)
   }
 
@@ -448,6 +455,11 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
             {['linear', 'log', 'exp'].includes(input.curve) && (
               <NumberField label="Letzte Stufe im Verhältnis zur ersten" value={input.ratio} onChange={(v) => set('ratio', v)}
                 hint={input.ratio >= 1 ? `Die letzte Stufe ist ${num(input.ratio, 2)}× so groß wie die erste.` : 'Unter 1: die Stufen werden kleiner.'} />
+            )}
+            {ladder?.centers && (
+              <CenterSliders side={input.side} steps={input.steps} centers={ladder.centers} shares={ladder.levels.map((l) => l.share)}
+                orderCenter={input.orderCenter} volumeCenter={input.volumeCenter} priceStart={input.priceStart} priceEnd={input.priceEnd}
+                formatPrice={(p) => `${fmtPrice(p, p >= 100 ? 0 : Math.min(pair?.priceDecimals ?? 2, 2))} ${sym}`} onChange={(k, v) => set(k, v)} />
             )}
             <label className="flex items-start gap-2 text-sm">
               <input type="checkbox" className="checkbox mt-0.5" checked={postOnly} onChange={(e) => setPostOnly(e.target.checked)} />

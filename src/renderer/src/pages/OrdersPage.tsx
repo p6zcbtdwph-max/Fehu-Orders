@@ -73,7 +73,7 @@ export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; on
     const s = profitLadderSuggestion(st.averagePrice, st.filledVolume)
     onPlanSell({
       pairId: p.pairId,
-      input: { ...p.input, side: 'sell', priceStart: +s.priceStart.toPrecision(6), priceEnd: +s.priceEnd.toPrecision(6), total: s.total, curve: 'linear', ratio: 2, customWeights: undefined },
+      input: { ...p.input, side: 'sell', priceStart: +s.priceStart.toPrecision(6), priceEnd: +s.priceEnd.toPrecision(6), total: s.total, curve: 'linear', ratio: 2, customWeights: undefined, orderCenter: undefined, volumeCenter: undefined },
     })
   }
 
