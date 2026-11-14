@@ -10,7 +10,7 @@ import Badge from '../components/ui/Badge'
 import { dateLocale, num, pct } from '../format'
 import { tr } from '@shared/i18n'
 import { useMoney } from '../money'
-import { exName, probeOk } from '@shared/exchanges'
+import { activeExchange, exName, probeOk } from '@shared/exchanges'
 
 /** Was ein Entwurf jetzt bedeuten würde: Stufen nach den aktuellen Regeln des Paars */
 function evaluate(d: DraftDto, pair: PairDto | undefined, last: number | undefined) {
@@ -230,7 +230,7 @@ function ReleaseModal({ draft, pair, last, hasKey, onNeedKey, onClose }: {
     try {
       setResult(await api().send({
         pairId: pair.id, pairName: pair.name, side: draft.side, input: draft.input, levels: ev.ladder.levels, validate, postOnly: draft.postOnly,
-        sendCount: ev.count < ev.sendable.length ? ev.count : undefined, draftId: draft.id,
+        sendCount: ev.count < ev.sendable.length ? ev.count : undefined, draftId: draft.id, exchange: activeExchange(),
       }))
     } catch (e) {
       setErr((e as Error).message)

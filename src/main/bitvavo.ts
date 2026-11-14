@@ -129,11 +129,13 @@ export class Bitvavo implements Exchange {
           name: `${m.base}/${m.quote}`,
           base: String(m.base),
           quote: String(m.quote),
-          priceDecimals: tick > 0 ? decimalsOf(m.tickSize) : 2,
+          priceDecimals: tick > 0 ? decimalsOf(m.tickSize) : Number(m.pricePrecision) > 0 ? 8 : 2,
           volumeDecimals: Number.isFinite(Number(m.quantityDecimals)) ? Number(m.quantityDecimals) : 8,
           orderMin: Number(m.minOrderInBaseAsset ?? 0),
           costMin: Number(m.minOrderInQuoteAsset ?? 0),
           ...(tick > 0 ? { tickSize: tick } : {}),
+          // Ältere Antwort ohne tickSize: Bitvavo begrenzte dann die gültigen Ziffern (pricePrecision, meist 5)
+          ...(!(tick > 0) && Number(m.pricePrecision) > 0 ? { priceSignificant: Number(m.pricePrecision) } : {}),
         }
       })
       .sort((a, b) => a.name.localeCompare(b.name))
