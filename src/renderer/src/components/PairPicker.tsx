@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Search, Star } from 'lucide-react'
 import type { PairDto } from '@shared/ipc'
 import { searchPairs } from '@shared/pair-search'
+import { tr } from '@shared/i18n'
 import { exName } from '@shared/exchanges'
 
 /** Suchfeld für Handelspaare: Coin-Symbol tippen, mit Pfeiltasten wählen, Enter übernimmt. */
@@ -39,8 +40,8 @@ export default function PairPicker({ pairs, value, watchlist, onChange }: { pair
         role="combobox"
         aria-expanded={open}
         aria-controls="pair-list"
-        aria-label="Handelspaar suchen"
-        placeholder={current ? `${current.name} · Symbol suchen …` : 'Symbol suchen, z. B. SOL'}
+        aria-label={tr('Handelspaar suchen', 'Search trading pair')}
+        placeholder={current ? `${current.name} · ${tr('Symbol suchen …', 'search symbol …')}` : tr('Symbol suchen, z. B. SOL', 'Search symbol, e.g. SOL')}
         value={open ? query : current?.name ?? ''}
         onFocus={() => { setOpen(true); setQuery('') }}
         onChange={(e) => { setQuery(e.target.value); setOpen(true) }}
@@ -53,7 +54,7 @@ export default function PairPicker({ pairs, value, watchlist, onChange }: { pair
       />
       {open && (
         <ul id="pair-list" ref={list} role="listbox" className="card absolute z-30 mt-1 max-h-72 w-full overflow-y-auto p-1 shadow-lg">
-          {hits.length === 0 && <li className="px-3 py-2 text-sm text-ink-muted">Kein Paar mit „{query}“ bei {exName()}.</li>}
+          {hits.length === 0 && <li className="px-3 py-2 text-sm text-ink-muted">{tr(`Kein Paar mit „${query}“ bei ${exName()}.`, `No pair with “${query}” at ${exName()}.`)}</li>}
           {hits.map((p, i) => (
             <li key={p.id} data-i={i} role="option" aria-selected={i === active}
               onMouseDown={(e) => { e.preventDefault(); pick(p) }} onMouseEnter={() => setActive(i)}

@@ -1,5 +1,5 @@
 import { api, isDemo, setDemo } from './api'
-import Guide, { GUIDE_STEPS } from './components/Guide'
+import Guide, { guideSteps } from './components/Guide'
 import { useEffect, useState } from 'react'
 import Segmented from './components/ui/Segmented'
 import { MoneyProvider, type Currency } from './money'
@@ -263,7 +263,7 @@ export default function App(): JSX.Element {
         )}
         <div key={`${demo ? 'demo' : 'live'}-${exchange}`} className="contents">
         {/* Der Planer bleibt beim Reiterwechsel erhalten (nur versteckt), damit keine Eingaben verloren gehen */}
-        <div className={page === 'planner' ? 'contents' : 'hidden'}><PlannerPage hasKey={!!hasKey} onNeedKey={() => setPage('key')} prefill={prefill} onPrefillUsed={() => setPrefill(null)} onOpenDrafts={() => setPage('drafts')} onOpenOrders={() => setPage('orders')} /></div>
+        <div className={page === 'planner' ? 'contents' : 'hidden'}><PlannerPage hasKey={!!hasKey} active={page === 'planner'} onOpenSettings={() => setPage('settings')} onNeedKey={() => setPage('key')} prefill={prefill} onPrefillUsed={() => setPrefill(null)} onOpenDrafts={() => setPage('drafts')} onOpenOrders={() => setPage('orders')} /></div>
         {page === 'drafts' && <DraftsPage hasKey={!!hasKey} onNeedKey={() => setPage('key')}
           onEdit={(d) => { setPrefill({ pairId: d.pairId, input: d.input, postOnly: d.postOnly, sendCount: d.sendCount, draft: d }); setPage('planner') }} />}
         {page === 'orders' && <OrdersPage hasKey={!!hasKey} onPlanSell={(p) => { setPrefill(p); setPage('planner') }} />}
@@ -273,7 +273,7 @@ export default function App(): JSX.Element {
         </div>
       </main>
       {guideStep !== null && (
-        <Guide step={Math.min(guideStep, GUIDE_STEPS.length - 1)} onStep={setGuideStep} onClose={closeGuide} onPage={setPage}
+        <Guide step={Math.min(guideStep, guideSteps().length - 1)} onStep={setGuideStep} onClose={closeGuide} onPage={setPage}
           demo={demo} onStartDemo={() => { switchDemo(true); closeGuide() }} />
       )}
     </div>

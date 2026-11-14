@@ -9,7 +9,7 @@ import { exchangeOf, isExchangeId, type ExchangeId } from '../shared/exchanges'
 import type { LadderInput, LadderLevel, Side } from '../shared/ladder'
 import type { DraftDto, LogEntry } from '../shared/ipc'
 import { makeBackup, type BackupData } from '../shared/backup'
-import { tr, type Lang } from '../shared/i18n'
+import { langFromLocale, tr, type Lang } from '../shared/i18n'
 
 const file = (name: string) => join(app.getPath('userData'), name)
 
@@ -134,7 +134,16 @@ export function cleanSettings(raw: Record<string, unknown>): Settings {
 }
 
 export function getSettings(): Settings {
-  return cleanSettings(readJson<Record<string, unknown>>('settings.json', {}))
+  const raw = readJson<Record<string, unknown>>('settings.json', {})
+  const s = cleanSettings(raw)
+  // Neue Nutzer ohne gespeichertes Zahlenformat: passend zur Systemsprache (englisches System → 1,234.56)
+  if (raw.numberFormat === undefined && raw.language === undefined) s.numberFormat = langFromLocale(systemLocale())
+  return s
+}
+
+/** Systemsprache des Macs (in Tests ohne Electron leer) */
+export function systemLocale(): string | undefined {
+  try { return app.getLocale?.() } catch { return undefined }
 }
 
 export function saveSettings(patch: Partial<Settings>): Settings {

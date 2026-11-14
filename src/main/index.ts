@@ -9,7 +9,7 @@ import { Coinbase } from './coinbase'
 import type { ClosedOrder, Credentials, Exchange, PairInfo } from './exchange'
 import { EXCHANGE_IDS, exchangeName, exchangeOf, isExchangeId, sendLimit, type ExchangeId } from '../shared/exchanges'
 import {
-  addLog, addPlan, clearCredentials, exportAll, importAll, getLog, markAlarmFired, deleteDraft, deleteTemplate, getDrafts, markDraftReleased, saveDraft, getNotified, getPlans, getSettings, getTemplates, hasRealPlan, loadCredentials, newUserref, saveCredentials, saveSettings, saveTemplate, setNotified, updatePlan, type Settings,
+  addLog, addPlan, systemLocale, clearCredentials, exportAll, importAll, getLog, markAlarmFired, deleteDraft, deleteTemplate, getDrafts, markDraftReleased, saveDraft, getNotified, getPlans, getSettings, getTemplates, hasRealPlan, loadCredentials, newUserref, saveCredentials, saveSettings, saveTemplate, setNotified, updatePlan, type Settings,
 } from './store'
 import type { DraftDto, LogEntry, PlanStatusDto, SaveKeyResult, SendRequest, SendResult, TemplateDto } from '../shared/ipc'
 import { alarmHit, checkKeyFormat, normalizeCoinbase, priceGuard } from '../shared/safety'
@@ -17,7 +17,7 @@ import { planStatus, type OrderSnapshot } from '../shared/plan-status'
 import { langFromLocale, setLang, tr } from '../shared/i18n'
 
 /** Sprache aus den Einstellungen, sonst die Systemsprache des Macs */
-const applyLanguage = () => setLang(getSettings().language ?? langFromLocale(app.getLocale?.()))
+const applyLanguage = () => setLang(getSettings().language ?? langFromLocale(systemLocale()))
 
 let mainWindow: BrowserWindow | null = null
 
@@ -139,7 +139,7 @@ handle('balances', () => client().balances())
 handle('orders:open', () => client().openOrders())
 // Pläne und Entwürfe der aktiven Börse (ältere ohne Börse gehören zu Kraken)
 handle('plans', () => getPlans().filter((p) => exchangeOf(p) === activeEx()))
-handle('settings', () => ({ ...getSettings(), language: getSettings().language ?? langFromLocale(app.getLocale?.()) }))
+handle('settings', () => ({ ...getSettings(), language: getSettings().language ?? langFromLocale(systemLocale()) }))
 handle('settings:save', (s: Partial<Settings>) => {
   const patch: Partial<Settings> = {}
   if (s.maxPlanEur !== undefined) patch.maxPlanEur = Math.max(1, Number(s.maxPlanEur) || 1)

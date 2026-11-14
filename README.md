@@ -1,6 +1,12 @@
 # Fehu Orders (Beta)
 
-Mac-App, um viele gestaffelte Limit-Orders auf einmal zu planen und an Kraken zu senden. Design aus dem FF Lifemanager.
+Mac-App, um viele gestaffelte Limit-Orders auf einmal zu planen und an Kraken zu senden. Design aus dem FF Lifemanager. Auf Deutsch und Englisch (Umschalter „Sprache“ unten links).
+
+> **Wichtiger Risiko-Hinweis / Important risk notice**
+>
+> Krypto ist hochriskant, du kannst dein eingesetztes Geld teilweise oder ganz verlieren. Orders, die du sendest, werden bei Kraken wirklich ausgeführt und lassen sich danach nicht rückgängig machen. Fehu Orders ist ein Werkzeug, keine Anlageberatung, und gibt keine Empfehlungen. Die Beta kann Fehler haben, Nutzung ohne Gewähr. Setze nur Geld ein, dessen Verlust du verkraften kannst. Zur Sicherheit kann am Anfang pro Plan nur bis 50 € gesendet werden (Einstellungen › Sicherheit).
+>
+> Crypto is high risk; you can lose some or all of your money. Orders you send are really executed at Kraken and cannot be undone. Fehu Orders is a tool, not investment advice, and makes no recommendations. The beta may contain bugs and comes without warranty. Only use money you can afford to lose. For safety, each plan is limited to 50 € at the start (Settings › Safety).
 
 ## Was die Beta kann
 
@@ -53,6 +59,10 @@ Mac-App, um viele gestaffelte Limit-Orders auf einmal zu planen und an Kraken zu
 - Reine Abfragen werden bei „Rate limit“ oder Überlastung bis zu zweimal mit Pause wiederholt, Orders nie
 - Status aller Pläne mit einer `ClosedOrders`-Abfrage (seitenweise) statt einer pro Plan
 - Netz- und Wartungsfehler als verständliche deutsche Meldungen; Preise und Mengen ohne Exponent-Schreibweise
+
+## Sprache
+
+Jeder Text steht an seiner Stelle in beiden Sprachen: `tr('Speichern', 'Save')` aus `src/shared/i18n.ts` (geht auch mit JSX). Haupt- und Fensterprozess setzen die Sprache aus `Settings.language`, ohne Einstellung gilt die Systemsprache. Beim Umschalten der Sprache wechselt auch das Zahlenformat mit, es lässt sich danach getrennt zurückstellen. `tr()` nie auf Modulebene in Konstanten auswerten, sondern beim Zeichnen.
 
 ## Entwicklung
 
