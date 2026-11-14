@@ -109,8 +109,10 @@ handle('key:status', () => {
   const keys = Object.fromEntries(EXCHANGE_IDS.map((id) => [id, loadCredentials(id) !== null])) as Record<ExchangeId, boolean>
   return { hasKey: keys[ex], encryption: safeStorage.isEncryptionAvailable(), touchId: touchIdAvailable(), exchange: ex, keys }
 })
-handle('key:save', async (key: string, secret: string, opts?: { noWithdrawConfirmed?: boolean }): Promise<SaveKeyResult> => {
-  const ex = activeEx()
+/** Der Schlüssel-Reiter verwaltet Schlüssel jeder Börse, auch wenn gerade eine andere benutzt wird */
+const keyEx = (ex: unknown): ExchangeId => (isExchangeId(ex) ? ex : activeEx())
+handle('key:save', async (key: string, secret: string, opts?: { noWithdrawConfirmed?: boolean; exchange?: ExchangeId }): Promise<SaveKeyResult> => {
+  const ex = keyEx(opts?.exchange)
   const creds = ex === 'coinbase' ? normalizeCoinbase(String(key), String(secret)) : { key: String(key).trim(), secret: String(secret).trim() }
   const format = checkKeyFormat(creds.key, creds.secret, ex)
   if (format.length) throw new Error(format.join(' '))
@@ -125,9 +127,9 @@ handle('key:save', async (key: string, secret: string, opts?: { noWithdrawConfir
   return { saved, checks }
 })
 // Ein gespeicherter Schlüssel wurde beim Speichern schon ohne Auszahlungsrecht bestätigt
-handle('key:verify', () => client().checkPermissions({ noWithdrawConfirmed: true }))
-handle('key:clear', () => {
-  const ex = activeEx()
+handle('key:verify', (ex?: ExchangeId) => clientFor(keyEx(ex)).checkPermissions({ noWithdrawConfirmed: true }))
+handle('key:clear', (exArg?: ExchangeId) => {
+  const ex = keyEx(exArg)
   clearCredentials(ex)
   resetClient(ex)
   addLog({ action: 'key-clear', success: true, message: `${exchangeName(ex)}: ${tr('Schlüssel gelöscht', 'Key deleted')}` })

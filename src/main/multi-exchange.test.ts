@@ -96,4 +96,17 @@ describe('Mehrere Börsen', () => {
     expect(hits).toContain('kraken:CancelAll')
     expect(hits).toContain('bitvavo:DELETE /orders')
   })
+
+  it('Schlüssel-Reiter verwaltet Schlüssel einer anderen Börse, ohne die aktive Börse zu wechseln', async () => {
+    await call('settings:save', { exchange: 'kraken' })
+    const krakenBefore = store.loadCredentials('kraken')
+    await call('key:clear', 'bitvavo')
+    expect(store.loadCredentials('bitvavo')).toBeNull()
+    const r = await call('key:save', bvKey.key, bvKey.secret, { noWithdrawConfirmed: true, exchange: 'bitvavo' })
+    expect(r.value.saved).toBe(true)
+    expect(store.loadCredentials('bitvavo')).toEqual(bvKey)
+    expect(store.loadCredentials('kraken')).toEqual(krakenBefore)
+    expect((await call('key:verify', 'bitvavo')).value.every((c: any) => c.ok)).toBe(true)
+    expect((await call('key:status')).value).toMatchObject({ exchange: 'kraken', keys: { bitvavo: true } })
+  })
 })
