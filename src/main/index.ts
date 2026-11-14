@@ -5,7 +5,7 @@ import { localDate } from '../shared/dates'
 import { join } from 'node:path'
 import { Kraken, type ClosedOrder, type PairInfo } from './kraken'
 import {
-  addLog, addPlan, clearCredentials, exportAll, importAll, getLog, markAlarmFired, deleteDraft, deleteTemplate, getDrafts, markDraftReleased, saveDraft, getNotified, getPlans, getSettings, getTemplates, loadCredentials, newUserref, saveCredentials, saveSettings, saveTemplate, setNotified, updatePlan, type Settings,
+  addLog, addPlan, systemLocale, clearCredentials, exportAll, importAll, getLog, markAlarmFired, deleteDraft, deleteTemplate, getDrafts, markDraftReleased, saveDraft, getNotified, getPlans, getSettings, getTemplates, loadCredentials, newUserref, saveCredentials, saveSettings, saveTemplate, setNotified, updatePlan, type Settings,
 } from './store'
 import type { DraftDto, LogEntry, PlanStatusDto, SaveKeyResult, SendRequest, SendResult, TemplateDto } from '../shared/ipc'
 import { alarmHit, checkKeyFormat, priceGuard } from '../shared/safety'
@@ -13,7 +13,7 @@ import { planStatus, type OrderSnapshot } from '../shared/plan-status'
 import { langFromLocale, setLang, tr } from '../shared/i18n'
 
 /** Sprache aus den Einstellungen, sonst die Systemsprache des Macs */
-const applyLanguage = () => setLang(getSettings().language ?? langFromLocale(app.getLocale?.()))
+const applyLanguage = () => setLang(getSettings().language ?? langFromLocale(systemLocale()))
 
 let pairCache: PairInfo[] | null = null
 let mainWindow: BrowserWindow | null = null
@@ -104,7 +104,7 @@ handle('prices', (pairIds: string[]) => client().lastPrices(pairIds.filter((x) =
 handle('balances', () => client().balances())
 handle('orders:open', () => client().openOrders())
 handle('plans', () => getPlans())
-handle('settings', () => ({ ...getSettings(), language: getSettings().language ?? langFromLocale(app.getLocale?.()) }))
+handle('settings', () => ({ ...getSettings(), language: getSettings().language ?? langFromLocale(systemLocale()) }))
 handle('settings:save', (s: Partial<Settings>) => {
   const patch: Partial<Settings> = {}
   if (s.maxPlanEur !== undefined) patch.maxPlanEur = Math.max(1, Number(s.maxPlanEur) || 1)
