@@ -52,7 +52,27 @@ export interface LadderInput {
    * im Mittel liegt. Fehlt der Wert, gilt die gewählte Formel.
    */
   volumeCenter?: number
+  /**
+   * Preiszonen: statt eines Bereichs mehrere getrennte Bereiche mit eigenem Anteil am Betrag und eigener Stufenzahl.
+   * Innerhalb jeder Zone gelten Preisabstände und Mengenverteilung des Plans. Sind Zonen gesetzt, werden
+   * priceStart, priceEnd und steps nur noch als Zusammenfassung geführt (siehe zoneSummary), die Schwerpunkt-Regler gelten nicht.
+   */
+  zones?: LadderZone[]
 }
+
+/** Eine Preiszone: z. B. „60.000 bis 57.000 €, 4 Stufen, 20 % vom Betrag“ */
+export interface LadderZone {
+  /** Preis der ersten Stufe der Zone (nah am Kurs) */
+  priceStart: number
+  /** Preis der letzten Stufe der Zone (weiter weg). Bei 1 Stufe ohne Bedeutung. */
+  priceEnd: number
+  steps: number
+  /** Anteil am Gesamtbetrag in Prozent (wird über alle Zonen auf 100 % umgerechnet) */
+  share: number
+}
+
+/** Höchstens so viele Zonen pro Plan */
+export const MAX_ZONES = 5
 
 /** Schwerpunkte einer Leiter, jeweils 0–1 (Anteil des Wegs von der ersten zur letzten Stufe) */
 export interface LadderCenters {
@@ -80,6 +100,8 @@ export interface LadderLevel {
   problem?: string
   /** Die Stufe lag unter dem Mindest-Orderwert und wurde darauf angehoben */
   raised?: boolean
+  /** Nur bei Preiszonen: zu welcher Zone die Stufe gehört (0 = erste Zone) */
+  zone?: number
 }
 
 export interface Ladder {
@@ -361,7 +383,132 @@ export function validateInput(input: LadderInput): string[] {
   return e
 }
 
+/** Sind für diesen Plan Preiszonen gesetzt? */
+export const hasZones = (input: Pick<LadderInput, 'zones'>): boolean => Array.isArray(input.zones) && input.zones.length > 0
+
+/** Preis, bei dem eine Zone endet (bei 1 Stufe ist das ihr Startpreis) */
+export const zoneEnd = (z: LadderZone): number => (z.steps === 1 ? z.priceStart : z.priceEnd)
+
+/**
+ * Hält Anfang, Ende und Stufenzahl des Plans passend zu den Zonen, damit Entwürfe, Kursalarm,
+ * Plan-Titel und Übersichten weiter mit priceStart, priceEnd und steps arbeiten können.
+ */
+export function zoneSummary(input: LadderInput): LadderInput {
+  if (!hasZones(input)) return input
+  const zs = input.zones as LadderZone[]
+  const steps = zs.reduce((a, z) => a + (Number.isFinite(z.steps) ? z.steps : 0), 0)
+  return { ...input, priceStart: zs[0].priceStart, priceEnd: zoneEnd(zs[zs.length - 1]), steps, orderCenter: undefined, volumeCenter: undefined }
+}
+
+/** Fehler in den Zonen (Reihenfolge, Überschneidung, Werte), leer wenn alles passt */
+export function validateZones(input: LadderInput): string[] {
+  const e: string[] = []
+  const zs = input.zones ?? []
+  const buy = input.side === 'buy'
+  if (zs.length > MAX_ZONES) e.push(tr(`Höchstens ${MAX_ZONES} Zonen.`, `At most ${MAX_ZONES} zones.`))
+  if (input.curve === 'custom') e.push(tr('Mit Preiszonen gibt es keine eigenen Prozente je Stufe. Den Anteil legst du je Zone fest.', 'Custom percentages per level are not available with price zones. Set the share per zone instead.'))
+  const total = zs.reduce((a, z) => a + (Number.isFinite(z.steps) ? z.steps : 0), 0)
+  if (total > MAX_STEPS) e.push(tr(`Alle Zonen zusammen höchstens ${MAX_STEPS} Stufen (jetzt ${total}).`, `All zones together at most ${MAX_STEPS} levels (now ${total}).`))
+  zs.forEach((z, i) => {
+    const n = i + 1
+    if (!(z.priceStart > 0) || (z.steps > 1 && !(z.priceEnd > 0))) e.push(tr(`Zone ${n}: Preise müssen größer als 0 sein.`, `Zone ${n}: prices must be greater than 0.`))
+    if (!Number.isInteger(z.steps) || z.steps < 1) e.push(tr(`Zone ${n}: Die Anzahl der Stufen muss eine ganze Zahl ab 1 sein.`, `Zone ${n}: the number of levels must be a whole number of at least 1.`))
+    if (!(z.share > 0) || !Number.isFinite(z.share)) e.push(tr(`Zone ${n}: Der Anteil muss größer als 0 % sein.`, `Zone ${n}: the share must be greater than 0 %.`))
+    if (z.steps > 1 && z.priceStart > 0 && z.priceEnd > 0) {
+      if (buy && z.priceEnd > z.priceStart) e.push(tr(`Zone ${n}: Beim Kauf liegt die letzte Stufe unter der ersten.`, `Zone ${n}: when buying, the last level is below the first.`))
+      if (!buy && z.priceEnd < z.priceStart) e.push(tr(`Zone ${n}: Beim Verkauf liegt die letzte Stufe über der ersten.`, `Zone ${n}: when selling, the last level is above the first.`))
+    }
+    const prev = zs[i - 1]
+    if (prev && z.priceStart > 0 && zoneEnd(prev) > 0) {
+      const ok = buy ? z.priceStart < zoneEnd(prev) : z.priceStart > zoneEnd(prev)
+      if (!ok) e.push(tr(
+        `Zone ${n} muss ${buy ? 'unter' : 'über'} Zone ${i} liegen. Die Zonen gehen vom Kurs weg ${buy ? 'nach unten' : 'nach oben'} und dürfen sich nicht überschneiden.`,
+        `Zone ${n} must be ${buy ? 'below' : 'above'} zone ${i}. Zones go away from the price ${buy ? 'downwards' : 'upwards'} and must not overlap.`,
+      ))
+    }
+  })
+  return e
+}
+
+/** Plan mit Preiszonen: jede Zone ist eine eigene kleine Leiter, am Ende werden alle aneinandergehängt */
+function buildZoneLadder(input: LadderInput, rules: PairRules, opts: LadderOptions): Ladder {
+  const zs = input.zones as LadderZone[]
+  const errors = [...validateZones(input)]
+  if (!(input.total > 0)) errors.push(input.side === 'buy' ? tr('Der Gesamtbetrag muss größer als 0 sein.', 'The total amount must be greater than 0.') : tr('Die Gesamtmenge muss größer als 0 sein.', 'The total volume must be greater than 0.'))
+  if (!(input.ratio > 0)) errors.push(tr('Das Verhältnis muss größer als 0 sein.', 'The ratio must be greater than 0.'))
+  if (errors.length) return { levels: [], totalVolume: 0, totalCost: 0, averagePrice: 0, valid: false, errors }
+
+  const shareSum = zs.reduce((a, z) => a + z.share, 0)
+  const levels: LadderLevel[] = []
+  zs.forEach((z, zi) => {
+    const part = z.share / shareSum
+    const sub = buildLadder({
+      side: input.side, priceStart: z.priceStart, priceEnd: zoneEnd(z), steps: z.steps, total: input.total * part,
+      spacing: input.spacing, curve: input.curve, ratio: input.ratio,
+    }, rules, opts)
+    for (const err of sub.errors) {
+      const msg = tr(`Zone ${zi + 1}: ${err}`, `Zone ${zi + 1}: ${err}`)
+      if (!errors.includes(msg)) errors.push(msg)
+    }
+    for (const l of sub.levels) levels.push({ ...l, index: levels.length, share: l.share * part, zone: zi })
+  })
+
+  // Auch zwischen den Zonen muss jede Stufe echt weiter weg vom Kurs liegen als die vorige (Rundung an den Zonengrenzen)
+  const dir = input.side === 'buy' ? -1 : 1
+  const unordered = levels.some((l, i) => i > 0 && l.zone !== levels[i - 1].zone && !((l.price - levels[i - 1].price) * dir > 0))
+  if (unordered) errors.push(tr('Zwei Zonen stoßen nach dem Runden auf denselben Preis. Lass etwas mehr Abstand zwischen den Zonen.', 'Two zones meet at the same price after rounding. Leave a bit more space between the zones.'))
+
+  const ok = levels.filter((l) => !l.problem)
+  const totalVolume = ok.reduce((a, l) => a + l.volume, 0)
+  const totalCost = ok.reduce((a, l) => a + l.cost, 0)
+  const minOn = opts.minCost !== undefined
+  const minCost = minOn && Number.isFinite(opts.minCost) && (opts.minCost as number) > 0 ? (opts.minCost as number) : 0
+  return {
+    levels,
+    totalVolume,
+    totalCost,
+    averagePrice: totalVolume > 0 ? totalCost / totalVolume : 0,
+    valid: errors.length === 0,
+    errors,
+    ...(minOn ? { raised: { count: levels.filter((l) => l.raised).length, minCost } } : {}),
+  }
+}
+
+/**
+ * Teilt einen einfachen Bereich in Zonen auf (Startpunkt beim Umschalten auf Preiszonen):
+ * gleich breite Abschnitte mit einer kleinen Lücke dazwischen, der mittlere bekommt den größten Anteil.
+ */
+export function splitIntoZones(input: Pick<LadderInput, 'priceStart' | 'priceEnd' | 'steps'>, count = 3): LadderZone[] {
+  const n = Math.max(1, Math.min(MAX_ZONES, Math.floor(count)))
+  const { priceStart: a, priceEnd: b } = input
+  const width = (b - a) / n
+  const gap = width * 0.25
+  const shares = n === 3 ? [30, 40, 30] : Array.from({ length: n }, () => Math.round(100 / n))
+  const steps = Math.max(1, Math.round((input.steps || n * 3) / n))
+  return Array.from({ length: n }, (_, i) => ({
+    priceStart: +(a + width * i).toPrecision(6),
+    priceEnd: +(a + width * (i + 1) - (i < n - 1 ? gap : 0)).toPrecision(6),
+    steps,
+    share: shares[i],
+  }))
+}
+
+/** Hängt hinter der letzten Zone eine weitere an, gleich breit und mit gleichem Abstand wie die letzte */
+export function appendZone(zones: LadderZone[], side: Side): LadderZone[] {
+  const last = zones[zones.length - 1]
+  if (!last) return zones
+  const prev = zones[zones.length - 2]
+  const dir = side === 'buy' ? -1 : 1
+  const width = Math.abs(last.priceEnd - last.priceStart) || last.priceStart * 0.03
+  const gap = prev ? Math.abs(last.priceStart - zoneEnd(prev)) : width * 0.25
+  const start = zoneEnd(last) + dir * (gap || width * 0.25)
+  const end = start + dir * width
+  if (!(start > 0) || !(end > 0)) return zones
+  return [...zones, { priceStart: +start.toPrecision(6), priceEnd: +end.toPrecision(6), steps: last.steps, share: last.share }]
+}
+
 export function buildLadder(input: LadderInput, rules: PairRules, opts: LadderOptions = {}): Ladder {
+  if (hasZones(input)) return buildZoneLadder(input, rules, opts)
   const errors = validateInput(input)
   if (errors.length) return { levels: [], totalVolume: 0, totalCost: 0, averagePrice: 0, valid: false, errors }
 

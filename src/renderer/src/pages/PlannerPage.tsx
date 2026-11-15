@@ -1,11 +1,15 @@
 import { api } from '../api'
 import { useEffect, useMemo, useState } from 'react'
-import { Bar, BarChart, CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { AlertTriangle, Bell, BookmarkPlus, ClipboardList, GraduationCap, FlaskConical, Info, RefreshCw, Send, Star, Trash2 } from 'lucide-react'
-import { buildLadder, DEFAULT_MIN_ORDER_EUR, MAX_STEPS, type LadderInput, type PriceSpacing, type Side, type SizeCurve } from '@shared/ladder'
+import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { AlertTriangle, Bell, History, Layers, SlidersHorizontal, BookmarkPlus, ClipboardList, GraduationCap, FlaskConical, Info, RefreshCw, Send, Star, Trash2 } from 'lucide-react'
+import { buildLadder, DEFAULT_MIN_ORDER_EUR, hasZones, MAX_STEPS, splitIntoZones, zoneEnd, zoneSummary, type LadderInput, type LadderZone, type PriceSpacing, type Side, type SizeCurve } from '@shared/ladder'
+import { reach, toCandles, unreached, windowStats, type Candle, type OhlcRow } from '@shared/history'
+import ZoneEditor, { zoneColor } from '../components/ZoneEditor'
+import HistoryHints, { windowLabel, windowPhrase } from '../components/HistoryHints'
 import type { DraftDto, PairDto, SendResult, TemplateDto } from '@shared/ipc'
 import { firstTestInput, wrongSide } from '@shared/safety'
 import KpiStrip from '../components/ui/KpiStrip'
+import { NumberField } from '../components/NumberField'
 import PairPicker from '../components/PairPicker'
 import CenterSliders from '../components/CenterSliders'
 import { MinOrderLine, RaisedNotice } from '../components/MinOrder'
@@ -16,7 +20,7 @@ import Modal from '../components/ui/Modal'
 import { useChartTheme } from '../utils/chartTheme'
 import { dateLocale, num, numberFormat, pct } from '../format'
 import { tr } from '@shared/i18n'
-import { parseNumber, parseWeightList, toInputText } from '@shared/number-format'
+import { parseWeightList, toInputText } from '@shared/number-format'
 import { useMoney } from '../money'
 import { activeExchange, exName, FIRST_TEST_MAX_EUR, probeHint, probeOk } from '@shared/exchanges'
 
@@ -58,48 +62,7 @@ const spacings = (): { id: PriceSpacing; label: string; title: string }[] => [
   { id: 'geometric', label: tr('Gleiche %-Abstände', 'Equal % steps'), title: tr('Zwischen zwei Stufen liegt immer derselbe Prozentsatz (logarithmisch)', 'Always the same percentage between two levels (logarithmic)') },
 ]
 
-/**
- * Zahlenfeld im gewählten Format (Deutsch 1.234,56 oder Amerikanisch 1,234.56).
- * Ist der Text keine gültige Zahl, meldet das Feld NaN: der Plan wird dann ungültig,
- * statt still mit dem alten Wert weiterzurechnen.
- */
-export function NumberField({ label, value, onChange, hint, step = 'any', emptyValue }: { label: string; value: number; onChange: (n: number) => void; hint?: string; step?: string; emptyValue?: number }) {
-  const fmt = numberFormat()
-  const [text, setText] = useState(toInputText(value, fmt))
-  const [shownFmt, setShownFmt] = useState(fmt)
-  useEffect(() => {
-    // Wert kam von außen (Vorlage, Kursvorschlag) oder das Format wurde umgestellt
-    if (fmt !== shownFmt) {
-      // Text im alten Format lesen und im neuen schreiben; Ungültiges bleibt stehen, damit man es sieht
-      const old = parseNumber(text, shownFmt)
-      setShownFmt(fmt)
-      if (!Number.isNaN(old)) setText(toInputText(old, fmt))
-      else if (!Number.isNaN(parseNumber(text, fmt))) onChange(parseNumber(text, fmt)) // war ungültig, passt aber zum neuen Format
-      return
-    }
-    const parsed = parseNumber(text, fmt)
-    if (text.trim() !== '' && !Number.isNaN(parsed) && parsed !== value && Number.isFinite(value)) setText(toInputText(value, fmt))
-  }, [value, fmt])
-  const invalid = text.trim() !== '' && Number.isNaN(parseNumber(text, fmt))
-  return (
-    <label className="block">
-      <span className="label">{label}</span>
-      <input className={`input w-full tabular-nums ${invalid ? 'border-danger-500' : ''}`} inputMode="decimal" step={step} value={text} aria-invalid={invalid}
-        onChange={(e) => {
-          setText(e.target.value)
-          const n = parseNumber(e.target.value, fmt)
-          onChange(e.target.value.trim() === '' && emptyValue !== undefined ? emptyValue : n)
-        }}
-        onBlur={() => { if (text.trim() === '' && Number.isFinite(value)) setText(toInputText(value, fmt)) }} />
-      {invalid
-        ? <span className="mt-1 block text-xs text-danger-fg">{tr(
-          `Keine gültige Zahl. Gewählt ist das ${fmt === 'de' ? 'deutsche Format, z. B. 60.000,50' : 'amerikanische Format, z. B. 60,000.50'} (umstellen links unten bei „Zahlenformat“).`,
-          `Not a valid number. The ${fmt === 'de' ? 'German format is selected, e.g. 60.000,50' : 'US format is selected, e.g. 60,000.50'} (change it bottom left under “Number format”).`,
-        )}</span>
-        : hint && <span className="mt-1 block text-xs text-ink-muted">{hint}</span>}
-    </label>
-  )
-}
+export { NumberField }
 
 export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed, onOpenDrafts, onOpenOrders, onOpenSettings, active = true }: { hasKey: boolean; onNeedKey: () => void; prefill?: Prefill | null; onPrefillUsed?: () => void; onOpenDrafts?: () => void; onOpenOrders?: () => void; onOpenSettings?: () => void; active?: boolean }): JSX.Element {
   const theme = useChartTheme()
@@ -126,7 +89,9 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
   const [templateId, setTemplateId] = useState('')
   const [saveAs, setSaveAs] = useState<string | null>(null)
   const [range, setRange] = useState(90)
-  const [candles, setCandles] = useState<[number, number][]>([])
+  const [candles, setCandles] = useState<OhlcRow[]>([])
+  /** Tageskerzen (bis etwa 1 Jahr) für Tief- und Höchstkurse und „wie oft erreicht“ */
+  const [daily, setDaily] = useState<Candle[]>([])
   const [fees, setFees] = useState<{ maker: number; taker: number } | null>(null)
   const [available, setAvailable] = useState<Record<string, number> | null>(null)
   // Beim Laden einer Vorlage oder eines Vorschlags den Kurs nicht überschreiben
@@ -156,6 +121,30 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
       return next
     })
     setResult(null)
+  }
+
+  const zoned = hasZones(input)
+  const setZones = (zones: LadderZone[]) => {
+    setInput((s) => zoneSummary({ ...s, zones }))
+    setResult(null)
+  }
+  /** Zwischen einem Bereich und Preiszonen umschalten. Die Zonen starten als Aufteilung des jetzigen Bereichs. */
+  const setMode = (mode: 'range' | 'zones') => {
+    setInput((s) => {
+      if (mode === 'range') return { ...s, zones: undefined }
+      if (hasZones(s)) return s
+      const curve = s.curve === 'custom' ? 'flat' : s.curve
+      return zoneSummary({ ...s, curve, customWeights: undefined, zones: splitIntoZones(s) })
+    })
+    setResult(null)
+  }
+  /** Kurs aus dem Rückblick als letzte Stufe übernehmen (mit Zonen: als Ende der letzten Zone) */
+  const useAsEnd = (price: number) => {
+    if (!hasZones(input)) return set('priceEnd', price)
+    const zs = input.zones!.slice()
+    const lastZone = zs[zs.length - 1]
+    zs[zs.length - 1] = lastZone.steps === 1 ? { ...lastZone, steps: 2, priceEnd: price } : { ...lastZone, priceEnd: price }
+    setZones(zs)
   }
 
   useEffect(() => {
@@ -201,6 +190,11 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
     const since = Date.now() / 1000 - r.days * 86400
     api().ohlc(pairId, r.interval).then((c) => setCandles(c.filter(([t]) => t >= since))).catch(() => setCandles([]))
   }, [pairId, range])
+  useEffect(() => {
+    if (!pairId) return
+    setDaily([])
+    api().ohlc(pairId, 1440).then((c) => setDaily(toCandles(c))).catch(() => setDaily([]))
+  }, [pairId])
 
   function applyTemplate(id: string) {
     setTemplateId(id)
@@ -237,7 +231,11 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
       setLast(p)
       if (startFromPrice && !keepPrices) {
         // Vorschlag: Kauf 2–20 % unter dem Kurs, Verkauf 5–40 % darüber
-        setInput((s) => s.side === 'buy' ? { ...s, priceStart: +(p * 0.98).toPrecision(6), priceEnd: +(p * 0.8).toPrecision(6) } : { ...s, priceStart: +(p * 1.05).toPrecision(6), priceEnd: +(p * 1.4).toPrecision(6) })
+        setInput((s) => {
+          const next = s.side === 'buy' ? { ...s, priceStart: +(p * 0.98).toPrecision(6), priceEnd: +(p * 0.8).toPrecision(6) } : { ...s, priceStart: +(p * 1.05).toPrecision(6), priceEnd: +(p * 1.4).toPrecision(6) }
+          // Mit Preiszonen: die Zonen im neuen Bereich neu aufteilen (z. B. nach Wechsel von Kaufen auf Verkaufen)
+          return hasZones(s) ? zoneSummary({ ...next, zones: splitIntoZones(next, s.zones!.length) }) : next
+        })
       }
     }).catch((e) => setLoadError(e.message))
   }
@@ -281,6 +279,15 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
   const wrong = wrongSide(input.side, toSend.map((l) => l.price), last)
   // Über der Obergrenze pro Plan schickt der Hauptprozess nichts raus. Lieber vorher sagen als hinterher.
   const overLimit = limit !== null && nowCost > limit + 1e-9
+  // Rückblick: wie oft der Kurs die Stufen im gewählten Zeitraum erreicht hat (Tageskerzen)
+  const nowSec = Date.now() / 1000
+  const reachOf = (price: number) => (daily.length ? reach(daily, input.side, price, range, nowSec) : null)
+  const covered = daily.length ? windowStats(daily, range, nowSec)?.covered ?? range : range
+  const never = daily.length && sendable.length ? unreached(sendable, daily, input.side, range, nowSec) : null
+  // Tief und Hoch im Chart-Zeitraum
+  const chartLow = candles.length ? Math.min(...candles.map((c) => c[2] ?? c[1])) : null
+  const chartHigh = candles.length ? Math.max(...candles.map((c) => c[3] ?? c[1])) : null
+  const extreme = input.side === 'buy' ? chartLow : chartHigh
 
   function openDraftForm() {
     if (!pair) return
@@ -444,12 +451,29 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
                 </span>
               </label>
             )}
+            <div>
+              <span className="label">{tr('Aufbau', 'Layout')}</span>
+              <Segmented<'range' | 'zones'> block value={zoned ? 'zones' : 'range'} onChange={setMode} options={[
+                { id: 'range', label: tr('Ein Bereich', 'One range'), icon: SlidersHorizontal, title: tr('Alle Stufen in einem Preisbereich, verteilt nach einer Formel', 'All levels in one price range, spread by a formula') },
+                { id: 'zones', label: tr('Preiszonen', 'Price zones'), icon: Layers, title: tr('Mehrere getrennte Bereiche mit eigenem Anteil, z. B. viel Geld an alten Tiefs', 'Several separate ranges with their own share, e.g. a lot of money at old lows') },
+              ]} />
+            </div>
+            {zoned ? (
+              <ZoneEditor side={input.side} zones={input.zones!} ladder={ladder} last={last} daily={daily} days={range} quote={quote} total={input.total} eur={eur}
+                fmtPrice={(p) => `${fmtPrice(p, pair?.priceDecimals ?? 2)} ${sym}`} onChange={setZones} />
+            ) : (
             <div className="grid grid-cols-2 gap-3">
               <NumberField label={tr(`Erste Stufe (${quote})`, `First level (${quote})`)} value={input.priceStart} onChange={(v) => set('priceStart', v)} hint={last ? [pct(input.priceStart / last - 1) + tr(' zum Kurs', ' vs. price'), usdHint(input.priceStart)].filter(Boolean).join(' · ') : undefined} />
               <NumberField label={tr(`Letzte Stufe (${quote})`, `Last level (${quote})`)} value={input.priceEnd} onChange={(v) => set('priceEnd', v)} hint={last ? [pct(input.priceEnd / last - 1) + tr(' zum Kurs', ' vs. price'), usdHint(input.priceEnd)].filter(Boolean).join(' · ') : undefined} />
             </div>
+            )}
+            <HistoryHints side={input.side} daily={daily} last={last} current={zoned ? input.zones![input.zones!.length - 1].priceStart : input.priceStart}
+              fmtPrice={(p) => `${fmtPrice(p, pair?.priceDecimals ?? 2)} ${sym}`} onUse={useAsEnd}
+              useLabel={zoned ? tr('Als Ende der letzten Zone übernehmen', 'Use as end of the last zone') : tr('Als letzte Stufe übernehmen', 'Use as last level')} />
             <div className="grid grid-cols-2 gap-3">
-              <NumberField label={tr('Anzahl Stufen', 'Number of levels')} step="1" value={input.steps} onChange={(v) => set('steps', Math.round(v))} hint={tr(`1 bis ${MAX_STEPS}`, `1 to ${MAX_STEPS}`)} />
+              {zoned
+                ? <div><span className="label">{tr('Anzahl Stufen', 'Number of levels')}</span><p className="pt-2 text-sm tabular-nums">{input.steps} <span className="text-xs text-ink-muted">{tr('aus den Zonen', 'from the zones')}</span></p></div>
+                : <NumberField label={tr('Anzahl Stufen', 'Number of levels')} step="1" value={input.steps} onChange={(v) => set('steps', Math.round(v))} hint={tr(`1 bis ${MAX_STEPS}`, `1 to ${MAX_STEPS}`)} />}
               <NumberField label={tr('Davon jetzt senden', 'Send now')} step="1" value={sendCount ?? sendable.length}
                 onChange={(v) => setSendCount(Number.isFinite(v) && v > 0 && Math.round(v) < sendable.length ? Math.round(v) : null)}
                 hint={partial ? tr(`Die ${nowCount} Stufen nah am Kurs. Den Rest sendest du später unter „Offene Orders“.`, `The ${nowCount} levels close to the price. Send the rest later under “Open orders”.`) : tr('Alle Stufen', 'All levels')} />
@@ -462,11 +486,11 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
             <div>
               <span className="label">{tr('Mengenverteilung', 'Size distribution')}</span>
               <select className="select w-full" value={input.curve} onChange={(e) => set('curve', e.target.value as SizeCurve)}>
-                {curves().map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+                {curves().filter((c) => !zoned || c.id !== 'custom').map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
               </select>
-              <span className="mt-1 block text-xs text-ink-muted">{curves().find((c) => c.id === input.curve)?.title}</span>
+              <span className="mt-1 block text-xs text-ink-muted">{curves().find((c) => c.id === input.curve)?.title}{zoned && tr('. Gilt innerhalb jeder Zone.', '. Applies within each zone.')}</span>
             </div>
-            {input.curve === 'custom' && (
+            {input.curve === 'custom' && !zoned && (
               <label className="block">
                 <span className="label">{tr('Anteil je Stufe in %', 'Share per level in %')}</span>
                 <input className="input w-full tabular-nums" value={customText} placeholder={numberFormat() === 'de' ? tr('z. B. 12,5; 12,5; 25; 50', 'e.g. 12,5; 12,5; 25; 50') : tr('z. B. 12.5, 12.5, 25, 50', 'e.g. 12.5, 12.5, 25, 50')}
@@ -509,6 +533,15 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
           )}
           {ladder && ladder.errors.length > 0 && (
             <div className="notice notice-warning space-y-1">{ladder.errors.map((e) => <p key={e}>{e}</p>)}</div>
+          )}
+          {never && never.count > 0 && ladder && (
+            <p className="notice notice-info flex items-start gap-2 text-xs">
+              <History size={14} className="mt-0.5 flex-shrink-0" />
+              <span>{tr(
+                <><strong>{never.count} von {sendable.length} Stufen</strong> hat der Kurs {windowPhrase(range, covered)} nie erreicht. Darin stecken {eur(never.cost)} ({pct(ladder.totalCost > 0 ? never.cost / ladder.totalCost : 0)} des Plans). Solche Orders sperren Guthaben und wären zuletzt nicht ausgeführt worden. Das kann gewollt sein (Absicherung für einen tiefen Fall), ist aber gut zu wissen.</>,
+                <><strong>{never.count} of {sendable.length} levels</strong> were never reached by the price {windowPhrase(range, covered)}. They hold {eur(never.cost)} ({pct(ladder.totalCost > 0 ? never.cost / ladder.totalCost : 0)} of the plan). Such orders lock funds and would not have been filled recently. That can be on purpose (a reserve for a deep drop), but it is good to know.</>,
+              )}</span>
+            </p>
           )}
           {ladder && pair && <RaisedNotice ladder={ladder} input={input} rules={pair} userMin={minOrder} base={base} eur={eur} />}
           {overLimit && limit !== null && (
@@ -580,11 +613,18 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
                       tickFormatter={(v) => new Date(v).toLocaleDateString(dateLocale(), { day: '2-digit', month: '2-digit' })} />
                     <YAxis {...theme.axis} width={70} tickFormatter={(v) => fmtPrice(v, 0)}
                       domain={[
-                        (min: number) => Math.min(min, ...sendable.map((l) => l.price)) * 0.98,
-                        (max: number) => Math.max(max, ...sendable.map((l) => l.price)) * 1.02,
+                        (min: number) => Math.min(min, chartLow ?? min, ...sendable.map((l) => l.price)) * 0.98,
+                        (max: number) => Math.max(max, chartHigh ?? max, ...sendable.map((l) => l.price)) * 1.02,
                       ]} />
                     <Tooltip {...theme.tooltip} labelFormatter={(v) => new Date(Number(v)).toLocaleString(dateLocale(), { dateStyle: 'short', timeStyle: 'short' })}
                       formatter={(v) => [fmtPrice(Number(v), pair?.priceDecimals ?? 2), tr('Kurs', 'Price')]} />
+                    {zoned && input.zones!.map((z, i) => (
+                      <ReferenceArea key={`z${i}`} y1={z.priceStart} y2={zoneEnd(z)} fill={zoneColor(theme.series, i)} fillOpacity={0.1} strokeOpacity={0} ifOverflow="extendDomain" />
+                    ))}
+                    {extreme !== null && (
+                      <ReferenceLine y={extreme} stroke={theme.status.neutral} strokeDasharray="1 3" ifOverflow="extendDomain"
+                        label={{ value: input.side === 'buy' ? tr('Tief', 'Low') : tr('Hoch', 'High'), position: 'insideBottomLeft', fill: theme.status.neutral, fontSize: 11 }} />
+                    )}
                     {sendable.map((l) => (
                       <ReferenceLine key={l.index} y={l.price} stroke={input.side === 'buy' ? theme.status.good : theme.status.critical} strokeOpacity={later.has(l.index) ? 0.15 : 0.35 + 0.65 * (l.share / Math.max(...sendable.map((x) => x.share)))} strokeDasharray="4 3" />
                     ))}
@@ -592,7 +632,7 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
                   </LineChart>
                 </ResponsiveContainer>
               </div>
-              <p className="mt-2 text-xs text-ink-muted">{tr('Gestrichelte Linien sind deine Stufen. Je kräftiger die Linie, desto größer die Stufe.', 'Dashed lines are your levels. The stronger the line, the bigger the level.')}{partial && tr(' Blasse Linien sind die Stufen für später.', ' Faint lines are the levels for later.')}</p>
+              <p className="mt-2 text-xs text-ink-muted">{tr('Gestrichelte Linien sind deine Stufen. Je kräftiger die Linie, desto größer die Stufe.', 'Dashed lines are your levels. The stronger the line, the bigger the level.')}{extreme !== null && tr(` Die gepunktete Linie ist der ${input.side === 'buy' ? 'Tiefstkurs' : 'Höchstkurs'} im gezeigten Zeitraum.`, ` The dotted line is the ${input.side === 'buy' ? 'lowest' : 'highest'} price in the period shown.`)}{zoned && tr(' Farbige Flächen sind deine Preiszonen.', ' Coloured areas are your price zones.')}{partial && tr(' Blasse Linien sind die Stufen für später.', ' Faint lines are the levels for later.')}</p>
             </SectionCard>
           )}
 
@@ -605,7 +645,9 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
                     <XAxis dataKey="preis" {...theme.axis} tickFormatter={(v) => fmtPrice(v, 0)} />
                     <YAxis {...theme.axis} tickFormatter={(v) => eur(Number(v)).replace(/,00(?= )/, '')} width={70} />
                     <Tooltip {...theme.tooltip} formatter={(v) => [eur(Number(v)), tr('Gegenwert', 'Value')]} labelFormatter={(v) => `${tr('Preis', 'Price')} ${fmtPrice(Number(v), pair?.priceDecimals ?? 2)}`} />
-                    <Bar dataKey="betrag" fill={theme.accent} radius={theme.bar.radius} />
+                    <Bar dataKey="betrag" fill={theme.accent} radius={theme.bar.radius}>
+                      {zoned && ladder.levels.map((l) => <Cell key={l.index} fill={zoneColor(theme.series, l.zone ?? 0)} />)}
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -617,19 +659,32 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
               <div className="overflow-x-auto">
                 <table className="data-table">
                   <thead>
-                    <tr><th>#</th><th className="num">{tr('Preis', 'Price')}</th><th className="num">{tr('Abstand', 'Distance')}</th><th className="num">{tr('Menge', 'Volume')} {base}</th><th className="num">{tr('Gegenwert', 'Value')}</th><th className="num">{tr('Anteil', 'Share')}</th><th>Status</th></tr>
+                    <tr><th>#</th><th className="num">{tr('Preis', 'Price')}</th><th className="num">{tr('Abstand', 'Distance')}</th><th className="num">{tr('Menge', 'Volume')} {base}</th><th className="num">{tr('Gegenwert', 'Value')}</th><th className="num">{tr('Anteil', 'Share')}</th>{daily.length > 0 && <th className="num" title={tr('An wie vielen Tagen der Kurs diese Stufe im gewählten Zeitraum erreicht hat', 'On how many days the price reached this level in the selected period')}>{tr(`Erreicht (${windowLabel(range, covered)})`, `Reached (${windowLabel(range, covered)})`)}</th>}<th>Status</th></tr>
                   </thead>
                   <tbody>
                     {ladder.levels.map((l) => {
                       const r = result?.orders.find((o) => o.index === l.index)
                       return (
                         <tr key={l.index}>
-                          <td className="tabular-nums text-ink-muted">{l.index + 1}</td>
+                          <td className="tabular-nums text-ink-muted">
+                            {zoned && <span className="mr-1.5 inline-block h-2 w-2 rounded-full align-middle" style={{ background: zoneColor(theme.series, l.zone ?? 0) }} title={tr(`Zone ${(l.zone ?? 0) + 1}`, `Zone ${(l.zone ?? 0) + 1}`)} />}
+                            {l.index + 1}
+                          </td>
                           <td className="num">{fmtPrice(l.price, pair?.priceDecimals ?? 2)}</td>
                           <td className="num text-ink-muted">{last ? pct(l.price / last - 1) : '–'}</td>
                           <td className="num">{num(l.volume, pair?.volumeDecimals)}</td>
                           <td className="num">{eur(l.cost)}</td>
                           <td className="num text-ink-muted">{pct(l.share)}</td>
+                          {daily.length > 0 && (() => {
+                            const rc = reachOf(l.price)
+                            if (!rc) return <td className="num">–</td>
+                            const when = rc.lastAt ? new Date(rc.lastAt * 1000).toLocaleDateString(dateLocale(), { day: '2-digit', month: '2-digit', year: '2-digit' }) : ''
+                            return (
+                              <td className={`num ${rc.hits === 0 ? 'text-warning-fg' : 'text-ink-muted'}`} title={rc.hits ? tr(`an ${rc.hits} von ${rc.of} Tagen, zuletzt am ${when}`, `on ${rc.hits} of ${rc.of} days, last on ${when}`) : tr(`an keinem der letzten ${rc.of} Tage`, `on none of the last ${rc.of} days`)}>
+                                {rc.hits ? tr(`${rc.hits} T`, `${rc.hits} d`) : tr('nie', 'never')}
+                              </td>
+                            )
+                          })()}
                           <td className="text-xs">
                             {l.problem ? <span className="text-warning-fg">{l.problem}</span>
                               : r?.error ? <span className="text-danger-fg">{r.error}</span>

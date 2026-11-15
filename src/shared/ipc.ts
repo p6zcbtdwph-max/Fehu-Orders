@@ -1,4 +1,5 @@
 // Gemeinsame Typen für Fenster und Hauptprozess
+import type { OhlcRow } from './history'
 import type { LadderInput, LadderLevel, Side } from './ladder'
 import type { BackupSummary } from './backup'
 import type { ExchangeId } from './exchanges'
@@ -207,7 +208,8 @@ export interface Api {
   saveSettings(s: Partial<SettingsDto>): Promise<SettingsDto>
   usdRate(): Promise<number>
   sendRest(userref: number, validate: boolean): Promise<SendResult>
-  ohlc(pairId: string, interval: number): Promise<[number, number][]>
+  /** Kerzen: [Zeit in s, Schlusskurs, Tief, Hoch] */
+  ohlc(pairId: string, interval: number): Promise<OhlcRow[]>
   fees(pairId: string): Promise<{ maker: number; taker: number }>
   available(): Promise<Record<string, number>>
   templates(): Promise<TemplateDto[]>

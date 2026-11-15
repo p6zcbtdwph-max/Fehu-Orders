@@ -1,6 +1,7 @@
 // Gemeinsame Schnittstelle aller Börsen. Der Rest der App spricht nur mit dieser Schnittstelle,
 // welche Börse dahinter steckt, entscheidet create() anhand der Einstellungen.
 // Läuft nur im Hauptprozess, Schlüssel verlassen ihn nie.
+import type { OhlcRow } from '../shared/history'
 import { priceText, volumeText, type LadderLevel, type PairRules, type Side } from '../shared/ladder'
 import type { KeyCheck } from '../shared/ipc'
 import type { ExchangeId } from '../shared/exchanges'
@@ -87,7 +88,8 @@ export interface Exchange {
   cancelPlan(userref: number): Promise<number>
   cancelOrder(txid: string): Promise<void>
   cancelAll(): Promise<number>
-  ohlc(pairId: string, interval: number): Promise<[number, number][]>
+  /** [Zeit in s, Schlusskurs, Tief, Hoch] */
+  ohlc(pairId: string, interval: number): Promise<OhlcRow[]>
   /** Gebühren in Prozent */
   fees(pairId: string): Promise<{ maker: number; taker: number }>
   /** noWithdrawConfirmed: Nutzer hat bestätigt, dass Auszahlungen aus sind (für Börsen, die das nicht verraten) */

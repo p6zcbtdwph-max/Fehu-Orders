@@ -2,6 +2,7 @@
 // Doku: https://docs.cdp.coinbase.com/coinbase-app/advanced-trade-apis/rest-api
 // Anmeldung per JWT (ES256), für jede Anfrage neu signiert und 2 Minuten gültig.
 // Probelauf über /orders/preview, Rechte über /key_permissions (inklusive „darf auszahlen?“).
+import type { OhlcRow } from '../shared/history'
 import { createPrivateKey, randomBytes, sign as cryptoSign } from 'node:crypto'
 import type { LadderLevel, Side } from '../shared/ladder'
 import type { KeyCheck } from '../shared/ipc'
@@ -320,11 +321,11 @@ export class Coinbase implements Exchange {
     return ids.length ? (await this.cancelIds(ids)).ok : 0
   }
 
-  async ohlc(pairId: string, interval: number): Promise<[number, number][]> {
+  async ohlc(pairId: string, interval: number): Promise<OhlcRow[]> {
     const end = Math.floor(Date.now() / 1000)
     const start = end - 300 * interval * 60
     const r = await this.request('GET', `${API}/market/products/${encodeURIComponent(pairId)}/candles`, [['start', start], ['end', end], ['granularity', GRANULARITY[interval] ?? 'ONE_HOUR'], ['limit', 300]])
-    return (r?.candles ?? []).map((c: any) => [Number(c.start), Number(c.close)] as [number, number]).sort((a: [number, number], b: [number, number]) => a[0] - b[0])
+    return (r?.candles ?? []).map((c: any) => [Number(c.start), Number(c.close), Number(c.low), Number(c.high)] as OhlcRow).sort((a: OhlcRow, b: OhlcRow) => a[0] - b[0])
   }
 
   async fees(_pairId: string): Promise<{ maker: number; taker: number }> {
