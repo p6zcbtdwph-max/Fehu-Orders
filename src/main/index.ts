@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Notification, safeStorage, session, shell, systemPreferences } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Notification, safeStorage, session, shell, systemPreferences } from 'electron'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { parseBackup, summarize } from '../shared/backup'
 import { localDate } from '../shared/dates'
@@ -9,13 +9,14 @@ import { Coinbase } from './coinbase'
 import type { ClosedOrder, Credentials, Exchange, PairInfo } from './exchange'
 import { EXCHANGE_IDS, exchangeName, exchangeOf, isExchangeId, sendLimit, type ExchangeId } from '../shared/exchanges'
 import {
-  addLog, addPlan, systemLocale, clearCredentials, exportAll, importAll, getLog, markAlarmFired, deleteDraft, deleteTemplate, getDrafts, markDraftReleased, saveDraft, getNotified, getPlans, getSettings, getTemplates, hasRealPlan, loadCredentials, newUserref, saveCredentials, saveSettings, saveTemplate, setNotified, updatePlan, type Settings,
+  addLog, addPlan, loadHomeIps, saveHomeIps, systemLocale, clearCredentials, exportAll, importAll, getLog, markAlarmFired, deleteDraft, deleteTemplate, getDrafts, markDraftReleased, saveDraft, getNotified, getPlans, getSettings, getTemplates, hasRealPlan, loadCredentials, newUserref, saveCredentials, saveSettings, saveTemplate, setNotified, updatePlan, type Settings,
 } from './store'
 import type { DraftDto, LogEntry, PlanStatusDto, SaveKeyResult, SendRequest, SendResult, TemplateDto } from '../shared/ipc'
 import { alarmHit, checkKeyFormat, normalizeCoinbase, priceGuard } from '../shared/safety'
 import { planStatus, type OrderSnapshot } from '../shared/plan-status'
-import { prepareForSend } from '../shared/ladder'
+import { MAX_MIN_ORDER_EUR, prepareForSend } from '../shared/ladder'
 import { langFromLocale, setLang, tr } from '../shared/i18n'
+import { ipKind, ipProblem, maskIp, MAX_IPS, type HomeIpView } from '../shared/ip'
 
 /** Sprache aus den Einstellungen, sonst die Systemsprache des Macs */
 const applyLanguage = () => setLang(getSettings().language ?? langFromLocale(systemLocale()))
@@ -147,6 +148,42 @@ handle('key:clear', (exArg?: ExchangeId) => {
   resetClient(ex)
   addLog({ action: 'key-clear', success: true, message: `${exchangeName(ex)}: ${tr('Schlüssel gelöscht', 'Key deleted')}` })
 })
+// Eigene IP-Adressen für die IP-Sperre. Das Fenster bekommt sie nur verdeckt, den Klartext erst auf Klick.
+const ipViews = (): HomeIpView[] => loadHomeIps().map((x) => ({ masked: maskIp(x.ip), label: x.label, kind: ipKind(x.ip) ?? 'IPv4' }))
+const ipAt = (i: unknown) => {
+  const list = loadHomeIps()
+  const n = Number(i)
+  if (!Number.isInteger(n) || n < 0 || n >= list.length) throw new Error(tr('Diese IP-Adresse gibt es nicht mehr.', 'This IP address no longer exists.'))
+  return { list, n }
+}
+handle('ip:list', () => ipViews())
+handle('ip:reveal', (i: number) => {
+  const { list, n } = ipAt(i)
+  return list[n].ip
+})
+handle('ip:copy', (i: number) => {
+  const { list, n } = ipAt(i)
+  clipboard.writeText(list[n].ip)
+})
+handle('ip:add', (ip: string, label?: string) => {
+  const text = String(ip ?? '').trim()
+  const problem = ipProblem(text)
+  if (problem) throw new Error(problem)
+  const list = loadHomeIps()
+  if (list.some((x) => x.ip.toLowerCase() === text.toLowerCase())) throw new Error(tr('Diese IP-Adresse ist schon gespeichert.', 'This IP address is already saved.'))
+  if (list.length >= MAX_IPS) throw new Error(tr(`Höchstens ${MAX_IPS} Adressen.`, `At most ${MAX_IPS} addresses.`))
+  const name = typeof label === 'string' && label.trim() ? label.trim().slice(0, 40) : undefined
+  saveHomeIps([...list, name ? { ip: text, label: name } : { ip: text }])
+  // Die Adresse selbst kommt bewusst nicht ins Protokoll
+  addLog({ action: 'ip-save', success: true, message: tr('IP-Adresse gespeichert', 'IP address saved') })
+  return ipViews()
+})
+handle('ip:delete', (i: number) => {
+  const { list, n } = ipAt(i)
+  saveHomeIps(list.filter((_, k) => k !== n))
+  addLog({ action: 'ip-delete', success: true, message: tr('IP-Adresse gelöscht', 'IP address deleted') })
+  return ipViews()
+})
 handle('pairs', () => pairsFor(activeEx()))
 handle('price', (pairId: string) => client().lastPrice(pairId))
 handle('prices', (pairIds: string[]) => client().lastPrices(pairIds.filter((x) => typeof x === 'string').slice(0, 50)))
@@ -163,6 +200,11 @@ handle('settings:save', (s: Partial<Settings>) => {
   if (s.numberFormat === 'de' || s.numberFormat === 'en') patch.numberFormat = s.numberFormat
   if (s.language === 'de' || s.language === 'en') patch.language = s.language
   if (isExchangeId(s.exchange)) patch.exchange = s.exchange
+  if (s.minOrderEur !== undefined) {
+    const min = Number(s.minOrderEur)
+    if (!Number.isFinite(min) || min < 1 || min > MAX_MIN_ORDER_EUR) throw new Error(tr(`Der Mindest-Orderwert muss zwischen 1 € und ${MAX_MIN_ORDER_EUR} € liegen.`, `The minimum order value must be between 1 € and ${MAX_MIN_ORDER_EUR} €.`))
+    patch.minOrderEur = min
+  }
   const saved = saveSettings(patch)
   applyLanguage()
   return saved
@@ -438,7 +480,7 @@ function conformToRules<T extends { price: number; volume: number; index?: numbe
     throw new Error(msg)
   }
   if (!rules) return fail(tr(`${exchangeName(ex)} kennt dieses Handelspaar gerade nicht (oder es ist nicht handelbar). Es wurde nichts gesendet.`, `${exchangeName(ex)} does not list this trading pair right now (or it cannot be traded). Nothing was sent.`))
-  const r = prepareForSend(levels, rules, side)
+  const r = prepareForSend(levels, rules, side, getSettings().minOrderEur)
   if (r.error) fail(`${rules.name}: ${r.error}`)
   return r.levels
 }

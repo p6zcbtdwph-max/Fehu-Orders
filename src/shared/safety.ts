@@ -128,10 +128,16 @@ export function assetLabel(code: string): { name: string; earn?: string } {
   return suffix ? { name, earn: SUFFIX[suffix]?.() ?? suffix } : { name }
 }
 
-/** Vorschlag für den ersten echten Test: zwei kleine Kauf-Stufen 20 % unter dem Kurs, knapp über Krakens Minimum */
-export function firstTestInput(last: number, rules: { orderMin: number; costMin: number }): { side: 'buy'; priceStart: number; priceEnd: number; steps: number; total: number; spacing: 'linear'; curve: 'flat'; ratio: number } {
+/**
+ * Vorschlag für den ersten echten Test: zwei kleine Kauf-Stufen 20 % unter dem Kurs, knapp über dem Minimum
+ * der Börse und dem eigenen Mindest-Orderwert. Passen zwei Stufen nicht unter cap (50-€-Grenze beim ersten Test),
+ * wird es eine Stufe.
+ */
+export function firstTestInput(last: number, rules: { orderMin: number; costMin: number }, minCost = 0, cap = Infinity): { side: 'buy'; priceStart: number; priceEnd: number; steps: number; total: number; spacing: 'linear'; curve: 'flat'; ratio: number } {
   const priceStart = +(last * 0.8).toPrecision(6)
   const priceEnd = +(last * 0.78).toPrecision(6)
-  const perStage = Math.max(rules.orderMin * priceStart * 1.1, rules.costMin * 1.1, 5)
-  return { side: 'buy', priceStart, priceEnd, steps: 2, total: Math.ceil(perStage * 2), spacing: 'linear', curve: 'flat', ratio: 1 }
+  // 2 % Luft über dem Mindest-Orderwert, damit Rundung die Stufen nicht darunter drückt (sonst würden sie angehoben)
+  const perStage = Math.max(rules.orderMin * priceStart * 1.1, rules.costMin * 1.1, 5, minCost > 0 ? minCost * 1.02 : 0)
+  const steps = Math.ceil(perStage * 2) <= cap ? 2 : 1
+  return { side: 'buy', priceStart, priceEnd, steps, total: Math.ceil(perStage * steps), spacing: 'linear', curve: 'flat', ratio: 1 }
 }

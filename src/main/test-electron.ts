@@ -10,6 +10,7 @@ export const electronMock = {
   safeStorage: { isEncryptionAvailable: () => true, encryptString: (s: string) => Buffer.from(s), decryptString: (b: Buffer) => b.toString() },
   ipcMain: { handle: (ch: string, fn: any) => handlers.set(ch, fn) },
   BrowserWindow: class { static getAllWindows() { return [] } },
+  clipboard: { text: '', writeText(t: string) { this.text = t } },
   dialog: {}, Notification: class { static isSupported() { return false } }, session: {}, shell: {},
   systemPreferences: { canPromptTouchID: () => false },
 }

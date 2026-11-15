@@ -1,7 +1,8 @@
 import { api } from '../api'
 import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, Bell, BellRing, ClipboardList, FlaskConical, Pencil, RefreshCw, Rocket, Trash2 } from 'lucide-react'
-import { buildLadder } from '@shared/ladder'
+import { buildLadder, DEFAULT_MIN_ORDER_EUR } from '@shared/ladder'
+import { RaisedNotice } from '../components/MinOrder'
 import type { DraftDto, PairDto, SendResult } from '@shared/ipc'
 import { wrongSide } from '@shared/safety'
 import SectionCard from '../components/ui/SectionCard'
@@ -14,9 +15,10 @@ import { useMoney } from '../money'
 import { activeExchange, exName, probeOk } from '@shared/exchanges'
 
 /** Was ein Entwurf jetzt bedeuten würde: Stufen nach den aktuellen Regeln des Paars */
-function evaluate(d: DraftDto, pair: PairDto | undefined, last: number | undefined) {
+function evaluate(d: DraftDto, pair: PairDto | undefined, last: number | undefined, minCost: number) {
   if (!pair) return null
-  const ladder = buildLadder(d.input, pair)
+  // Gleiche Rechnung wie im Planer, also auch mit Mindest-Orderwert (zu kleine Stufen werden angehoben)
+  const ladder = buildLadder(d.input, pair, { minCost })
   const sendable = ladder.levels.filter((l) => !l.problem)
   const count = d.sendCount ? Math.min(d.sendCount, sendable.length) : sendable.length
   const toSend = sendable.slice(0, count)
@@ -35,11 +37,13 @@ export default function DraftsPage({ hasKey, onEdit, onNeedKey }: { hasKey: bool
   const [release, setRelease] = useState<DraftDto | null>(null)
   const [remove, setRemove] = useState<DraftDto | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  const [minOrder, setMinOrder] = useState(DEFAULT_MIN_ORDER_EUR)
 
   async function load() {
     setError(null)
     try {
-      const [ds, ps] = await Promise.all([api().drafts(), api().pairs()])
+      const [ds, ps, st] = await Promise.all([api().drafts(), api().pairs(), api().settings()])
+      setMinOrder(st.minOrderEur ?? DEFAULT_MIN_ORDER_EUR)
       setDrafts(ds)
       setPairs(ps)
       const ids = [...new Set(ds.filter((d) => d.status === 'draft').map((d) => d.pairId))]
@@ -106,7 +110,7 @@ export default function DraftsPage({ hasKey, onEdit, onNeedKey }: { hasKey: bool
                   {list.map((d) => {
                     const pair = pairOf(d.pairId)
                     const last = prices[d.pairId]
-                    const ev = evaluate(d, pair, last)
+                    const ev = evaluate(d, pair, last, minOrder)
                     const first = ev?.toSend[0]?.price ?? d.input.priceStart
                     const lastLevel = ev?.toSend[ev.toSend.length - 1]?.price ?? d.input.priceEnd
                     const dec = pair?.priceDecimals ?? 2
@@ -119,6 +123,7 @@ export default function DraftsPage({ hasKey, onEdit, onNeedKey }: { hasKey: bool
                             ? <span className="mt-1 block"><Badge tone="accent"><BellRing size={12} className="mr-1 inline" />{tr('Kursalarm ausgelöst', 'Price alert triggered')} {new Date(d.alarmFiredAt).toLocaleString(dateLocale(), { dateStyle: 'short', timeStyle: 'short' })}</Badge></span>
                             : d.alarm && <span className="mt-1 flex items-center gap-1 text-xs text-ink-muted"><Bell size={12} /> {tr('Alarm bei', 'Alert at')} {fmtPrice(first, dec)} {sym}</span>}
                           {ev && ev.wrong.length > 0 && <span className="mt-1 block"><Badge tone="danger">{tr(`${ev.wrong.length} Stufen auf falscher Kursseite`, `${ev.wrong.length} levels on the wrong side of the price`)}</Badge></span>}
+                          {ev && (ev.ladder.raised?.count ?? 0) > 0 && <span className="mt-1 block"><Badge tone="warning">{tr(`${ev.ladder.raised?.count} Stufen auf Mindest-Orderwert angehoben`, `${ev.ladder.raised?.count} levels raised to minimum order value`)}</Badge></span>}
                           {ev && !ev.ladder.valid && <span className="mt-1 block"><Badge tone="warning">{tr(`Passt nicht mehr zu ${exName()}s Regeln`, `No longer fits ${exName()}’s rules`)}</Badge></span>}
                         </td>
                         <td className="whitespace-nowrap">{d.pairName} <span className="text-ink-muted">{d.side === 'buy' ? tr('Kauf', 'buy') : tr('Verkauf', 'sell')}</span></td>
@@ -170,7 +175,7 @@ export default function DraftsPage({ hasKey, onEdit, onNeedKey }: { hasKey: bool
       </div>
 
       {release && (
-        <ReleaseModal draft={release} pair={pairOf(release.pairId)} last={prices[release.pairId]} hasKey={hasKey} onNeedKey={onNeedKey}
+        <ReleaseModal draft={release} pair={pairOf(release.pairId)} last={prices[release.pairId]} minOrder={minOrder} hasKey={hasKey} onNeedKey={onNeedKey}
           onClose={(sent) => {
             setRelease(null)
             if (sent) {
@@ -196,7 +201,8 @@ export default function DraftsPage({ hasKey, onEdit, onNeedKey }: { hasKey: bool
   )
 }
 
-function ReleaseModal({ draft, pair, last, hasKey, onNeedKey, onClose }: {
+function ReleaseModal({ draft, pair, last, minOrder, hasKey, onNeedKey, onClose }: {
+  minOrder: number
   draft: DraftDto
   pair: PairDto | undefined
   last: number | undefined
@@ -209,7 +215,7 @@ function ReleaseModal({ draft, pair, last, hasKey, onNeedKey, onClose }: {
   const [result, setResult] = useState<SendResult | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [available, setAvailable] = useState<Record<string, number> | null>(null)
-  const ev = evaluate(draft, pair, last)
+  const ev = evaluate(draft, pair, last, minOrder)
 
   useEffect(() => {
     if (hasKey) api().available().then(setAvailable).catch(() => setAvailable(null))
@@ -274,6 +280,7 @@ function ReleaseModal({ draft, pair, last, hasKey, onNeedKey, onClose }: {
                 )}</span>
               </p>
             )}
+            {pair && <RaisedNotice ladder={ev.ladder} input={draft.input} rules={pair} userMin={minOrder} base={draft.pairName.split('/')[0]} eur={eur} />}
             {ev.ladder.errors.length > 0 && <div className="notice notice-warning space-y-1">{ev.ladder.errors.map((e) => <p key={e}>{e}</p>)}</div>}
             {shortfall && <p className="notice notice-danger">{tr('Nicht genug verfügbares Guthaben: nötig', 'Not enough available balance: needed')} {draft.side === 'buy' ? eur(need) : `${num(need, pair?.volumeDecimals)} ${draft.pairName.split('/')[0]}`}, {tr('verfügbar', 'available')} {draft.side === 'buy' ? eur(have ?? 0) : num(have ?? 0, pair?.volumeDecimals)}.</p>}
           </>

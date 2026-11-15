@@ -41,6 +41,11 @@ const api: Api = {
   drafts: () => call('drafts'),
   saveDraft: (d) => call('draft:save', d),
   deleteDraft: (id) => call('draft:delete', id),
+  homeIps: () => call('ip:list'),
+  revealHomeIp: (index) => call('ip:reveal', index),
+  copyHomeIp: (index) => call('ip:copy', index),
+  addHomeIp: (ip, label) => call('ip:add', ip, label),
+  deleteHomeIp: (index) => call('ip:delete', index),
   onFills: (cb) => {
     const h = () => cb()
     ipcRenderer.on('fills', h)

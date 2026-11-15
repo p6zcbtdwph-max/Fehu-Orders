@@ -7,6 +7,7 @@ import { EXCHANGE_IDS, exchangeMeta, exchangeName, type ExchangeId } from '@shar
 import { tr } from '@shared/i18n'
 import SectionCard from '../components/ui/SectionCard'
 import Segmented from '../components/ui/Segmented'
+import HomeIps from '../components/HomeIps'
 
 function CheckList({ checks, exchange }: { checks: KeyCheck[]; exchange: string }) {
   return (
@@ -233,6 +234,7 @@ function KeyPanel({ exchange, hasKey, onKeyChanged }: { exchange: ExchangeId; ha
               <li>{tr(`Bei ${ex.name} den Schlüssel bearbeiten und bei der IP-Liste (IP whitelist / allowlist) genau diese Adresse eintragen.`, `Edit the key at ${ex.name} and enter exactly this address in the IP whitelist / allowlist.`)}</li>
               <li>{tr('Hier „Rechte erneut prüfen“. Alles grün heißt: es klappt.', 'Click “Check permissions again” here. All green means it works.')}</li>
             </ol>
+            <HomeIps />
             <p className="notice notice-warning">{tr(`Achtung: Bei den meisten privaten Anschlüssen in Deutschland ändert sich die IP-Adresse ab und zu, zum Beispiel nach einem Router-Neustart. Dann meldet die App „fehlende Berechtigung“, bis du die neue Adresse bei ${ex.name} einträgst. Unterwegs (anderes WLAN, Handy-Hotspot) geht der Schlüssel ebenfalls nicht.`, `Note: on most home connections the IP address changes now and then, for example after a router restart. The app then reports a missing permission until you enter the new address at ${ex.name}. On the go (other Wi-Fi, phone hotspot) the key will not work either.`)}</p>
           </div>
         </SectionCard>
