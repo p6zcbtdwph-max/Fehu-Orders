@@ -6,9 +6,10 @@ import { copyFileSync, existsSync, readFileSync, renameSync, writeFileSync, unli
 import { join } from 'node:path'
 import type { Credentials } from './exchange'
 import { exchangeOf, isExchangeId, type ExchangeId } from '../shared/exchanges'
-import type { LadderInput, LadderLevel, Side } from '../shared/ladder'
+import { DEFAULT_MIN_ORDER_EUR, MAX_MIN_ORDER_EUR, type LadderInput, type LadderLevel, type Side } from '../shared/ladder'
 import type { DraftDto, LogEntry } from '../shared/ipc'
 import { makeBackup, type BackupData } from '../shared/backup'
+import { cleanIps, type HomeIp } from '../shared/ip'
 import { langFromLocale, tr, type Lang } from '../shared/i18n'
 
 const file = (name: string) => join(app.getPath('userData'), name)
@@ -38,6 +39,30 @@ export function clearCredentials(ex: ExchangeId = 'kraken'): void {
   if (existsSync(f)) unlinkSync(f)
 }
 
+/** Eigene IP-Adressen (für die IP-Sperre der Schlüssel), verschlüsselt wie die Schlüssel. Kommen nicht in die Datensicherung. */
+const ipFile = () => file('home-ip.bin')
+
+export function saveHomeIps(ips: HomeIp[]): void {
+  if (!safeStorage.isEncryptionAvailable()) throw new Error(tr('Der Schlüsselbund ist nicht verfügbar. Die IP-Adresse wird nicht unverschlüsselt gespeichert.', 'The macOS keychain is not available. The IP address is never stored unencrypted.'))
+  const f = ipFile()
+  if (!ips.length) {
+    if (existsSync(f)) unlinkSync(f)
+    return
+  }
+  writeFileSync(`${f}.tmp`, safeStorage.encryptString(JSON.stringify(cleanIps(ips))), { mode: 0o600 })
+  renameSync(`${f}.tmp`, f)
+}
+
+export function loadHomeIps(): HomeIp[] {
+  const f = ipFile()
+  if (!existsSync(f)) return []
+  try {
+    return cleanIps(JSON.parse(safeStorage.decryptString(readFileSync(f))))
+  } catch {
+    return []
+  }
+}
+
 export interface Settings {
   /** Obergrenze pro Plan in EUR, schützt vor Tippfehlern */
   maxPlanEur: number
@@ -51,9 +76,11 @@ export interface Settings {
   language?: Lang
   /** Börse, mit der die App gerade arbeitet */
   exchange: ExchangeId
+  /** Mindest-Orderwert in EUR: keine einzelne Order liegt darunter (zu kleine Stufen hebt der Planer an) */
+  minOrderEur: number
 }
 
-export const DEFAULT_SETTINGS: Settings = { maxPlanEur: 50, watchlist: ['BTC/EUR', 'ETH/EUR'], currency: 'EUR', numberFormat: 'de', exchange: 'kraken' }
+export const DEFAULT_SETTINGS: Settings = { minOrderEur: DEFAULT_MIN_ORDER_EUR, maxPlanEur: 50, watchlist: ['BTC/EUR', 'ETH/EUR'], currency: 'EUR', numberFormat: 'de', exchange: 'kraken' }
 
 export interface PlanRecord {
   /** Fehlt bei Plänen aus der Zeit, als es nur Kraken gab */
@@ -130,6 +157,8 @@ export function cleanSettings(raw: Record<string, unknown>): Settings {
   if (raw.numberFormat === 'de' || raw.numberFormat === 'en') s.numberFormat = raw.numberFormat
   if (raw.language === 'de' || raw.language === 'en') s.language = raw.language
   if (isExchangeId(raw.exchange)) s.exchange = raw.exchange
+  const min = Number(raw.minOrderEur)
+  if (raw.minOrderEur !== undefined && raw.minOrderEur !== null && Number.isFinite(min) && min >= 1 && min <= MAX_MIN_ORDER_EUR) s.minOrderEur = min
   return s
 }
 

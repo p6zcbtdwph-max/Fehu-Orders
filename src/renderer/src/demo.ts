@@ -1,6 +1,7 @@
 // Demo-Modus: dieselbe Schnittstelle wie die echte App, aber nur mit Beispieldaten im Speicher.
 // Hier gibt es keinen Netzwerkzugriff, es kann also keine echte Order entstehen.
 import { tr } from '@shared/i18n'
+import { ipKind, ipProblem, maskIp } from '@shared/ip'
 import type { Api, DraftDto, KeyCheck, LogEntry, OpenOrderDto, PairDto, PlanDto, PlanStatusDto, SendResult, SettingsDto, TemplateDto } from '@shared/ipc'
 
 const P = (id: string, name: string, base: string, priceDecimals: number, orderMin: number, price: number) =>
@@ -24,7 +25,8 @@ const pairOf = (pairId: string) => MARKET.find((m) => m.pair.id === pairId)?.pai
 const round = (v: number, d: number) => Math.round(v * 10 ** d) / 10 ** d
 
 export function createDemoApi(): Api {
-  let settings: SettingsDto = { maxPlanEur: 5000, watchlist: ['BTC/EUR', 'ETH/EUR', 'SOL/EUR'], currency: 'EUR', numberFormat: 'de', exchange: 'kraken' }
+  let homeIps: { ip: string; label?: string }[] = [{ ip: '203.0.113.42', label: tr('Zuhause', 'Home') }]
+  let settings: SettingsDto = { minOrderEur: 10, maxPlanEur: 5000, watchlist: ['BTC/EUR', 'ETH/EUR', 'SOL/EUR'], currency: 'EUR', numberFormat: 'de', exchange: 'kraken' }
   const balances: Record<string, number> = { ZEUR: 2500, XXBT: 0.02, XETH: 0.5, SOL: 4 }
   let templates: TemplateDto[] = [
     { id: 'demo-1', name: 'Dip-Kauf 10 Stufen', pairName: 'BTC/EUR', postOnly: true,
@@ -178,6 +180,20 @@ export function createDemoApi(): Api {
     drafts: () => wait(drafts.map((d) => ({ ...d }))),
     async saveDraft(d) { drafts = drafts.some((x) => x.id === d.id) ? drafts.map((x) => (x.id === d.id ? d : x)) : [d, ...drafts] },
     async deleteDraft(id) { drafts = drafts.filter((d) => d.id !== id) },
+    // Beispiel-Adressen aus dem Dokumentationsbereich (keine echten)
+    homeIps: () => wait(homeIps.map((x) => ({ masked: maskIp(x.ip), label: x.label, kind: ipKind(x.ip) ?? 'IPv4' })), 0),
+    revealHomeIp: (i) => wait(homeIps[i]?.ip ?? '', 0),
+    async copyHomeIp(i) { await navigator.clipboard?.writeText(homeIps[i]?.ip ?? '').catch(() => undefined) },
+    async addHomeIp(ip, label) {
+      const p = ipProblem(ip)
+      if (p) throw new Error(p)
+      homeIps = [...homeIps, { ip: ip.trim(), label: label?.trim() || undefined }]
+      return homeIps.map((x) => ({ masked: maskIp(x.ip), label: x.label, kind: ipKind(x.ip) ?? 'IPv4' }))
+    },
+    async deleteHomeIp(i) {
+      homeIps = homeIps.filter((_, k) => k !== i)
+      return homeIps.map((x) => ({ masked: maskIp(x.ip), label: x.label, kind: ipKind(x.ip) ?? 'IPv4' }))
+    },
     onFills: () => () => {},
     onOpenPage: () => () => {},
   }

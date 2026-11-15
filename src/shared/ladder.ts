@@ -78,6 +78,8 @@ export interface LadderLevel {
   share: number
   /** Grund, warum die Stufe nicht gesendet werden kann */
   problem?: string
+  /** Die Stufe lag unter dem Mindest-Orderwert und wurde darauf angehoben */
+  raised?: boolean
 }
 
 export interface Ladder {
@@ -89,6 +91,40 @@ export interface Ladder {
   valid: boolean
   errors: string[]
   centers?: LadderCenters
+  /**
+   * Nur mit Mindest-Orderwert: wie viele Stufen angehoben wurden, damit keine Order darunter liegt.
+   * Durch das Anheben wird der Plan größer als eingegeben (Kauf: mehr Euro, Verkauf: mehr Menge).
+   */
+  raised?: { count: number; minCost: number }
+}
+
+/** Mindest-Orderwert in Euro, wenn in den Einstellungen nichts anderes steht */
+export const DEFAULT_MIN_ORDER_EUR = 10
+/** Größter erlaubter Mindest-Orderwert (Schutz vor Tippfehlern wie 10000 statt 10) */
+export const MAX_MIN_ORDER_EUR = 10_000
+
+export interface LadderOptions {
+  /**
+   * Mindest-Orderwert aus den Einstellungen (Gegenwert je Order in der Kurswährung, z. B. 10 €).
+   * Jede Stufe darunter wird auf den Mindestwert angehoben. Verlangt die Börse mehr, gilt deren Wert.
+   */
+  minCost?: number
+}
+
+/**
+ * Kleinster Gegenwert, den die Börse bei diesem Preis annimmt: ihr Mindestbetrag (costMin) oder
+ * ihre Mindestmenge mal Preis (bei Kraken z. B. 0.00005 BTC), je nachdem, was größer ist.
+ */
+export function exchangeMinCost(price: number, rules: Pick<PairRules, 'orderMin' | 'costMin'>): number {
+  const byVolume = price > 0 && rules.orderMin > 0 ? rules.orderMin * price : 0
+  return Math.max(rules.costMin > 0 ? rules.costMin : 0, byVolume)
+}
+
+/** Was je Order mindestens gilt: eigener Mindest-Orderwert oder der höhere Mindestwert der Börse */
+export function effectiveMinCost(userMin: number | undefined, price: number, rules: Pick<PairRules, 'orderMin' | 'costMin'>): { user: number; exchange: number; effective: number; exchangeHigher: boolean } {
+  const user = Number.isFinite(userMin) && (userMin as number) > 0 ? (userMin as number) : 0
+  const exchange = exchangeMinCost(price, rules)
+  return { user, exchange, effective: Math.max(user, exchange), exchangeHigher: exchange > user }
 }
 
 export const MAX_STEPS = 200
@@ -325,7 +361,7 @@ export function validateInput(input: LadderInput): string[] {
   return e
 }
 
-export function buildLadder(input: LadderInput, rules: PairRules): Ladder {
+export function buildLadder(input: LadderInput, rules: PairRules, opts: LadderOptions = {}): Ladder {
   const errors = validateInput(input)
   if (errors.length) return { levels: [], totalVolume: 0, totalCost: 0, averagePrice: 0, valid: false, errors }
 
@@ -364,6 +400,9 @@ export function buildLadder(input: LadderInput, rules: PairRules): Ladder {
     positions,
   }
 
+  const minOn = opts.minCost !== undefined
+  const minCost = minOn && Number.isFinite(opts.minCost) && (opts.minCost as number) > 0 ? (opts.minCost as number) : 0
+
   // Kauf: Preis abrunden, Verkauf: aufrunden. So wird nie schlechter gehandelt als berechnet.
   const prices = separateLevels(ts.map((t) => roundPrice(priceAt(spacing, priceStart, priceEnd, t), rules, side === 'buy' ? 'down' : 'up')), rules, side)
   const levels: LadderLevel[] = weights.map((w, i) => {
@@ -372,9 +411,19 @@ export function buildLadder(input: LadderInput, rules: PairRules): Ladder {
     // Menge immer abrunden, damit Budget bzw. Bestand nie überschritten wird
     // Preis 0 nach dem Runden (Preis kleiner als ein Preisschritt): keine Menge, die Stufe wird als Problem gemeldet
     const rawVolume = !(price > 0) ? 0 : side === 'buy' ? (total * share) / price : total * share
-    const volume = roundTo(rawVolume, rules.volumeDecimals, 'down')
+    let volume = roundTo(rawVolume, rules.volumeDecimals, 'down')
+    let raised = false
+    // Mindest-Orderwert: zu kleine Stufen auf den Mindestwert anheben (Menge aufrunden), damit die Börse sie annimmt
+    if (minOn && price > 0) {
+      const need = minVolume(price, Math.max(minCost, rules.costMin > 0 ? rules.costMin : 0), rules)
+      if (need > volume) {
+        volume = need
+        raised = true
+      }
+    }
     const cost = volume * price
-    return { index: i, price, volume, cost, share, problem: levelProblem(price, volume, rules) }
+    const problem = levelProblem(price, volume, rules) ?? (minOn ? belowMin(price, volume, minCost) : undefined)
+    return { index: i, price, volume, cost, share, problem, ...(raised ? { raised } : {}) }
   })
 
   const ok = levels.filter((l) => !l.problem)
@@ -388,6 +437,7 @@ export function buildLadder(input: LadderInput, rules: PairRules): Ladder {
   if (unordered) errors.push(tr('Mehrere Stufen haben nach dem Runden denselben Preis. Weniger Stufen oder größeren Preisbereich wählen.', 'Several levels have the same price after rounding. Choose fewer levels or a wider price range.'))
   if (levels.some((l) => l.problem)) errors.push(tr('Einige Stufen sind zu klein für die Börse. Weniger Stufen oder mehr Betrag wählen.', 'Some levels are too small for the exchange. Choose fewer levels or a larger amount.'))
 
+  const raisedCount = levels.filter((l) => l.raised).length
   return {
     levels,
     totalVolume,
@@ -396,7 +446,29 @@ export function buildLadder(input: LadderInput, rules: PairRules): Ladder {
     valid: errors.length === 0,
     errors,
     centers,
+    ...(minOn ? { raised: { count: raisedCount, minCost } } : {}),
   }
+}
+
+/**
+ * Kleinste Menge, die bei diesem Preis den Mindestwert (Gegenwert) und die Mindestmenge der Börse erfüllt,
+ * aufgerundet auf die erlaubten Nachkommastellen.
+ */
+function minVolume(price: number, minCost: number, rules: Pick<PairRules, 'orderMin' | 'volumeDecimals'>): number {
+  const raw = Math.max(rules.orderMin > 0 ? rules.orderMin : 0, minCost > 0 ? minCost / price : 0)
+  if (!(raw > 0)) return 0
+  let v = roundTo(raw, rules.volumeDecimals, 'up')
+  // Gleitkomma: 10 / 3 aufgerundet mal 3 muss wirklich mindestens 10 ergeben
+  const step = Math.pow(10, -Math.max(0, Math.min(20, Math.floor(rules.volumeDecimals))))
+  while (minCost > 0 && v * price < minCost * (1 - 1e-12)) v = roundTo(v + step, rules.volumeDecimals, 'nearest')
+  return v
+}
+
+/** Meldung, wenn eine Order unter dem eigenen Mindest-Orderwert liegt (sonst undefined) */
+export function belowMin(price: number, volume: number, minCost: number | undefined): string | undefined {
+  if (!(minCost !== undefined && minCost > 0)) return undefined
+  if (price * volume >= minCost * (1 - 1e-9)) return undefined
+  return tr(`Gegenwert unter deinem Mindest-Orderwert von ${minCost} €`, `Value below your minimum order value of ${minCost} €`)
 }
 
 /**
@@ -406,7 +478,7 @@ export function buildLadder(input: LadderInput, rules: PairRules): Ladder {
  * - keine zwei Stufen auf demselben Preis
  * - jede Stufe erfüllt nach dem Runden noch Mindestmenge und Mindestbetrag
  */
-export function prepareForSend<T extends Pick<LadderLevel, 'price' | 'volume'> & { index?: number }>(levels: T[], rules: PairRules, side: Side): { levels: T[]; error?: string } {
+export function prepareForSend<T extends Pick<LadderLevel, 'price' | 'volume'> & { index?: number }>(levels: T[], rules: PairRules, side: Side, minCost?: number): { levels: T[]; error?: string } {
   const bad = levels.filter((l) => !Number.isFinite(l.price) || !(l.price > 0) || !Number.isFinite(l.volume) || !(l.volume > 0))
   if (bad.length) return { levels, error: tr(`${bad.length} Stufe(n) haben einen ungültigen Preis oder eine ungültige Menge. Es wurde nichts gesendet.`, `${bad.length} level(s) have an invalid price or volume. Nothing was sent.`) }
   const r = conformLevels(levels, rules, side)
@@ -420,6 +492,18 @@ export function prepareForSend<T extends Pick<LadderLevel, 'price' | 'volume'> &
       error: tr(
         `${small.length} Stufe(n) würde die Börse ablehnen (z. B. Stufe ${n}: ${first.p}). Es wurde nichts gesendet. Bitte im Planer weniger Stufen oder mehr Betrag wählen.`,
         `The exchange would reject ${small.length} level(s) (e.g. level ${n}: ${first.p}). Nothing was sent. Please choose fewer levels or a larger amount in the planner.`,
+      ),
+    }
+  }
+  // Eigener Mindest-Orderwert aus den Einstellungen: auch hier gilt, keine einzige Order darunter
+  const under = r.levels.map((l, i) => ({ i, p: belowMin(l.price, l.volume, minCost) })).filter((x) => x.p)
+  if (under.length) {
+    const n = (r.levels[under[0].i].index ?? under[0].i) + 1
+    return {
+      levels: r.levels,
+      error: tr(
+        `${under.length} Stufe(n) liegen unter deinem Mindest-Orderwert von ${minCost} € (z. B. Stufe ${n}). Es wurde nichts gesendet. Bitte den Plan im Planer neu berechnen lassen, dort werden zu kleine Stufen automatisch angehoben.`,
+        `${under.length} level(s) are below your minimum order value of ${minCost} € (e.g. level ${n}). Nothing was sent. Please recalculate the plan in the planner, where levels that are too small are raised automatically.`,
       ),
     }
   }

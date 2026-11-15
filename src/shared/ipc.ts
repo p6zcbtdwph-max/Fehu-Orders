@@ -2,6 +2,7 @@
 import type { LadderInput, LadderLevel, Side } from './ladder'
 import type { BackupSummary } from './backup'
 import type { ExchangeId } from './exchanges'
+import type { HomeIpView } from './ip'
 
 export interface PairDto {
   id: string
@@ -41,6 +42,8 @@ export interface SettingsDto {
   exchange: ExchangeId
   /** Sprache der App, fehlt sie, gilt die Systemsprache */
   language?: 'de' | 'en'
+  /** Mindest-Orderwert je Order in EUR (Standard 10 €) */
+  minOrderEur: number
 }
 
 export interface SendResult {
@@ -141,7 +144,7 @@ export interface DraftDto {
 /** Ein Eintrag im Protokoll */
 export interface LogEntry {
   at: string
-  /** send, validate, rest, cancel-plan, cancel-order, cancel-all, key-save, key-clear, alarm, restore */
+  /** send, validate, rest, cancel-plan, cancel-order, cancel-all, key-save, key-clear, ip-save, ip-delete, alarm, restore */
   action: string
   pair?: string
   side?: Side
@@ -214,6 +217,14 @@ export interface Api {
   drafts(): Promise<DraftDto[]>
   saveDraft(d: DraftDto): Promise<void>
   deleteDraft(id: string): Promise<void>
+  /** Gespeicherte eigene IP-Adressen, nur verdeckt */
+  homeIps(): Promise<HomeIpView[]>
+  /** Klartext einer Adresse (Nummer in der Liste) */
+  revealHomeIp(index: number): Promise<string>
+  /** Adresse in die Zwischenablage kopieren, ohne sie anzuzeigen */
+  copyHomeIp(index: number): Promise<void>
+  addHomeIp(ip: string, label?: string): Promise<HomeIpView[]>
+  deleteHomeIp(index: number): Promise<HomeIpView[]>
   onFills(cb: () => void): () => void
   /** Hauptprozess bittet, eine Seite zu öffnen (z. B. nach Klick auf einen Kursalarm) */
   onOpenPage(cb: (page: string) => void): () => void

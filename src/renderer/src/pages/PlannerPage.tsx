@@ -2,12 +2,13 @@ import { api } from '../api'
 import { useEffect, useMemo, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { AlertTriangle, Bell, BookmarkPlus, ClipboardList, GraduationCap, FlaskConical, Info, RefreshCw, Send, Star, Trash2 } from 'lucide-react'
-import { buildLadder, MAX_STEPS, type LadderInput, type PriceSpacing, type Side, type SizeCurve } from '@shared/ladder'
+import { buildLadder, DEFAULT_MIN_ORDER_EUR, MAX_STEPS, type LadderInput, type PriceSpacing, type Side, type SizeCurve } from '@shared/ladder'
 import type { DraftDto, PairDto, SendResult, TemplateDto } from '@shared/ipc'
 import { firstTestInput, wrongSide } from '@shared/safety'
 import KpiStrip from '../components/ui/KpiStrip'
 import PairPicker from '../components/PairPicker'
 import CenterSliders from '../components/CenterSliders'
+import { MinOrderLine, RaisedNotice } from '../components/MinOrder'
 import SectionCard from '../components/ui/SectionCard'
 import Segmented from '../components/ui/Segmented'
 import { SendSuccessModal } from '../components/SendSuccess'
@@ -17,7 +18,7 @@ import { dateLocale, num, numberFormat, pct } from '../format'
 import { tr } from '@shared/i18n'
 import { parseNumber, parseWeightList, toInputText } from '@shared/number-format'
 import { useMoney } from '../money'
-import { activeExchange, exName, probeHint, probeOk } from '@shared/exchanges'
+import { activeExchange, exName, FIRST_TEST_MAX_EUR, probeHint, probeOk } from '@shared/exchanges'
 
 const curves = (): { id: SizeCurve; label: string; title: string }[] => [
   { id: 'flat', label: tr('Gleich', 'Equal'), title: tr('Jede Stufe gleich groß', 'Every level the same size') },
@@ -136,9 +137,11 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
   /** Fenster „Ersten Test vorbereiten“ */
   const [firstTest, setFirstTest] = useState(false)
   const [limit, setLimit] = useState<number | null>(null)
-  // Obergrenze pro Plan neu lesen, sobald der Planer wieder sichtbar ist (sie kann in den Einstellungen geändert worden sein)
+  /** Mindest-Orderwert aus den Einstellungen: keine Stufe darunter */
+  const [minOrder, setMinOrder] = useState(DEFAULT_MIN_ORDER_EUR)
+  // Obergrenze und Mindest-Orderwert neu lesen, sobald der Planer wieder sichtbar ist (sie können in den Einstellungen geändert worden sein)
   useEffect(() => {
-    if (active) api().settings().then((s) => setLimit(s.maxPlanEur)).catch(() => setLimit(null))
+    if (active) api().settings().then((s) => { setLimit(s.maxPlanEur); setMinOrder(s.minOrderEur ?? DEFAULT_MIN_ORDER_EUR) }).catch(() => setLimit(null))
   }, [active])
   const [scenarios, setScenarios] = useState<string[]>([])
   const [draftMsg, setDraftMsg] = useState<string | null>(null)
@@ -254,7 +257,7 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
     return undefined
   }, [keepPrices])
 
-  const ladder = useMemo(() => (pair ? buildLadder(input, pair) : null), [input, pair])
+  const ladder = useMemo(() => (pair ? buildLadder(input, pair, { minCost: minOrder }) : null), [input, pair, minOrder])
   const quote = pair?.name.split('/')[1] ?? 'EUR'
   const base = pair?.name.split('/')[0] ?? ''
   const sendable = ladder?.levels.filter((l) => !l.problem) ?? []
@@ -297,7 +300,7 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
       setKeepPrices(true)
       setPairId(btc.id)
       setLast(p)
-      const t = firstTestInput(p, btc)
+      const t = firstTestInput(p, btc, minOrder, Math.min(limit ?? FIRST_TEST_MAX_EUR, FIRST_TEST_MAX_EUR))
       setInput(t)
       setSendCount(null)
       setPostOnly(true)
@@ -451,6 +454,7 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
                 onChange={(v) => setSendCount(Number.isFinite(v) && v > 0 && Math.round(v) < sendable.length ? Math.round(v) : null)}
                 hint={partial ? tr(`Die ${nowCount} Stufen nah am Kurs. Den Rest sendest du später unter „Offene Orders“.`, `The ${nowCount} levels close to the price. Send the rest later under “Open orders”.`) : tr('Alle Stufen', 'All levels')} />
             </div>
+            {pair && <MinOrderLine userMin={minOrder} price={input.priceStart} rules={pair} pairName={pair.name} eur={eur} onOpenSettings={onOpenSettings} />}
             <div>
               <span className="label">{tr('Preisabstände', 'Price spacing')}</span>
               <Segmented<PriceSpacing> block value={input.spacing} onChange={(v) => set('spacing', v)} options={spacings()} />
@@ -506,6 +510,7 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
           {ladder && ladder.errors.length > 0 && (
             <div className="notice notice-warning space-y-1">{ladder.errors.map((e) => <p key={e}>{e}</p>)}</div>
           )}
+          {ladder && pair && <RaisedNotice ladder={ladder} input={input} rules={pair} userMin={minOrder} base={base} eur={eur} />}
           {overLimit && limit !== null && (
             <p className="notice notice-warning flex flex-wrap items-start gap-x-3 gap-y-1">
               <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" />
@@ -630,6 +635,7 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
                               : r?.error ? <span className="text-danger-fg">{r.error}</span>
                               : r ? <span className="text-success-fg">{result?.validate ? tr('geprüft', 'checked') : tr('angelegt', 'placed')}</span>
                               : later.has(l.index) ? <span className="text-ink-faint">{tr('später', 'later')}</span>
+                              : l.raised ? <span className="text-warning-fg" title={tr('Auf den Mindest-Orderwert angehoben', 'Raised to the minimum order value')}>{tr('angehoben', 'raised')}</span>
                               : <span className="text-ink-muted">{tr('bereit', 'ready')}</span>}
                           </td>
                         </tr>
@@ -719,14 +725,14 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
               </li>
               {tr(
                 <>
-                  <li><strong>Mini-Plan laden:</strong> BTC/EUR kaufen, 2 Stufen etwa 20 % unter dem Kurs, knapp über dem Mindestbetrag von {exName()} (meist unter 15 €). So tief wird der Kurs kaum fallen, die Orders bleiben also nur liegen.</li>
+                  <li><strong>Mini-Plan laden:</strong> BTC/EUR kaufen, 2 Stufen etwa 20 % unter dem Kurs, knapp über deinem Mindest-Orderwert ({eur(minOrder)}) und dem Mindestbetrag von {exName()}. So tief wird der Kurs kaum fallen, die Orders bleiben also nur liegen.</li>
                   <li><strong>Probelauf</strong> klicken. {probeHint()}.</li>
                   <li><strong>An {exName()} senden</strong> und bestätigen.</li>
                   <li>Unter <strong>Offene Orders</strong> nachsehen, ob beide Orders da sind, und den Plan <strong>stornieren</strong>.</li>
                   <li>Im <strong>Protokoll</strong> siehst du danach jeden Schritt mit Uhrzeit.</li>
                 </>,
                 <>
-                  <li><strong>Load mini plan:</strong> buy BTC/EUR, 2 levels about 20 % below the price, just above {exName()}’s minimum (usually under 15 €). The price will hardly fall that far, so the orders just sit there.</li>
+                  <li><strong>Load mini plan:</strong> buy BTC/EUR, 2 levels about 20 % below the price, just above your minimum order value ({eur(minOrder)}) and {exName()}’s minimum. The price will hardly fall that far, so the orders just sit there.</li>
                   <li>Click <strong>Test run</strong>. {probeHint()}.</li>
                   <li><strong>Send to {exName()}</strong> and confirm.</li>
                   <li>Check under <strong>Open orders</strong> that both orders are there, and <strong>cancel</strong> the plan.</li>
@@ -734,6 +740,10 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
                 </>,
               )}
             </ol>
+            {minOrder * 1.02 > FIRST_TEST_MAX_EUR && <p className="notice notice-danger">{tr(
+              `Dein Mindest-Orderwert steht bei ${eur(minOrder)}. Schon eine einzige Order wäre damit größer als die 50-€-Grenze beim ersten Test, die App würde nichts senden. Senke ihn für den Test in den Einstellungen, zum Beispiel auf 10 €.`,
+              `Your minimum order value is ${eur(minOrder)}. Even a single order would then be larger than the 50 € first-test limit, so the app would send nothing. Lower it in Settings for the test, for example to 10 €.`,
+            )}</p>}
             {!hasKey && <p className="notice notice-info">{tr('Für Schritt 3 bis 5 brauchst du einen Schlüssel.', 'For steps 3 to 5 you need a key.')} <button type="button" className="btn-link" onClick={() => { setFirstTest(false); onNeedKey() }}>{tr('Schlüssel anlegen', 'Create key')}</button></p>}
             {onOpenOrders && <p className="text-xs text-ink-muted">{tr(<>Geht etwas schief, stoppt die <strong>Notbremse</strong> unter „Offene Orders“ alle offenen Orders auf einmal.</>, <>If something goes wrong, the <strong>emergency stop</strong> under “Open orders” stops all open orders at once.</>)}</p>}
           </div>

@@ -19,6 +19,8 @@ export const actionLabel = (a: string): string => ({
   'cancel-all': tr('Notbremse', 'Emergency stop'),
   'key-save': tr('Schlüssel gespeichert', 'Key saved'),
   'key-clear': tr('Schlüssel gelöscht', 'Key deleted'),
+  'ip-save': tr('IP-Adresse gespeichert', 'IP address saved'),
+  'ip-delete': tr('IP-Adresse gelöscht', 'IP address deleted'),
   alarm: tr('Kursalarm', 'Price alert'),
   restore: tr('Sicherung eingespielt', 'Backup restored'),
 } as Record<string, string>)[a] ?? a

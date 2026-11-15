@@ -119,4 +119,15 @@ describe('Sicherungen vor dem Senden', () => {
     expect(r.ok).toBe(true)
     expect(r.value.check).toBeUndefined()
   })
+  it('Mindest-Orderwert: über dem Börsen-Minimum (5 €), aber unter den eigenen 10 € → nichts wird gesendet', async () => {
+    posted.length = 0
+    const r = await send(lv(2, 49000, 0.00015)) // je ca. 7,35 €
+    expect(r.ok).toBe(false)
+    expect(r.error).toMatch(/Mindest-Orderwert von 10 €/)
+    expect(posted).toHaveLength(0)
+    await call('settings:save', { minOrderEur: 5 })
+    const ok = await send(lv(2, 49000, 0.00015), { validate: true })
+    expect(ok.ok).toBe(true)
+    await call('settings:save', { minOrderEur: 10 })
+  })
 })
