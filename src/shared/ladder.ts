@@ -69,6 +69,65 @@ export interface LadderZone {
   steps: number
   /** Anteil am Gesamtbetrag in Prozent (wird über alle Zonen auf 100 % umgerechnet) */
   share: number
+  /**
+   * false = entschärft: die Zone wird beim Senden zurückgehalten, sperrt also noch kein Guthaben.
+   * Unter „Offene Orders“ lässt sie sich später scharf schalten. Fehlt der Wert, ist die Zone scharf.
+   */
+  armed?: boolean
+  /**
+   * Nur für entschärfte Zonen: wann der Knopf „scharf schalten“ aufleuchtet,
+   * z. B. { zone: 1, percent: 50 } = sobald Zone 2 zu mindestens 50 % ausgeführt ist. Fehlt der Wert: vorige Zone, 50 %.
+   */
+  trigger?: ZoneTrigger
+}
+
+export interface ZoneTrigger {
+  /** Index der Zone, deren Ausführung zählt (0 = erste Zone) */
+  zone: number
+  /** Ab wie viel Prozent ausgeführt (1–100) */
+  percent: number
+}
+
+/** Bedingung einer entschärften Zone, mit Standardwert (vorige Zone, 50 %) */
+export function zoneTrigger(zones: LadderZone[], i: number): ZoneTrigger {
+  const t = zones[i]?.trigger
+  const zone = t && Number.isInteger(t.zone) && t.zone >= 0 && t.zone < zones.length && t.zone !== i ? t.zone : Math.max(0, i - 1)
+  const percent = t && Number.isFinite(t.percent) ? Math.min(100, Math.max(1, t.percent)) : 50
+  return { zone, percent }
+}
+
+/** Indizes der entschärften Zonen eines Plans (leer ohne Zonen) */
+export function heldZones(input: Pick<LadderInput, 'zones'>): Set<number> {
+  const out = new Set<number>()
+  ;(input.zones ?? []).forEach((z, i) => { if (z.armed === false) out.add(i) })
+  return out
+}
+
+/** Stufen, die beim ersten Senden zurückgehalten werden, weil ihre Zone entschärft ist */
+export function isHeld(level: { zone?: number }, held: Set<number>): boolean {
+  return level.zone !== undefined && held.has(level.zone)
+}
+
+/**
+ * Bringt die Anteile der Zonen auf ganze Prozent mit genau 100 % Summe
+ * (beim Hinzufügen oder Entfernen einer Zone und für den Aufteilungs-Regler).
+ */
+export function normalizeShares(zones: LadderZone[]): LadderZone[] {
+  if (!zones.length) return zones
+  const raw = zones.map((z) => (Number.isFinite(z.share) && z.share > 0 ? z.share : 0))
+  const sum = raw.reduce((a, b) => a + b, 0)
+  const base = sum > 0 ? raw.map((x) => (x / sum) * 100) : zones.map(() => 100 / zones.length)
+  const ints = base.map((x) => Math.max(1, Math.floor(x)))
+  let diff = 100 - ints.reduce((a, b) => a + b, 0)
+  // Rest nach den größten Nachkommaresten verteilen (bzw. bei zu viel von den größten Zonen abziehen)
+  const order = base.map((x, i) => ({ i, r: x - Math.floor(x) })).sort((a, b) => b.r - a.r).map((x) => x.i)
+  for (let k = 0; diff > 0; k++, diff--) ints[order[k % order.length]]++
+  const big = ints.map((x, i) => ({ i, x })).sort((a, b) => b.x - a.x).map((x) => x.i)
+  for (let k = 0; diff < 0 && k < 1000; k++) {
+    const i = big[k % big.length]
+    if (ints[i] > 1) { ints[i]--; diff++ }
+  }
+  return zones.map((z, i) => ({ ...z, share: ints[i] }))
 }
 
 /** Höchstens so viele Zonen pro Plan */
@@ -406,6 +465,7 @@ export function validateZones(input: LadderInput): string[] {
   const zs = input.zones ?? []
   const buy = input.side === 'buy'
   if (zs.length > MAX_ZONES) e.push(tr(`Höchstens ${MAX_ZONES} Zonen.`, `At most ${MAX_ZONES} zones.`))
+  if (zs.length && zs.every((z) => z.armed === false)) e.push(tr('Mindestens eine Zone muss scharf sein, sonst wird nichts gesendet.', 'At least one zone must be armed, otherwise nothing is sent.'))
   if (input.curve === 'custom') e.push(tr('Mit Preiszonen gibt es keine eigenen Prozente je Stufe. Den Anteil legst du je Zone fest.', 'Custom percentages per level are not available with price zones. Set the share per zone instead.'))
   const total = zs.reduce((a, z) => a + (Number.isFinite(z.steps) ? z.steps : 0), 0)
   if (total > MAX_STEPS) e.push(tr(`Alle Zonen zusammen höchstens ${MAX_STEPS} Stufen (jetzt ${total}).`, `All zones together at most ${MAX_STEPS} levels (now ${total}).`))
@@ -504,7 +564,7 @@ export function appendZone(zones: LadderZone[], side: Side): LadderZone[] {
   const start = zoneEnd(last) + dir * (gap || width * 0.25)
   const end = start + dir * width
   if (!(start > 0) || !(end > 0)) return zones
-  return [...zones, { priceStart: +start.toPrecision(6), priceEnd: +end.toPrecision(6), steps: last.steps, share: last.share }]
+  return [...zones, { priceStart: +start.toPrecision(6), priceEnd: +end.toPrecision(6), steps: last.steps, share: last.share, armed: false }]
 }
 
 export function buildLadder(input: LadderInput, rules: PairRules, opts: LadderOptions = {}): Ladder {

@@ -31,6 +31,7 @@ const api: Api = {
   saveSettings: (s) => call('settings:save', s),
   usdRate: () => call('usdRate'),
   sendRest: (userref, validate) => call('plan:rest', userref, validate),
+  armZone: (userref, zone, validate, levels) => call('plan:zone', userref, zone, validate, levels),
   ohlc: (pairId, interval) => call('ohlc', pairId, interval),
   fees: (pairId) => call('fees', pairId),
   available: () => call('available'),

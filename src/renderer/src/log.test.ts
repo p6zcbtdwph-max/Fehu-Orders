@@ -18,7 +18,7 @@ describe('Protokoll', () => {
     const input = { side: 'buy' as const, priceStart: 81000, priceEnd: 79000, steps: 2, total: 50, spacing: 'linear' as const, curve: 'flat' as const, ratio: 1 }
     const { levels } = buildLadder(input, pair)
     await expect(api.send({ pairId: pair.id, pairName: pair.name, side: 'buy', input, levels, validate: true, postOnly: true })).rejects.toThrow(/falschen Seite/)
-    expect(await api.cancelAll()).toBe(3) // die offenen Orders des Beispielplans
+    expect(await api.cancelAll()).toBe(4) // die offenen Orders der Beispielpläne
     expect(await api.openOrders()).toHaveLength(0)
     const log = await api.log()
     expect(log.map((e) => e.action)).toEqual(['cancel-all', 'validate'])

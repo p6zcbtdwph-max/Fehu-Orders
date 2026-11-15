@@ -1,5 +1,6 @@
 // Gemeinsame Typen für Fenster und Hauptprozess
 import type { OhlcRow } from './history'
+import type { ZoneProgress } from './plan-status'
 import type { LadderInput, LadderLevel, Side } from './ladder'
 import type { BackupSummary } from './backup'
 import type { ExchangeId } from './exchanges'
@@ -171,6 +172,8 @@ export interface PlanStatusDto {
   filledCost: number
   fees: number
   averagePrice: number
+  /** Nur bei Plänen mit Preiszonen: Fortschritt je Zone */
+  zones?: ZoneProgress[]
 }
 
 export interface Api {
@@ -208,6 +211,11 @@ export interface Api {
   saveSettings(s: Partial<SettingsDto>): Promise<SettingsDto>
   usdRate(): Promise<number>
   sendRest(userref: number, validate: boolean): Promise<SendResult>
+  /**
+   * Eine entschärfte Zone eines gesendeten Plans scharf schalten: ihre Stufen gehen jetzt raus (gleiche Plan-Nummer).
+   * levels: geänderte Stufen der Zone (nach „Bearbeiten“), sonst die beim Planen berechneten.
+   */
+  armZone(userref: number, zone: number, validate: boolean, levels?: LadderLevel[]): Promise<SendResult>
   /** Kerzen: [Zeit in s, Schlusskurs, Tief, Hoch] */
   ohlc(pairId: string, interval: number): Promise<OhlcRow[]>
   fees(pairId: string): Promise<{ maker: number; taker: number }>
