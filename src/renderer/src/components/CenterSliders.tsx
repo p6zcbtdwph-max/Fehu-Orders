@@ -94,8 +94,10 @@ function CenterTrack({ centers, shares, firstLabel, lastLabel, legend }: { cente
   )
 }
 
-export default function CenterSliders({ side, steps, centers, shares, orderCenter, volumeCenter, priceStart, priceEnd, formatPrice, onChange }: {
+export default function CenterSliders({ side, steps, centers, shares, orderCenter, volumeCenter, priceStart, priceEnd, formatPrice, onChange, volumeOff }: {
   side: Side
+  /** Text, warum der Volumen-Regler gerade nicht gilt (z. B. bei „pro Stufe“) */
+  volumeOff?: string
   steps: number
   centers: LadderCenters
   shares: number[]
@@ -121,7 +123,7 @@ export default function CenterSliders({ side, steps, centers, shares, orderCente
         disabledText={steps < 3 ? T.needSteps(3) : undefined} priceAt={priceAt} onChange={(v) => onChange('orderCenter', v)} />
       <CenterSlider tone="volume" label={T.volumeLabel[side]} hint={T.volumeHint[side]}
         value={volumeCenter ?? centers.volumeDefault} formulaValue={centers.volumeDefault} custom={volumeCenter !== undefined}
-        disabledText={steps < 2 ? T.needSteps(2) : undefined} priceAt={priceAt} onChange={(v) => onChange('volumeCenter', v)} />
+        disabledText={volumeOff ?? (steps < 2 ? T.needSteps(2) : undefined)} priceAt={priceAt} onChange={(v) => onChange('volumeCenter', v)} />
     </div>
   )
 }

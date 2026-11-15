@@ -1,6 +1,6 @@
 // Mindest-Orderwert im Planer und bei Entwürfen: was gilt, und Warnung, wenn Stufen angehoben wurden
 import { ArrowUpCircle, Info } from 'lucide-react'
-import { effectiveMinCost, type Ladder, type LadderInput, type PairRules } from '@shared/ladder'
+import { amountUnit, effectiveMinCost, planAmount, type Ladder, type LadderInput, type PairRules } from '@shared/ladder'
 import { tr } from '@shared/i18n'
 import { exName } from '@shared/exchanges'
 import { num } from '../format'
@@ -34,12 +34,13 @@ export function RaisedNotice({ ladder, input, rules, userMin, base, eur }: { lad
   if (!count) return null
   const first = ladder.levels.find((l) => l.raised)
   const min = effectiveMinCost(userMin, first?.price ?? input.priceStart, rules).effective
-  const buy = input.side === 'buy'
-  const before = input.total
+  // „buy“ heißt hier: der Plan ist in Geld angegeben (früher immer beim Kauf), sonst in Stück
+  const buy = amountUnit(input) === 'quote'
+  const before = planAmount(input)
   const after = buy ? ladder.totalCost : ladder.totalVolume
   const grows = buy ? after - before >= 0.01 : after > before * (1 + 1e-9)
-  // Wie viele Stufen passen in den eingegebenen Betrag, ohne dass etwas angehoben werden muss (nur beim Kauf sinnvoll)
-  const fit = buy && min > 0 ? Math.floor(before / (min * 1.01)) : 0
+  // Wie viele Stufen passen in den eingegebenen Betrag, ohne dass etwas angehoben werden muss (nur bei Geld sinnvoll)
+  const fit = buy && !input.perLevel && min > 0 ? Math.floor(before / (min * 1.01)) : 0
   const levels = tr(count === 1 ? '1 Stufe lag' : `${count} Stufen lagen`, count === 1 ? '1 level was' : `${count} levels were`)
   return (
     <p className="notice notice-warning flex items-start gap-2">
