@@ -1,8 +1,8 @@
 import { api } from '../api'
 import { useEffect, useMemo, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { AlertTriangle, Bell, History, Layers, SlidersHorizontal, BookmarkPlus, ClipboardList, GraduationCap, FlaskConical, Info, RefreshCw, Send, Star, Trash2 } from 'lucide-react'
-import { buildLadder, DEFAULT_MIN_ORDER_EUR, hasZones, MAX_STEPS, splitIntoZones, zoneEnd, zoneSummary, type LadderInput, type LadderZone, type PriceSpacing, type Side, type SizeCurve } from '@shared/ladder'
+import { AlertTriangle, Bell, History, Layers, ShieldOff, SlidersHorizontal, BookmarkPlus, ClipboardList, GraduationCap, FlaskConical, Info, RefreshCw, Send, Star, Trash2 } from 'lucide-react'
+import { buildLadder, DEFAULT_MIN_ORDER_EUR, hasZones, heldZones, isHeld, zoneTrigger, MAX_STEPS, splitIntoZones, zoneEnd, zoneSummary, type LadderInput, type LadderZone, type PriceSpacing, type Side, type SizeCurve } from '@shared/ladder'
 import { reach, toCandles, unreached, windowStats, type Candle, type OhlcRow } from '@shared/history'
 import ZoneEditor, { zoneColor } from '../components/ZoneEditor'
 import HistoryHints, { windowLabel, windowPhrase } from '../components/HistoryHints'
@@ -260,12 +260,16 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
   const base = pair?.name.split('/')[0] ?? ''
   const sendable = ladder?.levels.filter((l) => !l.problem) ?? []
   // Nur die ersten N Stufen (nah am Kurs) gehen jetzt raus, der Rest bleibt im Plan
-  const nowCount = sendCount ? Math.min(sendCount, sendable.length) : sendable.length
-  const toSend = sendable.slice(0, nowCount)
+  // Entschärfte Preiszonen bleiben im Plan, gehen aber jetzt nicht raus
+  const held = heldZones(input)
+  const armedLevels = sendable.filter((l) => !isHeld(l, held))
+  const heldLevels = sendable.filter((l) => isHeld(l, held))
+  const nowCount = sendCount ? Math.min(sendCount, armedLevels.length) : armedLevels.length
+  const toSend = armedLevels.slice(0, nowCount)
   const nowCost = toSend.reduce((a, l) => a + l.cost, 0)
   const nowVolume = toSend.reduce((a, l) => a + l.volume, 0)
-  const partial = nowCount < sendable.length
-  const later = new Set(sendable.slice(nowCount).map((l) => l.index))
+  const partial = nowCount < armedLevels.length
+  const later = new Set([...armedLevels.slice(nowCount), ...heldLevels].map((l) => l.index))
 
   // Gebühren und Guthaben (für das, was jetzt gesendet wird)
   const feePct = fees ? (postOnly ? fees.maker : fees.taker) : null
@@ -474,8 +478,8 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
               {zoned
                 ? <div><span className="label">{tr('Anzahl Stufen', 'Number of levels')}</span><p className="pt-2 text-sm tabular-nums">{input.steps} <span className="text-xs text-ink-muted">{tr('aus den Zonen', 'from the zones')}</span></p></div>
                 : <NumberField label={tr('Anzahl Stufen', 'Number of levels')} step="1" value={input.steps} onChange={(v) => set('steps', Math.round(v))} hint={tr(`1 bis ${MAX_STEPS}`, `1 to ${MAX_STEPS}`)} />}
-              <NumberField label={tr('Davon jetzt senden', 'Send now')} step="1" value={sendCount ?? sendable.length}
-                onChange={(v) => setSendCount(Number.isFinite(v) && v > 0 && Math.round(v) < sendable.length ? Math.round(v) : null)}
+              <NumberField label={tr('Davon jetzt senden', 'Send now')} step="1" value={sendCount ?? armedLevels.length}
+                onChange={(v) => setSendCount(Number.isFinite(v) && v > 0 && Math.round(v) < armedLevels.length ? Math.round(v) : null)}
                 hint={partial ? tr(`Die ${nowCount} Stufen nah am Kurs. Den Rest sendest du später unter „Offene Orders“.`, `The ${nowCount} levels close to the price. Send the rest later under “Open orders”.`) : tr('Alle Stufen', 'All levels')} />
             </div>
             {pair && <MinOrderLine userMin={minOrder} price={input.priceStart} rules={pair} pairName={pair.name} eur={eur} onOpenSettings={onOpenSettings} />}
@@ -525,7 +529,7 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
         <div className="min-w-0 space-y-4" data-guide="result">
           {ladder && (
             <KpiStrip items={[
-              { label: tr('Stufen', 'Levels'), value: `${sendable.length} / ${input.steps}`, tone: sendable.length < input.steps ? 'warning' : 'default', hint: partial ? tr(`${nowCount} jetzt, ${sendable.length - nowCount} später`, `${nowCount} now, ${sendable.length - nowCount} later`) : undefined },
+              { label: tr('Stufen', 'Levels'), value: `${sendable.length} / ${input.steps}`, tone: sendable.length < input.steps ? 'warning' : 'default', hint: partial || heldLevels.length ? tr(`${nowCount} jetzt, ${sendable.length - nowCount} später`, `${nowCount} now, ${sendable.length - nowCount} later`) : undefined },
               { label: partial ? tr('Gegenwert jetzt', 'Value now') : tr('Gegenwert', 'Value'), value: eur(partial ? nowCost : ladder.totalCost), tone: overLimit ? 'warning' : 'default', hint: feeEur !== null ? tr(`+ ca. ${eur(feeEur)} Gebühr (${num(feePct ?? 0, 2)} %)`, `+ approx. ${eur(feeEur)} fee (${num(feePct ?? 0, 2)} %)`) : partial ? tr(`von ${eur(ladder.totalCost)} gesamt`, `of ${eur(ladder.totalCost)} total`) : undefined },
               { label: tr(`Menge ${base}`, `Volume ${base}`), value: num(ladder.totalVolume, pair?.volumeDecimals) },
               { label: tr('Ø Preis bei voller Ausführung', 'Avg. price if fully filled'), value: ladder.averagePrice ? fmtPrice(ladder.averagePrice, pair?.priceDecimals ?? 2) : '–', hint: last && ladder.averagePrice ? pct(ladder.averagePrice / last - 1) + tr(' zum Kurs', ' vs. price') : undefined },
@@ -533,6 +537,19 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
           )}
           {ladder && ladder.errors.length > 0 && (
             <div className="notice notice-warning space-y-1">{ladder.errors.map((e) => <p key={e}>{e}</p>)}</div>
+          )}
+          {heldLevels.length > 0 && zoned && (
+            <p className="notice notice-accent flex items-start gap-2 text-xs">
+              <ShieldOff size={14} className="mt-0.5 flex-shrink-0" />
+              <span>{[...held].map((z) => {
+                const t = zoneTrigger(input.zones!, z)
+                const cost = heldLevels.filter((l) => l.zone === z).reduce((a, l) => a + l.cost, 0)
+                return <span key={z} className="block">{tr(
+                  <><strong>Zone {z + 1} ist entschärft.</strong> {input.side === 'buy' ? eur(cost) : `≈ ${eur(cost)}`} gehen beim Senden noch nicht raus und sperren kein Guthaben. Unter „Offene Orders“ leuchtet „Zone {z + 1} scharf schalten“ auf, sobald Zone {t.zone + 1} zu {t.percent} % ausgeführt ist.</>,
+                  <><strong>Zone {z + 1} is disarmed.</strong> {input.side === 'buy' ? eur(cost) : `≈ ${eur(cost)}`} will not be sent yet and lock no funds. Under “Open orders”, “Arm zone {z + 1}” lights up once zone {t.zone + 1} is {t.percent} % filled.</>,
+                )}</span>
+              })}</span>
+            </p>
           )}
           {never && never.count > 0 && ladder && (
             <p className="notice notice-info flex items-start gap-2 text-xs">
@@ -689,6 +706,7 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
                             {l.problem ? <span className="text-warning-fg">{l.problem}</span>
                               : r?.error ? <span className="text-danger-fg">{r.error}</span>
                               : r ? <span className="text-success-fg">{result?.validate ? tr('geprüft', 'checked') : tr('angelegt', 'placed')}</span>
+                              : isHeld(l, held) ? <span className="text-ink-faint">{tr('entschärft', 'disarmed')}</span>
                               : later.has(l.index) ? <span className="text-ink-faint">{tr('später', 'later')}</span>
                               : l.raised ? <span className="text-warning-fg" title={tr('Auf den Mindest-Orderwert angehoben', 'Raised to the minimum order value')}>{tr('angehoben', 'raised')}</span>
                               : <span className="text-ink-muted">{tr('bereit', 'ready')}</span>}
@@ -752,8 +770,8 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
               <input className="input w-full" value={draftForm.note} placeholder={tr('z. B. nur freigeben, wenn BTC unter 60.000 € fällt', 'e.g. only release if BTC falls below 60,000 €')} onChange={(e) => setDraftForm({ ...draftForm, note: e.target.value })} />
             </label>
             <p className="text-xs text-ink-muted">{tr(
-              `${input.side === 'buy' ? 'Kauf' : 'Verkauf'} ${pair.name}, ${nowCount} ${partial ? `von ${sendable.length} ` : ''}Stufen, ${eur(nowCost)}. Es geht nichts an ${exName()}. Freigeben kannst du den Entwurf im Reiter „Entwürfe“.`,
-              `${input.side === 'buy' ? 'Buy' : 'Sell'} ${pair.name}, ${nowCount} ${partial ? `of ${sendable.length} ` : ''}levels, ${eur(nowCost)}. Nothing goes to ${exName()}. You can release the draft in the “Drafts” tab.`,
+              `${input.side === 'buy' ? 'Kauf' : 'Verkauf'} ${pair.name}, ${nowCount} ${partial || heldLevels.length ? `von ${sendable.length} ` : ''}Stufen, ${eur(nowCost)}. Es geht nichts an ${exName()}. Freigeben kannst du den Entwurf im Reiter „Entwürfe“.`,
+              `${input.side === 'buy' ? 'Buy' : 'Sell'} ${pair.name}, ${nowCount} ${partial || heldLevels.length ? `of ${sendable.length} ` : ''}levels, ${eur(nowCost)}. Nothing goes to ${exName()}. You can release the draft in the “Drafts” tab.`,
             )}</p>
           </div>
         </Modal>
@@ -827,7 +845,8 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
               `Achtung: ${wrong.length} ${wrong.length === 1 ? 'Stufe liegt' : 'Stufen liegen'} auf der falschen Seite des Kurses (${fmtPrice(last ?? 0, pair.priceDecimals)} ${sym}) und ${postOnly ? 'werden sofort wieder storniert' : 'würden sofort ausgeführt'}.`,
               `Warning: ${wrong.length} ${wrong.length === 1 ? 'level is' : 'levels are'} on the wrong side of the price (${fmtPrice(last ?? 0, pair.priceDecimals)} ${sym}) and ${postOnly ? 'will be cancelled right away' : 'would be filled immediately'}.`,
             )}</p>}
-            {partial && <p className="text-ink-muted">{tr(`Die restlichen ${sendable.length - nowCount} Stufen bleiben im Plan. Du kannst sie später unter „Offene Orders“ mit „Rest senden“ nachschicken.`, `The remaining ${sendable.length - nowCount} levels stay in the plan. You can send them later under “Open orders” with “Send rest”.`)}</p>}
+            {heldLevels.length > 0 && <p className="text-ink-muted">{tr(`Entschärft und nicht dabei: ${[...held].map((z) => `Zone ${z + 1}`).join(', ')} mit ${heldLevels.length} Stufen. Die schaltest du später unter „Offene Orders“ scharf.`, `Disarmed and not included: ${[...held].map((z) => `zone ${z + 1}`).join(', ')} with ${heldLevels.length} levels. You arm them later under “Open orders”.`)}</p>}
+            {partial && <p className="text-ink-muted">{tr(`Die restlichen ${armedLevels.length - nowCount} Stufen bleiben im Plan. Du kannst sie später unter „Offene Orders“ mit „Rest senden“ nachschicken.`, `The remaining ${armedLevels.length - nowCount} levels stay in the plan. You can send them later under “Open orders” with “Send rest”.`)}</p>}
             <p>{tr(
               <>{exName()} sperrt dafür jetzt <strong>{input.side === 'buy' ? eur(nowCost) : `${num(toSend.reduce((a, l) => a + l.volume, 0), pair.volumeDecimals)} ${base}`}</strong> von deinem Guthaben, bis die Orders ausgeführt oder storniert sind.</>,
               <>{exName()} now locks <strong>{input.side === 'buy' ? eur(nowCost) : `${num(toSend.reduce((a, l) => a + l.volume, 0), pair.volumeDecimals)} ${base}`}</strong> of your balance for this until the orders are filled or cancelled.</>,

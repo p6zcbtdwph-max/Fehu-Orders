@@ -1,8 +1,10 @@
 import { api } from '../api'
 import { Fragment, useEffect, useState } from 'react'
-import { OctagonX, RefreshCw, Send, TrendingUp, X } from 'lucide-react'
+import { OctagonX, RefreshCw, Send, Shield, TrendingUp, X } from 'lucide-react'
+import { heldZones, isHeld } from '@shared/ladder'
+import ArmZoneModal, { triggerText, zoneLevels } from '../components/ArmZone'
 import { assetLabel } from '@shared/safety'
-import type { OpenOrderDto, PlanDto, PlanStatusDto, SendResult } from '@shared/ipc'
+import type { OpenOrderDto, PairDto, PlanDto, PlanStatusDto, SendResult } from '@shared/ipc'
 import { profitLadderSuggestion } from '@shared/plan-status'
 import type { Prefill } from './PlannerPage'
 import SectionCard from '../components/ui/SectionCard'
@@ -18,6 +20,9 @@ export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; on
   const [plans, setPlans] = useState<PlanDto[]>([])
   /** Nachkommastellen je Paar, damit günstige Coins (DOGE 0,1234567) nicht auf 0,12 gekürzt werden */
   const [decimals, setDecimals] = useState<Record<string, number>>({})
+  const [pairs, setPairs] = useState<PairDto[]>([])
+  /** Fenster „Zone scharf schalten“ */
+  const [arm, setArm] = useState<{ plan: PlanDto; zone: number } | null>(null)
   const dec = (pairId: string) => decimals[pairId] ?? 2
   const [balances, setBalances] = useState<Record<string, number>>({})
   const [restSent, setRestSent] = useState<{ result: SendResult; pairName: string; side: 'buy' | 'sell'; priceDecimals: number } | null>(null)
@@ -56,7 +61,7 @@ export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; on
   async function load() {
     setError(null)
     api().plans().then(setPlans).catch(() => {})
-    api().pairs().then((ps) => setDecimals(Object.fromEntries(ps.map((x) => [x.id, x.priceDecimals])))).catch(() => {})
+    api().pairs().then((ps) => { setPairs(ps); setDecimals(Object.fromEntries(ps.map((x) => [x.id, x.priceDecimals]))) }).catch(() => {})
     if (!hasKey) return
     try {
       const [o, b] = await Promise.all([api().openOrders(), api().balances()])
@@ -103,10 +108,14 @@ export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; on
     load()
   }
 
+  // Entschärfte Zonen zählen nicht zum Rest, die haben ihren eigenen Knopf
   const restLevels = (p: PlanDto) => {
     const sent = new Set(p.sentIndices ?? [])
-    return (p.levels ?? []).filter((l) => !sent.has(l.index))
+    const held = heldZones(p.input)
+    return (p.levels ?? []).filter((l) => !sent.has(l.index) && !isHeld(l, held))
   }
+  /** Entschärfte Zonen eines Plans, die noch Stufen zum Senden haben */
+  const heldOf = (p: PlanDto) => [...heldZones(p.input)].filter((z) => zoneLevels(p, z).length > 0)
 
   async function sendRest(p: PlanDto, validate: boolean) {
     setBusy(true)
@@ -132,7 +141,7 @@ export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; on
   }
 
   const hasActions = (p: PlanDto, st: PlanStatusDto | undefined, open: number) =>
-    restLevels(p).length > 0 || (p.side === 'buy' && !!st && st.filledVolume > 0) || open > 0
+    restLevels(p).length > 0 || heldOf(p).length > 0 || (p.side === 'buy' && !!st && st.filledVolume > 0) || open > 0
 
   const openByPlan = (ref: number) => orders?.filter((o) => o.userref === ref).length ?? 0
 
@@ -199,7 +208,27 @@ export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; on
                       {hasActions(p, st, open) && (
                         <tr>
                           <td colSpan={7} className="pt-0">
-                            <span className="inline-flex gap-2">
+                            {st?.zones && p.input.zones && (
+                              <p className="mb-2 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-ink-muted tabular-nums">
+                                {p.input.zones.map((z, i) => {
+                                  const zp = st.zones!.find((x) => x.zone === i)
+                                  return <span key={i}>{tr(`Zone ${i + 1}`, `Zone ${i + 1}`)}: {z.armed === false ? tr('entschärft', 'disarmed') : zp && zp.sentVolume > 0 ? tr(`${Math.round(zp.filledShare * 100)} % ausgeführt`, `${Math.round(zp.filledShare * 100)} % filled`) : '–'}</span>
+                                })}
+                              </p>
+                            )}
+                            {heldOf(p).filter((z) => triggerText(p, z, st?.zones).met).map((z) => (
+                              <p key={`t${z}`} className="mb-2 text-xs font-medium text-success-fg">{triggerText(p, z, st?.zones).text}</p>
+                            ))}
+                            <span className="inline-flex flex-wrap gap-2">
+                              {heldOf(p).map((z) => {
+                                const c = triggerText(p, z, st?.zones)
+                                return (
+                                  <button key={`z${z}`} type="button" className={`btn btn-sm whitespace-nowrap ${c.met ? 'btn-primary animate-pulse ring-2 ring-accent-400 ring-offset-1' : 'btn-outline'}`}
+                                    onClick={() => { setRestMsg(null); setArm({ plan: p, zone: z }) }} title={c.text}>
+                                    <Shield size={14} /> {c.met ? tr(`Jetzt Zone ${z + 1} scharf schalten`, `Arm zone ${z + 1} now`) : tr(`Zone ${z + 1} scharf schalten`, `Arm zone ${z + 1}`)}
+                                  </button>
+                                )
+                              })}
                               {restLevels(p).length > 0 && (
                                 <button type="button" className="btn btn-secondary btn-sm whitespace-nowrap" onClick={() => { setRestMsg(null); setRestPlan(p) }} title={tr(`Die noch nicht gesendeten Stufen dieses Plans an ${exName()} schicken`, `Send the levels of this plan that have not been sent yet to ${exName()}`)}>
                                   <Send size={14} /> {tr('Rest senden', 'Send rest')} ({restLevels(p).length})
@@ -248,6 +277,11 @@ export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; on
         )}
       </div>
 
+      {arm && (
+        <ArmZoneModal plan={arm.plan} zone={arm.zone} progress={status[arm.plan.userref]?.zones} pair={pairs.find((x) => x.id === arm.plan.pairId)}
+          onClose={() => setArm(null)}
+          onSent={(r) => { setRestSent({ result: r, pairName: arm.plan.pairName, side: arm.plan.side, priceDecimals: dec(arm.plan.pairId) }); setArm(null); load() }} />
+      )}
       {restSent && <SendSuccessModal {...restSent} onClose={() => setRestSent(null)} />}
 
       {restPlan && (

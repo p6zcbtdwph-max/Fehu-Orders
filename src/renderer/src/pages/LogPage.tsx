@@ -14,6 +14,7 @@ export const actionLabel = (a: string): string => ({
   send: tr('Gesendet', 'Sent'),
   validate: tr('Probelauf', 'Test run'),
   rest: tr('Rest gesendet', 'Rest sent'),
+  zone: tr('Zone scharf geschaltet', 'Zone armed'),
   'cancel-plan': tr('Plan storniert', 'Plan cancelled'),
   'cancel-order': tr('Order storniert', 'Order cancelled'),
   'cancel-all': tr('Notbremse', 'Emergency stop'),
@@ -54,7 +55,7 @@ export default function LogPage(): JSX.Element {
   useEffect(() => { load() }, [])
 
   const shown = useMemo(() => entries.filter((e) =>
-    filter === 'all' ? true : filter === 'errors' ? !e.success : ['send', 'rest', 'cancel-plan', 'cancel-order', 'cancel-all'].includes(e.action),
+    filter === 'all' ? true : filter === 'errors' ? !e.success : ['send', 'rest', 'zone', 'cancel-plan', 'cancel-order', 'cancel-all'].includes(e.action),
   ), [entries, filter])
 
   function exportCsv() {

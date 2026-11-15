@@ -114,3 +114,49 @@ describe('Zonen anlegen', () => {
     expect(appendZone(zs, 'buy')).toHaveLength(1)
   })
 })
+
+describe('Entschärfte Zonen und Aufteilung', () => {
+  it('normalizeShares ergibt immer ganze Prozent mit Summe 100, jede Zone mindestens 1 %', async () => {
+    const { normalizeShares } = await import('./ladder')
+    for (const shares of [[30, 40, 30], [1, 1, 1], [50, 50, 50, 50], [99, 0.1, 0.1], [33.3, 33.3, 33.4], [0, 0]]) {
+      const out = normalizeShares(shares.map((share) => ({ priceStart: 1, priceEnd: 1, steps: 1, share }))).map((z) => z.share)
+      expect(out.reduce((a, b) => a + b, 0)).toBe(100)
+      expect(out.every((x) => Number.isInteger(x) && x >= 1)).toBe(true)
+    }
+  })
+  it('heldZones und zoneTrigger mit Standard „vorige Zone, 50 %“', async () => {
+    const { heldZones, zoneTrigger } = await import('./ladder')
+    const zs = [{ priceStart: 3, priceEnd: 2, steps: 2, share: 1 }, { priceStart: 1.5, priceEnd: 1, steps: 2, share: 1, armed: false }, { priceStart: 0.8, priceEnd: 0.5, steps: 2, share: 1, armed: false, trigger: { zone: 0, percent: 150 } }]
+    expect([...heldZones({ zones: zs })]).toEqual([1, 2])
+    expect(zoneTrigger(zs, 1)).toEqual({ zone: 0, percent: 50 })
+    expect(zoneTrigger(zs, 2)).toEqual({ zone: 0, percent: 100 })
+  })
+  it('alle Zonen entschärft ist ungültig', () => {
+    expect(validateZones({ ...zoned, zones: zoned.zones!.map((z) => ({ ...z, armed: false })) }).join(' ')).toMatch(/Mindestens eine Zone/)
+  })
+  it('neu angehängte Zone ist erst einmal entschärft', () => {
+    expect(appendZone(zoned.zones!, 'buy')[3].armed).toBe(false)
+  })
+})
+
+describe('Fortschritt je Zone', () => {
+  it('ordnet Ausführungen über den Limitpreis den Zonen zu', async () => {
+    const { zoneProgress, triggerMet } = await import('./plan-status')
+    const levels = [
+      { index: 0, price: 100, volume: 1, zone: 0 }, { index: 1, price: 95, volume: 1, zone: 0 },
+      { index: 2, price: 80, volume: 2, zone: 1 }, { index: 3, price: 75, volume: 2, zone: 1 },
+      { index: 4, price: 60, volume: 3, zone: 2 },
+    ]
+    const p = zoneProgress(levels, [0, 1, 2, 3], [
+      { price: 99.5, limitPrice: 100, filled: 1 }, { price: 95, filled: 1 }, // Zone 1 ganz
+      { price: 79, limitPrice: 80, filled: 2 }, { price: 75, limitPrice: 75, filled: 0 }, // Zone 2 halb
+    ])
+    expect(p.map((z) => Math.round(z.filledShare * 100))).toEqual([100, 50, 0])
+    expect(p[2]).toMatchObject({ levels: 1, sent: 0, sentVolume: 0 })
+    expect(triggerMet(p, { zone: 1, percent: 50 })).toBe(true)
+    expect(triggerMet(p, { zone: 1, percent: 51 })).toBe(false)
+    expect(triggerMet(p, { zone: 2, percent: 1 })).toBe(false)
+    expect(triggerMet(undefined, { zone: 0, percent: 1 })).toBe(false)
+    expect(zoneProgress([{ index: 0, price: 1, volume: 1 }], [0], [])).toEqual([])
+  })
+})

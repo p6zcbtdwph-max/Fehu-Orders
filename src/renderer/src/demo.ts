@@ -1,6 +1,7 @@
 // Demo-Modus: dieselbe Schnittstelle wie die echte App, aber nur mit Beispieldaten im Speicher.
 // Hier gibt es keinen Netzwerkzugriff, es kann also keine echte Order entstehen.
 import type { OhlcRow } from '@shared/history'
+import { heldZones, isHeld } from '@shared/ladder'
 import { tr } from '@shared/i18n'
 import { ipKind, ipProblem, maskIp } from '@shared/ip'
 import type { Api, DraftDto, KeyCheck, LogEntry, OpenOrderDto, PairDto, PlanDto, PlanStatusDto, SendResult, SettingsDto, TemplateDto } from '@shared/ipc'
@@ -83,6 +84,30 @@ export function createDemoApi(): Api {
     fills.set(plan.userref, { userref: plan.userref, open: 3, filled: 3, partial: 0, canceled: 0, filledVolume: vol, filledCost: 150, fees: 0.38, averagePrice: 150 / vol })
   }
 
+  // Ein Beispielplan mit Preiszonen: Zone 1 ganz und Zone 2 zu zwei Dritteln ausgeführt, Zone 3 entschärft
+  {
+    const mk = (prices: number[], zone: number, from: number, eurEach: number) => prices.map((price, k) => ({ index: from + k, price, volume: round(eurEach / price, 8), cost: eurEach, share: 0, zone }))
+    const levels = [...mk([79000, 78500, 78000], 0, 0, 60), ...mk([75000, 74000, 73000], 1, 3, 100), ...mk([68000, 66000, 64000], 2, 6, 80)]
+    const plan: PlanDto = { userref: nextRef++, createdAt: new Date(Date.now() - 3 * 86400_000).toISOString(), pairId: 'XXBTZEUR', pairName: 'BTC/EUR', side: 'buy',
+      input: { side: 'buy', priceStart: 79000, priceEnd: 64000, steps: 9, total: 720, spacing: 'linear', curve: 'flat', ratio: 1, zones: [
+        { priceStart: 79000, priceEnd: 78000, steps: 3, share: 25 },
+        { priceStart: 75000, priceEnd: 73000, steps: 3, share: 42 },
+        { priceStart: 68000, priceEnd: 64000, steps: 3, share: 33, armed: false, trigger: { zone: 1, percent: 50 } },
+      ] },
+      sent: 6, failed: 0, totalCost: 480, levels, sentIndices: [0, 1, 2, 3, 4, 5], postOnly: true }
+    plans.unshift(plan)
+    place(plan, [5])
+    const done = levels.slice(0, 5)
+    const vol = done.reduce((a, l) => a + l.volume, 0)
+    const zv = (z: number, n: number) => levels.filter((l) => l.zone === z).slice(0, n).reduce((a, l) => a + l.volume, 0)
+    const zs = [0, 1].map((z) => levels.filter((l) => l.zone === z).reduce((a, l) => a + l.volume, 0))
+    fills.set(plan.userref, { userref: plan.userref, open: 1, filled: 5, partial: 0, canceled: 0, filledVolume: vol, filledCost: 380, fees: 0.95, averagePrice: 380 / vol, zones: [
+      { zone: 0, levels: 3, sent: 3, sentVolume: zs[0], filledVolume: zv(0, 3), filledShare: 1 },
+      { zone: 1, levels: 3, sent: 3, sentVolume: zs[1], filledVolume: zv(1, 2), filledShare: zv(1, 2) / zs[1] },
+      { zone: 2, levels: 3, sent: 0, sentVolume: 0, filledVolume: 0, filledShare: 0 },
+    ] })
+  }
+
   const wait = <T,>(v: T, ms = 150) => new Promise<T>((r) => setTimeout(() => r(v), ms))
 
   return {
@@ -96,7 +121,9 @@ export function createDemoApi(): Api {
     balances: () => wait({ ...balances }),
     openOrders: () => wait(orders.map((o) => ({ ...o }))),
     async send(req) {
-      const valid = req.levels.filter((l) => !l.problem)
+      const held = heldZones(req.input ?? {})
+      const valid = req.levels.filter((l) => !l.problem && !isHeld(l, held))
+      if (!valid.length) throw new Error(tr('Alle Zonen sind entschärft. Schalte mindestens eine Zone scharf, sonst wird nichts gesendet.', 'All zones are disarmed. Arm at least one zone, otherwise nothing is sent.'))
       const chosen = valid.slice(0, req.sendCount ?? valid.length)
       const amount = chosen.reduce((a, l) => a + l.cost, 0)
       const last = priceOf(req.pairId)
@@ -117,12 +144,31 @@ export function createDemoApi(): Api {
     async sendRest(userref, validate) {
       const plan = plans.find((p) => p.userref === userref)
       if (!plan?.levels) throw new Error(tr('Plan nicht gefunden', 'Plan not found'))
-      const rest = plan.levels.filter((l) => !l.problem && !plan.sentIndices?.includes(l.index))
+      const held = heldZones(plan.input)
+      const rest = plan.levels.filter((l) => !l.problem && !plan.sentIndices?.includes(l.index) && !isHeld(l, held))
       if (validate) return wait({ userref, validate: true, orders: rest.map((l) => ({ index: l.index, price: l.price, volume: l.volume })) }, 400)
       const placed = place(plan, rest.map((l) => plan.levels!.indexOf(l)))
       plan.sentIndices = [...(plan.sentIndices ?? []), ...rest.map((l) => l.index)]
       plan.sent += rest.length
       return wait({ userref, validate: false, orders: placed, check: { found: placed.filter((o) => o.txid).length, placed: placed.filter((o) => o.txid).length } }, 500)
+    },
+    async armZone(userref, zone, validate, edited) {
+      const plan = plans.find((p) => p.userref === userref)
+      if (!plan?.levels || !plan.input.zones?.[zone]) throw new Error(tr('Plan nicht gefunden', 'Plan not found'))
+      if (plan.input.zones[zone].armed !== false) throw new Error(tr(`Zone ${zone + 1} ist schon scharf.`, `Zone ${zone + 1} is already armed.`))
+      const next = Math.max(...plan.levels.map((l) => l.index)) + 1
+      const levels = edited
+        ? edited.filter((l) => !l.problem).map((l, i) => ({ ...l, index: next + i, zone }))
+        : plan.levels.filter((l) => l.zone === zone && !plan.sentIndices?.includes(l.index))
+      if (validate) return wait({ userref, validate: true, orders: levels.map((l) => ({ index: l.index, price: l.price, volume: l.volume })) }, 400)
+      if (edited) plan.levels = [...plan.levels.filter((l) => !(l.zone === zone && !plan.sentIndices?.includes(l.index))), ...levels]
+      const placed = place(plan, levels.map((l) => plan.levels!.findIndex((x) => x.index === l.index)))
+      plan.sentIndices = [...(plan.sentIndices ?? []), ...levels.map((l) => l.index)]
+      plan.sent += levels.length
+      plan.totalCost += levels.reduce((a, l) => a + l.cost, 0)
+      plan.input = { ...plan.input, zones: plan.input.zones.map((z, i) => (i === zone ? { ...z, armed: true } : z)) }
+      addLog({ action: 'zone', pair: plan.pairName, side: plan.side, count: levels.length, ok: levels.length, failed: 0, amount: levels.reduce((a, l) => a + l.cost, 0), success: true, userref, message: tr(`Zone ${zone + 1} scharf geschaltet`, `Zone ${zone + 1} armed`) })
+      return wait({ userref, validate: false, orders: placed, check: { found: placed.length, placed: placed.length } }, 500)
     },
     async cancelPlan(userref) {
       const n = orders.filter((o) => o.userref === userref).length
