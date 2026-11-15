@@ -2,7 +2,7 @@ import { api } from '../api'
 import { useEffect, useMemo, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { AlertTriangle, Bell, History, Layers, ShieldOff, SlidersHorizontal, BookmarkPlus, ClipboardList, GraduationCap, FlaskConical, Info, RefreshCw, Send, Star, Trash2 } from 'lucide-react'
-import { buildLadder, DEFAULT_MIN_ORDER_EUR, hasZones, heldZones, isHeld, zoneTrigger, MAX_STEPS, splitIntoZones, zoneEnd, zoneSummary, type LadderInput, type LadderZone, type PriceSpacing, type Side, type SizeCurve } from '@shared/ladder'
+import { buildLadder, otherUnitLadder, DEFAULT_MIN_ORDER_EUR, hasZones, heldZones, isHeld, zoneTrigger, MAX_STEPS, splitIntoZones, zoneEnd, zoneSummary, type LadderInput, type LadderZone, type PriceSpacing, type Side, type SizeCurve } from '@shared/ladder'
 import { reach, toCandles, unreached, windowStats, type Candle, type OhlcRow } from '@shared/history'
 import ZoneEditor, { zoneColor } from '../components/ZoneEditor'
 import HistoryHints, { windowLabel, windowPhrase } from '../components/HistoryHints'
@@ -11,6 +11,9 @@ import { firstTestInput, wrongSide } from '@shared/safety'
 import KpiStrip from '../components/ui/KpiStrip'
 import { NumberField } from '../components/NumberField'
 import PairPicker from '../components/PairPicker'
+import AmountInput, { tidy } from '../components/AmountInput'
+import HoldingsCard from '../components/HoldingsCard'
+import { holdingsFor, sellablePairs } from '@shared/holdings'
 import CenterSliders from '../components/CenterSliders'
 import { MinOrderLine, RaisedNotice } from '../components/MinOrder'
 import SectionCard from '../components/ui/SectionCard'
@@ -94,6 +97,14 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
   const [daily, setDaily] = useState<Candle[]>([])
   const [fees, setFees] = useState<{ maker: number; taker: number } | null>(null)
   const [available, setAvailable] = useState<Record<string, number> | null>(null)
+  /** Gesamtguthaben (frei + gesperrt, bei Kraken auch Earn) und Kurse für die Bestandsliste beim Verkaufen */
+  const [balances, setBalances] = useState<Record<string, number>>({})
+  const [holdPrices, setHoldPrices] = useState<Record<string, number>>({})
+  const [holdLoading, setHoldLoading] = useState(false)
+  /** Beim Verkaufen auch Paare ohne Bestand in der Suche zeigen */
+  const [showAll, setShowAll] = useState(false)
+  /** Beim Verkaufen: so viel vom Coin mindestens behalten (gilt für die Prozent-Knöpfe) */
+  const [keep, setKeep] = useState(0)
   // Beim Laden einer Vorlage oder eines Vorschlags den Kurs nicht überschreiben
   const [keepPrices, setKeepPrices] = useState(false)
   /** Entwurf, der gerade bearbeitet wird */
@@ -118,6 +129,11 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
       // Neue Formel: Regler springen auf deren Standardwert, damit man ihn sieht
       if (k === 'spacing') next.orderCenter = undefined
       if (k === 'curve') next.volumeCenter = undefined
+      // Richtung gewechselt und keine Einheit gewählt: Kauf rechnet in Geld, Verkauf in Stück.
+      // Den Wert umrechnen, damit aus 100 € nicht plötzlich 100 BTC werden.
+      if (k === 'side' && v !== s.side && !s.unit && last && last > 0 && s.total > 0) {
+        next.total = v === 'sell' ? tidy(s.total / last, pair?.volumeDecimals ?? 8) : tidy(s.total * last, 2)
+      }
       return next
     })
     setResult(null)
@@ -183,6 +199,23 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
     api().fees(pairId).then(setFees).catch(() => setFees(null))
     api().available().then(setAvailable).catch(() => setAvailable(null))
   }, [hasKey, pairId, result])
+
+  // Bestand beim Verkaufen: freies und gesamtes Guthaben, dazu die Kurse der eigenen Coins für den Wert
+  const selling = input.side === 'sell'
+  useEffect(() => {
+    if (!hasKey || !selling || !pairs.length) return
+    let gone = false
+    setHoldLoading(true)
+    Promise.all([api().available(), api().balances().catch(() => ({} as Record<string, number>))]).then(async ([free, all]) => {
+      if (gone) return
+      setAvailable(free)
+      setBalances(all)
+      const ids = holdingsFor(pairs, free, all).map((h) => h.pair.id)
+      const ps = ids.length ? await api().prices(ids).catch(() => ({} as Record<string, number>)) : {}
+      if (!gone) setHoldPrices(ps)
+    }).catch(() => undefined).finally(() => { if (!gone) setHoldLoading(false) })
+    return () => { gone = true }
+  }, [hasKey, selling, pairs, result])
 
   useEffect(() => {
     if (!pairId) return
@@ -256,6 +289,21 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
   }, [keepPrices])
 
   const ladder = useMemo(() => (pair ? buildLadder(input, pair, { minCost: minOrder }) : null), [input, pair, minOrder])
+  // Derselbe Plan in der anderen Einheit, für den Vergleich „feste Euro“ gegen „feste Stück“
+  const altLadder = useMemo(() => (pair && ladder ? otherUnitLadder(input, ladder, pair, { minCost: minOrder }) : null), [input, ladder, pair, minOrder])
+  const holdings = useMemo(() => (hasKey && selling && available ? holdingsFor(pairs, available, balances, holdPrices, minOrder) : []), [hasKey, selling, pairs, available, balances, holdPrices, minOrder])
+  const sellPairs = useMemo(() => sellablePairs(pairs, holdings), [pairs, holdings])
+  // Beim Verkaufen zeigt die Suche nur Paare mit freiem Bestand (außer „Alle Paare zeigen“ oder es gibt keinen Bestand)
+  const pickable = selling && !showAll && sellPairs.length ? sellPairs : pairs
+  const holding = pair ? holdings.find((h) => h.base === pair.base) ?? null : null
+  // Wechsel auf Verkaufen mit einem Coin, den man nicht hat: den größten eigenen Bestand wählen
+  useEffect(() => {
+    if (!selling || showAll || keepPrices || !pair || !sellPairs.length) return
+    if (!sellPairs.some((p) => p.id === pair.id)) {
+      const top = holdings.find((h) => !h.dust)
+      if (top) setPairId(top.pair.id)
+    }
+  }, [selling, sellPairs])
   const quote = pair?.name.split('/')[1] ?? 'EUR'
   const base = pair?.name.split('/')[0] ?? ''
   const sendable = ladder?.levels.filter((l) => !l.problem) ?? []
@@ -411,7 +459,7 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
           <div>
             <span className="label">{tr('Handelspaar', 'Trading pair')}</span>
             <span className="flex gap-2">
-              <PairPicker pairs={pairs} value={pairId} watchlist={watchlist} onChange={(id) => { setPairId(id); setResult(null) }} />
+              <PairPicker pairs={pickable} value={pairId} watchlist={watchlist} onChange={(id) => { setPairId(id); setResult(null) }} />
               {pair && (
                 <button type="button" className="btn btn-ghost btn-icon flex-shrink-0" aria-pressed={watchlist.includes(pair.name)} onClick={() => toggleWatch(pair.name)}
                   aria-label={watchlist.includes(pair.name) ? tr('Von der Watchlist nehmen', 'Remove from watchlist') : tr('Auf die Watchlist', 'Add to watchlist')} title={watchlist.includes(pair.name) ? tr('Von der Watchlist nehmen', 'Remove from watchlist') : tr('Auf die Watchlist', 'Add to watchlist')}>
@@ -435,10 +483,13 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
             <span className="label">{tr('Richtung', 'Side')}</span>
             <Segmented<Side> block size="md" value={input.side} onChange={(v) => set('side', v)} options={[{ id: 'buy', label: tr('Kaufen', 'Buy') }, { id: 'sell', label: tr('Verkaufen', 'Sell') }]} />
           </div>
-          <NumberField label={input.side === 'buy' ? tr(`Betrag zum Investieren (${quote})`, `Amount to invest (${quote})`) : tr(`Menge zum Verkaufen (${base})`, `Volume to sell (${base})`)} value={input.total} onChange={(v) => set('total', v)}
-            hint={input.side === 'buy' ? usdHint(input.total) || tr('Wird auf alle Stufen verteilt.', 'Spread across all levels.') : last ? `≈ ${eur(input.total * last)}` : undefined} />
+          <AmountInput input={input} ladder={ladder} alt={altLadder} last={last} quote={quote} base={base} volumeDecimals={pair?.volumeDecimals ?? 8}
+            holding={holding} keep={keep} onKeep={setKeep} eur={eur} usdHint={usdHint}
+            onChange={(patch) => { setInput((s) => ({ ...s, ...patch })); setResult(null) }} />
         </div>
       </section>
+
+      {selling && <HoldingsCard holdings={holdings} pairId={pairId} showAll={showAll} onShowAll={setShowAll} onPick={(id) => { setPairId(id); setResult(null) }} eur={eur} hasKey={hasKey} loading={holdLoading} />}
 
       <div className="grid grid-cols-1 gap-4 @lg:grid-cols-[22rem_1fr]">
         <div data-guide="plan" className="min-w-0"><SectionCard title={tr('Plan', 'Plan')} action={<button type="button" className="btn btn-ghost btn-sm" onClick={() => setSaveAs(templateId ? templates.find((t) => t.id === templateId)?.name ?? '' : '')} title={tr('Diesen Plan als Vorlage speichern', 'Save this plan as a template')}><BookmarkPlus size={14} /> {tr('Als Vorlage', 'Save as template')}</button>}>
@@ -489,12 +540,14 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
             </div>
             <div>
               <span className="label">{tr('Mengenverteilung', 'Size distribution')}</span>
-              <select className="select w-full" value={input.curve} onChange={(e) => set('curve', e.target.value as SizeCurve)}>
+              <select className="select w-full" value={input.curve} disabled={!!input.perLevel} onChange={(e) => set('curve', e.target.value as SizeCurve)}>
                 {curves().filter((c) => !zoned || c.id !== 'custom').map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
               </select>
-              <span className="mt-1 block text-xs text-ink-muted">{curves().find((c) => c.id === input.curve)?.title}{zoned && tr('. Gilt innerhalb jeder Zone.', '. Applies within each zone.')}</span>
+              <span className="mt-1 block text-xs text-ink-muted">{input.perLevel
+                ? tr(`Bei „Pro Stufe“ ist jede Stufe gleich groß. Die Verteilung gilt erst wieder mit „Gesamt“.${zoned ? ' Die Anteile der Zonen zählen dann auch nicht, jede Stufe bekommt denselben Wert.' : ''}`, `With “Per level” every level is the same size. The distribution applies again with “Total”.${zoned ? ' Zone shares do not count either, every level gets the same value.' : ''}`)
+                : <>{curves().find((c) => c.id === input.curve)?.title}{zoned && tr('. Gilt innerhalb jeder Zone.', '. Applies within each zone.')}</>}</span>
             </div>
-            {input.curve === 'custom' && !zoned && (
+            {input.curve === 'custom' && !zoned && !input.perLevel && (
               <label className="block">
                 <span className="label">{tr('Anteil je Stufe in %', 'Share per level in %')}</span>
                 <input className="input w-full tabular-nums" value={customText} placeholder={numberFormat() === 'de' ? tr('z. B. 12,5; 12,5; 25; 50', 'e.g. 12,5; 12,5; 25; 50') : tr('z. B. 12.5, 12.5, 25, 50', 'e.g. 12.5, 12.5, 25, 50')}
@@ -507,14 +560,15 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
                 </span>
               </label>
             )}
-            {['linear', 'log', 'exp'].includes(input.curve) && (
+            {['linear', 'log', 'exp'].includes(input.curve) && !input.perLevel && (
               <NumberField label={tr('Letzte Stufe im Verhältnis zur ersten', 'Last level relative to the first')} value={input.ratio} onChange={(v) => set('ratio', v)}
                 hint={input.ratio >= 1 ? tr(`Die letzte Stufe ist ${num(input.ratio, 2)}× so groß wie die erste.`, `The last level is ${num(input.ratio, 2)}× the size of the first.`) : tr('Unter 1: die Stufen werden kleiner.', 'Below 1: the levels get smaller.')} />
             )}
             {ladder?.centers && (
               <CenterSliders side={input.side} steps={input.steps} centers={ladder.centers} shares={ladder.levels.map((l) => l.share)}
                 orderCenter={input.orderCenter} volumeCenter={input.volumeCenter} priceStart={input.priceStart} priceEnd={input.priceEnd}
-                formatPrice={(p) => `${fmtPrice(p, p >= 100 ? 0 : Math.min(pair?.priceDecimals ?? 2, 2))} ${sym}`} onChange={(k, v) => set(k, v)} />
+                formatPrice={(p) => `${fmtPrice(p, p >= 100 ? 0 : Math.min(pair?.priceDecimals ?? 2, 2))} ${sym}`} onChange={(k, v) => set(k, v)}
+                volumeOff={input.perLevel ? tr('Bei „Pro Stufe“ ist jede Stufe gleich groß.', 'With “Per level” every level is the same size.') : undefined} />
             )}
             <label className="flex items-start gap-2 text-sm">
               <input type="checkbox" className="checkbox mt-0.5" checked={postOnly} onChange={(e) => setPostOnly(e.target.checked)} />

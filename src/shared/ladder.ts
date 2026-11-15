@@ -8,6 +8,18 @@ export type Side = 'buy' | 'sell'
 export type PriceSpacing = 'linear' | 'geometric'
 /** Wie sich die Menge über die Stufen verteilt */
 export type SizeCurve = 'flat' | 'linear' | 'log' | 'exp' | 'fib' | 'custom'
+/** Einheit der Menge im Planer: Geld (Kurswährung, z. B. EUR) oder Stück (Basiswährung, z. B. SOL) */
+export type AmountUnit = 'quote' | 'base'
+
+/** Einheit, in der total gemeint ist (ältere Pläne ohne unit: Kauf in Geld, Verkauf in Stück) */
+export function amountUnit(input: Pick<LadderInput, 'side' | 'unit'>): AmountUnit {
+  return input.unit ?? (input.side === 'buy' ? 'quote' : 'base')
+}
+
+/** Planmenge über alle Stufen in der Einheit des Plans (bei „pro Stufe“: Wert je Stufe mal Stufenzahl) */
+export function planAmount(input: Pick<LadderInput, 'total' | 'perLevel' | 'steps'>): number {
+  return input.perLevel ? input.total * input.steps : input.total
+}
 
 export interface PairRules {
   /** Nachkommastellen beim Preis */
@@ -34,8 +46,21 @@ export interface LadderInput {
   /** Preis der letzten Stufe (am weitesten weg) */
   priceEnd: number
   steps: number
-  /** Kauf: Gesamtbetrag in EUR. Verkauf: Gesamtmenge in der Basiswährung (z. B. BTC). */
+  /**
+   * Wie viel gehandelt wird, in der Einheit aus unit. Ohne unit wie früher: Kauf in EUR, Verkauf in Stück (z. B. BTC).
+   * Mit perLevel gilt der Wert für jede einzelne Stufe, sonst für den ganzen Plan.
+   */
   total: number
+  /**
+   * Einheit von total: 'quote' = Geld (z. B. EUR), 'base' = Stück des Coins (z. B. SOL).
+   * Fehlt der Wert, gilt beim Kauf 'quote' und beim Verkauf 'base' (so waren alle älteren Pläne gemeint).
+   */
+  unit?: AmountUnit
+  /**
+   * true = total gilt für jede Stufe (z. B. „bei jeder Stufe 1 SOL verkaufen“). Dann sind alle Stufen gleich groß,
+   * Mengenverteilung, Volumen-Schwerpunkt und Zonen-Anteile gelten nicht.
+   */
+  perLevel?: boolean
   spacing: PriceSpacing
   curve: SizeCurve
   /** Verhältnis letzte Stufe zu erster Stufe bei linear/log/exp (z. B. 3 = letzte Stufe dreimal so groß) */
@@ -419,13 +444,19 @@ export function levelProblem(price: number, volume: number, rules: Pick<PairRule
   return undefined
 }
 
+/** Fehlermeldung, wenn kein Betrag bzw. keine Menge eingegeben ist */
+function totalError(input: Pick<LadderInput, 'side' | 'unit' | 'perLevel'>): string {
+  if (amountUnit(input) === 'quote') return input.perLevel ? tr('Der Betrag pro Stufe muss größer als 0 sein.', 'The amount per level must be greater than 0.') : tr('Der Gesamtbetrag muss größer als 0 sein.', 'The total amount must be greater than 0.')
+  return input.perLevel ? tr('Die Menge pro Stufe muss größer als 0 sein.', 'The volume per level must be greater than 0.') : tr('Die Gesamtmenge muss größer als 0 sein.', 'The total volume must be greater than 0.')
+}
+
 export function validateInput(input: LadderInput): string[] {
   const e: string[] = []
   const { priceStart, priceEnd, steps, total, ratio, side } = input
   if (!(priceStart > 0) || !(priceEnd > 0)) e.push(tr('Preise müssen größer als 0 sein.', 'Prices must be greater than 0.'))
   if (!Number.isInteger(steps) || steps < 1) e.push(tr('Die Anzahl der Stufen muss eine ganze Zahl ab 1 sein.', 'The number of levels must be a whole number of at least 1.'))
   if (steps > MAX_STEPS) e.push(tr(`Höchstens ${MAX_STEPS} Stufen.`, `At most ${MAX_STEPS} levels.`))
-  if (!(total > 0)) e.push(side === 'buy' ? tr('Der Gesamtbetrag muss größer als 0 sein.', 'The total amount must be greater than 0.') : tr('Die Gesamtmenge muss größer als 0 sein.', 'The total volume must be greater than 0.'))
+  if (!(total > 0)) e.push(totalError(input))
   if (!(ratio > 0)) e.push(tr('Das Verhältnis muss größer als 0 sein.', 'The ratio must be greater than 0.'))
   if (input.curve === 'custom') {
     const w = input.customWeights ?? []
@@ -494,16 +525,19 @@ export function validateZones(input: LadderInput): string[] {
 function buildZoneLadder(input: LadderInput, rules: PairRules, opts: LadderOptions): Ladder {
   const zs = input.zones as LadderZone[]
   const errors = [...validateZones(input)]
-  if (!(input.total > 0)) errors.push(input.side === 'buy' ? tr('Der Gesamtbetrag muss größer als 0 sein.', 'The total amount must be greater than 0.') : tr('Die Gesamtmenge muss größer als 0 sein.', 'The total volume must be greater than 0.'))
+  if (!(input.total > 0)) errors.push(totalError(input))
   if (!(input.ratio > 0)) errors.push(tr('Das Verhältnis muss größer als 0 sein.', 'The ratio must be greater than 0.'))
   if (errors.length) return { levels: [], totalVolume: 0, totalCost: 0, averagePrice: 0, valid: false, errors }
 
-  const shareSum = zs.reduce((a, z) => a + z.share, 0)
+  // Bei „pro Stufe“ bekommt jede Stufe denselben Wert, die Anteile der Zonen ergeben sich dann aus ihrer Stufenzahl
+  const weightOf = (z: LadderZone) => (input.perLevel ? z.steps : z.share)
+  const shareSum = zs.reduce((a, z) => a + weightOf(z), 0)
   const levels: LadderLevel[] = []
   zs.forEach((z, zi) => {
-    const part = z.share / shareSum
+    const part = weightOf(z) / shareSum
     const sub = buildLadder({
-      side: input.side, priceStart: z.priceStart, priceEnd: zoneEnd(z), steps: z.steps, total: input.total * part,
+      side: input.side, priceStart: z.priceStart, priceEnd: zoneEnd(z), steps: z.steps, total: input.perLevel ? input.total : input.total * part,
+      unit: amountUnit(input), perLevel: input.perLevel,
       spacing: input.spacing, curve: input.curve, ratio: input.ratio,
     }, rules, opts)
     for (const err of sub.errors) {
@@ -573,8 +607,13 @@ export function buildLadder(input: LadderInput, rules: PairRules, opts: LadderOp
   if (errors.length) return { levels: [], totalVolume: 0, totalCost: 0, averagePrice: 0, valid: false, errors }
 
   const { side, steps, total, spacing, curve, ratio, priceStart, priceEnd } = input
+  const perLevel = !!input.perLevel
+  const inBase = amountUnit(input) === 'base'
+  // „Pro Stufe“: jede Stufe gleich groß, die Mengenverteilung gilt nicht
   const baseWeights =
-    curve === 'fib'
+    perLevel
+      ? Array.from({ length: steps }, () => 1)
+      : curve === 'fib'
       ? Array.from({ length: steps }, (_, i) => fibonacci(i))
       : curve === 'custom'
         ? (input.customWeights ?? []).slice(0, steps)
@@ -596,7 +635,7 @@ export function buildLadder(input: LadderInput, rules: PairRules, opts: LadderOp
   // anderen Seite gekippt (mal e^(a·Lage)). a = 0 heißt: genau wie die Formel.
   const volumeDefault = weightedCenter(baseWeights, positions)
   const tilt = (a: number) => baseWeights.map((w, i) => w * Math.exp(a * (positions[i] - 0.5)))
-  const a = input.volumeCenter !== undefined && steps > 1 ? solveIncreasing((x) => weightedCenter(tilt(x), positions), clampCenter(input.volumeCenter), -60, 60) : 0
+  const a = input.volumeCenter !== undefined && steps > 1 && !perLevel ? solveIncreasing((x) => weightedCenter(tilt(x), positions), clampCenter(input.volumeCenter), -60, 60) : 0
   const weights = a === 0 ? baseWeights : tilt(a)
   const sum = weights.reduce((x, y) => x + y, 0)
   const centers: LadderCenters = {
@@ -617,7 +656,9 @@ export function buildLadder(input: LadderInput, rules: PairRules, opts: LadderOp
     const price = prices[i]
     // Menge immer abrunden, damit Budget bzw. Bestand nie überschritten wird
     // Preis 0 nach dem Runden (Preis kleiner als ein Preisschritt): keine Menge, die Stufe wird als Problem gemeldet
-    const rawVolume = !(price > 0) ? 0 : side === 'buy' ? (total * share) / price : total * share
+    // Geld: Menge = Betrag der Stufe / Preis. Stück: Menge = Anteil der Stück. Pro Stufe: genau der eingegebene Wert.
+    const part = perLevel ? total : total * share
+    const rawVolume = !(price > 0) ? 0 : inBase ? part : part / price
     let volume = roundTo(rawVolume, rules.volumeDecimals, 'down')
     let raised = false
     // Mindest-Orderwert: zu kleine Stufen auf den Mindestwert anheben (Menge aufrunden), damit die Börse sie annimmt
@@ -715,4 +756,18 @@ export function prepareForSend<T extends Pick<LadderLevel, 'price' | 'volume'> &
     }
   }
   return { levels: r.levels }
+}
+
+/**
+ * Derselbe Plan in der anderen Einheit, gleich groß gerechnet: Ist der Plan in Stück, wird der Gegenwert in Geld
+ * genauso verteilt (und umgekehrt). So sieht man, was „feste Euro je Stufe“ gegenüber „feste Stück je Stufe“ ausmacht.
+ * Mit festen Euro kauft man bei tiefen Preisen automatisch mehr Stück (Durchschnittskosten-Effekt).
+ */
+export function otherUnitLadder(input: LadderInput, ladder: Ladder, rules: PairRules, opts: LadderOptions = {}): Ladder | null {
+  if (!ladder.valid || !(ladder.totalVolume > 0)) return null
+  const unit: AmountUnit = amountUnit(input) === 'base' ? 'quote' : 'base'
+  const sum = unit === 'quote' ? ladder.totalCost : ladder.totalVolume
+  const steps = ladder.levels.length || input.steps
+  const alt = buildLadder({ ...input, unit, total: input.perLevel ? sum / steps : sum }, rules, opts)
+  return alt.valid ? alt : null
 }
