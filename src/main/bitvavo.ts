@@ -2,6 +2,7 @@
 // Doku: https://docs.bitvavo.com/docs/rest-overview
 // Besonderheiten gegenüber Kraken: kein Probelauf bei der Börse (die App prüft selbst), keine Paket-Orders,
 // jede Order braucht eine operatorId, und die Plan-Nummer steckt in der eigenen Order-Kennung (clientOrderId).
+import type { OhlcRow } from '../shared/history'
 import { createHmac } from 'node:crypto'
 import type { LadderLevel, Side } from '../shared/ladder'
 import type { KeyCheck } from '../shared/ipc'
@@ -290,9 +291,11 @@ export class Bitvavo implements Exchange {
     return Array.isArray(r) ? r.length : 0
   }
 
-  async ohlc(pairId: string, interval: number): Promise<[number, number][]> {
-    const r: any[] = await this.request('GET', `/${encodeURIComponent(pairId)}/candles`, { interval: INTERVALS[interval] ?? '1h', limit: 300 })
-    return r.map((c) => [Math.floor(Number(c[0]) / 1000), Number(c[4])] as [number, number]).sort((a, b) => a[0] - b[0])
+  async ohlc(pairId: string, interval: number): Promise<OhlcRow[]> {
+    // Bitvavo erlaubt bis zu 1440 Kerzen; 400 reichen für ein Jahr Tageskerzen
+    const r: any[] = await this.request('GET', `/${encodeURIComponent(pairId)}/candles`, { interval: INTERVALS[interval] ?? '1h', limit: 400 })
+    // Bitvavo: [Zeit in ms, Eröffnung, Hoch, Tief, Schluss, Volumen]
+    return r.map((c) => [Math.floor(Number(c[0]) / 1000), Number(c[4]), Number(c[3]), Number(c[2])] as OhlcRow).sort((a, b) => a[0] - b[0])
   }
 
   async fees(_pairId: string): Promise<{ maker: number; taker: number }> {

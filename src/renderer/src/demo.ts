@@ -1,5 +1,6 @@
 // Demo-Modus: dieselbe Schnittstelle wie die echte App, aber nur mit Beispieldaten im Speicher.
 // Hier gibt es keinen Netzwerkzugriff, es kann also keine echte Order entstehen.
+import type { OhlcRow } from '@shared/history'
 import { tr } from '@shared/i18n'
 import { ipKind, ipProblem, maskIp } from '@shared/ip'
 import type { Api, DraftDto, KeyCheck, LogEntry, OpenOrderDto, PairDto, PlanDto, PlanStatusDto, SendResult, SettingsDto, TemplateDto } from '@shared/ipc'
@@ -154,7 +155,13 @@ export function createDemoApi(): Api {
       const wave = (x: number) => 1 + 0.08 * Math.sin(x / 60) + 0.03 * Math.sin(x / 11) + 0.01 * Math.sin(x / 3)
       const scale = priceOf(pairId) / wave(719 + off)
       const now = Math.floor(Date.now() / 1000)
-      return wait(Array.from({ length: 720 }, (_, i) => [now - (719 - i) * interval * 60, round(scale * wave(i + off), 6)] as [number, number]))
+      // Tief und Hoch schwanken um den Schlusskurs, bei Tageskerzen stärker als bei Stundenkerzen
+      const swing = 0.004 * Math.sqrt(interval / 60)
+      return wait(Array.from({ length: 720 }, (_, i) => {
+        const c = scale * wave(i + off)
+        const s = swing * (1 + 0.6 * Math.sin(i * 1.7 + off))
+        return [now - (719 - i) * interval * 60, round(c, 6), round(c * (1 - s), 6), round(c * (1 + s * 0.8), 6)] as OhlcRow
+      }))
     },
     fees: () => wait({ maker: 0.25, taker: 0.4 }),
     async available() {

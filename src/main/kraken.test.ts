@@ -64,9 +64,9 @@ describe('placeLadder', () => {
 })
 
 describe('neue Abfragen', () => {
-  it('ohlc liefert Zeit und Schlusskurs', async () => {
+  it('ohlc liefert Zeit, Schlusskurs, Tief und Hoch', async () => {
     const { http } = fakeHttp(() => ({ error: [], result: { XXBTZEUR: [[1700000000, '1', '2', '0.5', '1.5', '1.2', '10', 5]], last: 1 } }))
-    expect(await new Kraken(null, http).ohlc('XXBTZEUR', 1440)).toEqual([[1700000000, 1.5]])
+    expect(await new Kraken(null, http).ohlc('XXBTZEUR', 1440)).toEqual([[1700000000, 1.5, 0.5, 2]])
   })
   it('available zieht gebundenes Guthaben ab', async () => {
     const { http } = fakeHttp(() => ({ error: [], result: { ZEUR: { balance: '100.5', hold_trade: '40.5' } } }))

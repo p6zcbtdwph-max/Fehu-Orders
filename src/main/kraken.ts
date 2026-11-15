@@ -1,5 +1,6 @@
 // Kraken-Anbindung (Spot, REST). Läuft nur im Hauptprozess, der Schlüssel
 // verlässt ihn nie. Doku: https://docs.kraken.com/api/
+import type { OhlcRow } from '../shared/history'
 import { tr } from '../shared/i18n'
 import { createHash, createHmac } from 'node:crypto'
 import type { LadderLevel, Side } from '../shared/ladder'
@@ -305,11 +306,12 @@ export class Kraken implements Exchange {
     }
   }
 
-  /** Kerzen für den Kurs-Chart: interval in Minuten (60, 240, 1440). Liefert [Zeit in s, Schlusskurs]. */
-  async ohlc(pairId: string, interval: number): Promise<[number, number][]> {
+  /** Kerzen für den Kurs-Chart: interval in Minuten (60, 240, 1440). Liefert [Zeit in s, Schlusskurs, Tief, Hoch]. */
+  async ohlc(pairId: string, interval: number): Promise<OhlcRow[]> {
     const result = await this.publicGet('OHLC', { pair: pairId, interval: String(interval) })
     const key = Object.keys(result).find((k) => k !== 'last')
-    return (key ? result[key] : []).map((c: any[]) => [Number(c[0]), Number(c[4])])
+    // Kraken: [Zeit, Eröffnung, Hoch, Tief, Schluss, VWAP, Volumen, Anzahl]
+    return (key ? result[key] : []).map((c: any[]) => [Number(c[0]), Number(c[4]), Number(c[3]), Number(c[2])] as OhlcRow)
   }
 
   /** Gebühren in Prozent für dieses Paar (Maker = Limit im Orderbuch, Taker = sofort ausgeführt) */
