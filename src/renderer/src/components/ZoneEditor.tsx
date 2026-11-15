@@ -2,7 +2,9 @@ import { Plus, Shield, ShieldOff, Trash2 } from 'lucide-react'
 import { appendZone, MAX_STEPS, MAX_ZONES, normalizeShares, zoneTrigger, type Ladder, type LadderZone, type Side } from '@shared/ladder'
 import Segmented from './ui/Segmented'
 import ShareSlider from './ShareSlider'
-import { reach, windowStats, type Candle } from '@shared/history'
+import PriceZoneSlider from './PriceZoneSlider'
+import { windowLabel } from './HistoryHints'
+import { HISTORY_WINDOWS, reach, windowStats, type Candle } from '@shared/history'
 import { windowPhrase } from './HistoryHints'
 import { num, pct } from '../format'
 import { tr } from '@shared/i18n'
@@ -39,6 +41,9 @@ export default function ZoneEditor({ side, zones, ladder, last, daily, days, quo
   // Beim Entfernen rückt die Bedingung der späteren Zonen mit, damit sie auf dieselbe Zone zeigt
   const remove = (i: number) => onChange(normalizeShares(zones.filter((_, k) => k !== i).map((z) => (z.trigger && z.trigger.zone > i ? { ...z, trigger: { ...z.trigger, zone: z.trigger.zone - 1 } } : z.trigger?.zone === i ? { ...z, trigger: undefined } : z))))
   const view = normalizeShares(zones)
+  // Tiefst- bzw. Höchstkurse aus dem Rückblick als feine Striche auf dem Preis-Regler
+  const marks = daily.length ? HISTORY_WINDOWS.map((d) => windowStats(daily, d, now)).filter((w): w is NonNullable<typeof w> => !!w)
+    .map((w) => ({ price: side === 'buy' ? w.low : w.high, label: `${side === 'buy' ? tr('Tief', 'Low') : tr('Hoch', 'High')} ${windowLabel(w.days, w.covered)}` })) : []
   const valueOf = (i: number) => (ladder?.levels ?? []).filter((l) => l.zone === i && !l.problem).reduce((a, l) => a + l.cost, 0)
 
   return (
@@ -47,6 +52,14 @@ export default function ZoneEditor({ side, zones, ladder, last, daily, days, quo
         `Lege fest, wo dein ${side === 'buy' ? 'Geld' : 'Bestand'} liegen soll. Zone 1 ist am nächsten am Kurs, jede weitere liegt ${side === 'buy' ? 'tiefer' : 'höher'}. Zwischen den Zonen gibt es keine Orders. Preisabstände und Mengenverteilung unten gelten innerhalb jeder Zone.`,
         `Decide where your ${side === 'buy' ? 'money' : 'holdings'} should sit. Zone 1 is closest to the price, each further zone is ${side === 'buy' ? 'lower' : 'higher'}. There are no orders between zones. Price spacing and size distribution below apply within each zone.`,
       )}</p>
+      <div>
+        <span className="label">{tr('Preise der Zonen', 'Zone prices')}</span>
+        <PriceZoneSlider zones={zones} side={side} last={last} colors={zones.map((_, i) => zoneColor(series, i))} marks={marks} fmtPrice={fmtPrice} onChange={onChange} />
+        <p className="mt-1 text-xs text-ink-muted">{tr(
+          `Griffe an Anfang und Ende jeder Zone verschieben (auch mit den Pfeiltasten, mit Umschalt in großen Schritten). ${side === 'buy' ? 'Rechts ist der Kurs, nach links wird es billiger.' : 'Links ist der Kurs, nach rechts wird es teurer.'}${marks.length ? ' Feine Striche: Tiefst- bzw. Höchstkurse im Rückblick.' : ''}`,
+          `Drag the handles at the start and end of each zone (or use the arrow keys, with Shift for big steps). ${side === 'buy' ? 'The price is on the right, cheaper to the left.' : 'The price is on the left, more expensive to the right.'}${marks.length ? ' Thin lines: lowest or highest prices looking back.' : ''}`,
+        )}</p>
+      </div>
       {zones.length > 1 && (
         <div>
           <span className="label">{tr('Aufteilung des Betrags', 'Split of the amount')}</span>
