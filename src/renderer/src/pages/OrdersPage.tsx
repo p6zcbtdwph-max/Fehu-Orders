@@ -1,6 +1,7 @@
 import { api } from '../api'
 import { Fragment, useEffect, useState } from 'react'
-import { OctagonX, RefreshCw, Send, Shield, TrendingUp, X } from 'lucide-react'
+import { OctagonX, RefreshCw, Send, Shield, TrendingUp } from 'lucide-react'
+import OpenOrdersCard from '../components/OpenOrdersCard'
 import { heldZones, isHeld } from '@shared/ladder'
 import ArmZoneModal, { triggerText, zoneLevels } from '../components/ArmZone'
 import { assetLabel } from '@shared/safety'
@@ -259,30 +260,7 @@ export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; on
           )}
         </SectionCard></div>
 
-        {orders && (
-          <SectionCard title={tr(`Alle offenen Orders (${orders.length})`, `All open orders (${orders.length})`)}>
-            {orders.length === 0 ? <p className="text-sm text-ink-muted">{tr('Keine offenen Orders.', 'No open orders.')}</p> : (
-              <div className="overflow-x-auto">
-                <table className="data-table">
-                  <thead><tr><th>{tr('Paar', 'Pair')}</th><th>{tr('Richtung', 'Side')}</th><th className="num">{tr('Preis', 'Price')}</th><th className="num">{tr('Menge', 'Volume')}</th><th className="num">{tr('Ausgeführt', 'Filled')}</th><th>Plan</th><th /></tr></thead>
-                  <tbody>
-                    {orders.sort((a, b) => b.price - a.price).map((o) => (
-                      <tr key={o.txid}>
-                        <td>{o.pair}</td>
-                        <td>{o.side === 'buy' ? tr('Kauf', 'Buy') : tr('Verkauf', 'Sell')}</td>
-                        <td className="num">{fmtPrice(o.price, 8)} {sym}</td>
-                        <td className="num">{num(o.volume, 8)}</td>
-                        <td className="num">{num(o.filled, 8)}</td>
-                        <td className="tabular-nums text-ink-muted">{o.userref || '–'}</td>
-                        <td className="text-right"><button type="button" className="btn-mini" aria-label={tr('Order stornieren', 'Cancel order')} title={tr('Order stornieren', 'Cancel order')} onClick={() => cancelOne(o.txid)}><X size={14} /></button></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </SectionCard>
-        )}
+        {orders && <OpenOrdersCard orders={orders} pairs={pairs} onCancel={cancelOne} />}
       </div>
 
       {arm && (
