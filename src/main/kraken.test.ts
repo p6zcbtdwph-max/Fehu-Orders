@@ -212,6 +212,13 @@ describe('checkPermissions', () => {
     expect(r.find((c) => c.id === 'withdraw')?.ok).toBe(false)
     expect(r.find((c) => c.id === 'cancel')?.ok).toBe(true)
   })
+  it('eine unklare Antwort bei der Auszahlungsprüfung zählt nicht als sicher', async () => {
+    const { http } = fakeHttp((url: string) => (url.endsWith('/WithdrawMethods') ? { error: ['EService:Unavailable'] } : reply([])(url)))
+    const r = await new Kraken({ key: 'k', secret: 'cw==' }, http).checkPermissions()
+    const w = r.find((c) => c.id === 'withdraw')
+    expect(w?.ok).toBe(false)
+    expect(w?.detail).toMatch(/nicht gespeichert/)
+  })
   it('ein falscher Schlüssel bricht sofort ab', async () => {
     const { http, calls } = fakeHttp(() => ({ error: ['EAPI:Invalid key'] }))
     await expect(new Kraken({ key: 'k', secret: 'cw==' }, http).checkPermissions()).rejects.toThrow(/ungültig/)

@@ -22,6 +22,11 @@
     "files": [
       "out/**/*"
     ],
+    "electronFuses": {
+      "runAsNode": false,
+      "enableNodeOptionsEnvironmentVariable": false,
+      "enableNodeCliInspectArguments": false
+    },
     "mac": {
       "icon": "resources/icon.png",
       "category": "public.app-category.finance",
