@@ -25,7 +25,8 @@
     "electronFuses": {
       "runAsNode": false,
       "enableNodeOptionsEnvironmentVariable": false,
-      "enableNodeCliInspectArguments": false
+      "enableNodeCliInspectArguments": false,
+      "resetAdHocDarwinSignature": true
     },
     "mac": {
       "icon": "resources/icon.png",
