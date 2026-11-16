@@ -10,12 +10,12 @@ import { Coinbase } from './coinbase'
 import type { ClosedOrder, Credentials, Exchange, PairInfo } from './exchange'
 import { EXCHANGE_IDS, exchangeName, exchangeOf, isExchangeId, sendLimit, type ExchangeId } from '../shared/exchanges'
 import {
-  addLog, addPlan, loadHomeIps, saveHomeIps, systemLocale, clearCredentials, exportAll, importAll, getLog, markAlarmFired, deleteDraft, deleteTemplate, getDrafts, markDraftReleased, saveDraft, getNotified, getPlans, getSettings, getTemplates, hasRealPlan, loadCredentials, newUserref, saveCredentials, saveSettings, saveTemplate, setNotified, updatePlan, type Settings,
+  addLog, addPlan, loadHomeIps, saveHomeIps, systemLocale, clearCredentials, exportAll, importAll, getLog, markAlarmFired, deleteDraft, deleteTemplate, getDrafts, markDraftReleased, saveDraft, getNotified, getPlans, getSettings, getTemplates, hasRealPlan, loadCredentials, newUserref, saveCredentials, saveSettings, saveTemplate, setNotified, updatePlan, type PlanRecord, type Settings,
 } from './store'
 import type { DraftDto, LogEntry, PlanStatusDto, SaveKeyResult, SendRequest, SendResult, TemplateDto } from '../shared/ipc'
 import { alarmHit, checkKeyFormat, normalizeCoinbase, priceGuard } from '../shared/safety'
 import { planStatus, zoneProgress, type OrderSnapshot } from '../shared/plan-status'
-import { hasZones, heldZones, isHeld, MAX_MIN_ORDER_EUR, MAX_STEPS, prepareForSend, type LadderLevel } from '../shared/ladder'
+import { hasZones, heldZones, isHeld, MAX_MIN_ORDER_EUR, MAX_STEPS, prepareForSend, type LadderLevel, type Side } from '../shared/ladder'
 import { langFromLocale, setLang, tr } from '../shared/i18n'
 import { ipKind, ipProblem, maskIp, MAX_IPS, type HomeIpView } from '../shared/ip'
 
@@ -511,6 +511,86 @@ async function oneAtATime<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
+type LogBase = Omit<LogEntry, 'at' | 'success'>
+type Orders = SendResult['orders']
+
+/**
+ * Ein Sendeauftrag. Senden, „Rest senden“ und „Zone scharf schalten“ beschreiben nur, welche Stufen in Frage kommen
+ * und wie das Ergebnis im Plan landet. Alle Sicherungen laufen in runSend, für alle drei gleich und in derselben Reihenfolge.
+ */
+interface SendJob<T extends LadderLevel> {
+  ex: ExchangeId
+  pairId: string
+  pairName: string
+  side: Side
+  validate: boolean
+  postOnly: boolean | undefined
+  action: 'send' | 'rest' | 'zone'
+  /** Plan-Nummer eines bestehenden Plans (Rest, Zone). Fehlt bei einem neuen Plan. */
+  userref?: number
+  candidates: T[]
+  /** Aus den regelkonformen Stufen die wählen, die jetzt rausgehen (z. B. nur scharfe Zonen, nur die ersten N) */
+  pick?: (valid: T[]) => T[]
+  /** Fehlermeldung, wenn danach keine Stufe übrig bleibt */
+  emptyText: string
+  /** Text für die Touch-ID-Abfrage */
+  touchText: (count: number, total: string) => string
+  /** Nach dem echten Senden im Plan festhalten (wird immer aufgerufen, auch wenn keine Order angelegt wurde) */
+  record: (r: { userref: number; valid: T[]; levels: T[]; orders: Orders }) => void
+}
+
+/**
+ * Der eine Sendeweg. Reihenfolge der Sicherungen:
+ * 1. Regeln der Börse (Nachkommastellen, Preisschritt, Mindestwerte, doppelte Preise)
+ * 2. Obergrenze
+ * 3. Touch ID (nur echtes Senden)
+ * 4. frischer Kurs (keine Stufe auf der falschen Kursseite)
+ * 5. Senden, Protokoll, im Plan festhalten, Nachkontrolle
+ */
+async function runSend<T extends LadderLevel>(job: SendJob<T>): Promise<SendResult> {
+  const { ex, validate } = job
+  const rules = (await pairsFor(ex, SEND_RULES_MAX_AGE_MS)).find((p) => p.id === job.pairId)
+  const base0: LogBase = { action: validate ? 'validate' : job.action, pair: job.pairName, side: job.side, count: 0, amount: 0, ...(job.userref ? { userref: job.userref } : {}) }
+  const valid = conformToRules(job.candidates, rules, job.side, ex, base0)
+  const levels = job.pick ? job.pick(valid) : valid
+  if (!levels.length) throw new Error(job.emptyText)
+  const total = checkLimit(levels, ex)
+  const base: LogBase = { ...base0, count: levels.length, amount: total }
+  if (!validate) await confirmWithTouchId(job.touchText(levels.length, total.toFixed(2)), base)
+  await freshPriceGuard(ex, job.pairId, job.side, levels, base)
+  const userref = job.userref ?? newUserref()
+  let orders: Orders
+  try {
+    orders = await clientFor(ex).placeLadder(job.pairId, job.side, levels, { validate, userref, postOnly: job.postOnly, rules })
+  } catch (e) {
+    addLog({ ...base, success: false, message: (e as Error).message })
+    throw e
+  }
+  logResult(validate || base.userref ? base : { ...base, userref }, orders)
+  if (validate) return { userref, validate, orders }
+  job.record({ userref, valid, levels, orders })
+  return { userref, validate, orders, check: await checkPlaced(ex, orders) }
+}
+
+/** Angelegte und unklare Orders. Unklare (Verbindung abgebrochen) gelten als gesendet, damit nichts doppelt rausgeht. */
+function sentPart(orders: Orders): { placed: Orders; any: boolean } {
+  const placed = orders.filter((o) => o.txid || o.uncertain)
+  return { placed, any: placed.length > 0 }
+}
+
+/** Zählt eine weitere Sendung zu einem bestehenden Plan dazu */
+function addSent(p: PlanRecord, orders: Orders): PlanRecord {
+  const { placed } = sentPart(orders)
+  const ok = orders.filter((o) => o.txid).length
+  return { ...p, sent: p.sent + ok, failed: p.failed + orders.length - ok, totalCost: p.totalCost + costOf(placed), sentIndices: [...(p.sentIndices ?? []), ...placed.map((o) => o.index)] }
+}
+
+function planFor(userref: number): PlanRecord & { levels: LadderLevel[] } {
+  const plan = getPlans().find((p) => p.userref === userref)
+  if (!plan?.levels) throw new Error(tr('Für diesen Plan sind keine Stufen gespeichert.', 'No levels are stored for this plan.'))
+  return plan as PlanRecord & { levels: LadderLevel[] }
+}
+
 handle('send', (req: SendRequest): Promise<SendResult> => oneAtATime(async () => {
   const ex = activeEx()
   // Wurde inzwischen links unten die Börse gewechselt, gehören Paar und Regeln zur anderen Börse
@@ -520,134 +600,83 @@ handle('send', (req: SendRequest): Promise<SendResult> => oneAtATime(async () =>
   // Ein Entwurf gehört zu der Börse, auf der er geplant wurde (die Paar-Kennungen unterscheiden sich)
   const draft = req.draftId ? getDrafts().find((d) => d.id === req.draftId) : undefined
   if (draft && exchangeOf(draft) !== ex) throw new Error(tr(`Dieser Entwurf gehört zu ${exchangeName(exchangeOf(draft))}. Wechsle links unten auf ${exchangeName(exchangeOf(draft))}, um ihn freizugeben.`, `This draft belongs to ${exchangeName(exchangeOf(draft))}. Switch to ${exchangeName(exchangeOf(draft))} at the bottom left to release it.`))
-  const rules = (await pairsFor(ex, SEND_RULES_MAX_AGE_MS)).find((p) => p.id === req.pairId)
-  const valid = conformToRules(req.levels.filter((l) => !l.problem), rules, req.side, ex, { action: req.validate ? 'validate' : 'send', pair: req.pairName, side: req.side, count: 0, amount: 0 })
-  if (!valid.length) throw new Error(tr('Keine gültigen Stufen.', 'No valid levels.'))
-  // Entschärfte Preiszonen bleiben im Plan gespeichert, gehen aber jetzt nicht raus
-  const held = heldZones(req.input ?? {})
-  const armed = valid.filter((l) => !isHeld(l, held))
-  if (!armed.length) throw new Error(tr('Alle Zonen sind entschärft. Schalte mindestens eine Zone scharf, sonst wird nichts gesendet.', 'All zones are disarmed. Arm at least one zone, otherwise nothing is sent.'))
-  const count = req.sendCount ? Math.max(1, Math.min(armed.length, Math.floor(req.sendCount))) : armed.length
-  const levels = armed.slice(0, count)
-  const total = checkLimit(levels, ex)
-  const base = { action: req.validate ? 'validate' : 'send', pair: req.pairName, side: req.side, count: levels.length, amount: total }
-  if (!req.validate) await confirmWithTouchId(tr(`${levels.length} echte Orders über ${total.toFixed(2)} € an ${exchangeName(ex)} senden`, `send ${levels.length} real orders worth ${total.toFixed(2)} € to ${exchangeName(ex)}`), base)
-  await freshPriceGuard(ex, req.pairId, req.side, levels, base)
-  const userref = newUserref()
-  let orders: SendResult['orders']
-  try {
-    orders = await clientFor(ex).placeLadder(req.pairId, req.side, levels, { validate: req.validate, userref, postOnly: req.postOnly, rules })
-  } catch (e) {
-    addLog({ ...base, success: false, message: (e as Error).message })
-    throw e
-  }
-  logResult({ ...base, userref: req.validate ? undefined : userref }, orders)
-  if (!req.validate) {
-    const ok = orders.filter((o) => o.txid)
-    // Unklare Orders (Verbindung abgebrochen) gelten als gesendet, damit „Rest senden“ sie nicht doppelt schickt
-    const maybe = orders.filter((o) => o.uncertain)
-    if (ok.length + maybe.length > 0) {
+  return runSend({
+    ex, pairId: req.pairId, pairName: req.pairName, side: req.side, validate: req.validate, postOnly: req.postOnly, action: 'send',
+    candidates: req.levels.filter((l) => !l.problem),
+    pick: (valid) => {
+      if (!valid.length) throw new Error(tr('Keine gültigen Stufen.', 'No valid levels.'))
+      // Entschärfte Preiszonen bleiben im Plan gespeichert, gehen aber jetzt nicht raus
+      const held = heldZones(req.input ?? {})
+      const armed = valid.filter((l) => !isHeld(l, held))
+      if (!armed.length) throw new Error(tr('Alle Zonen sind entschärft. Schalte mindestens eine Zone scharf, sonst wird nichts gesendet.', 'All zones are disarmed. Arm at least one zone, otherwise nothing is sent.'))
+      const count = req.sendCount ? Math.max(1, Math.min(armed.length, Math.floor(req.sendCount))) : armed.length
+      return armed.slice(0, count)
+    },
+    emptyText: tr('Keine gültigen Stufen.', 'No valid levels.'),
+    touchText: (n, total) => tr(`${n} echte Orders über ${total} € an ${exchangeName(ex)} senden`, `send ${n} real orders worth ${total} € to ${exchangeName(ex)}`),
+    record: ({ userref, valid, orders }) => {
+      const { placed, any } = sentPart(orders)
+      if (!any) return
+      const ok = orders.filter((o) => o.txid).length
       addPlan({
         exchange: ex, userref, createdAt: new Date().toISOString(), pairId: req.pairId, pairName: req.pairName, side: req.side, input: req.input,
-        sent: ok.length, failed: orders.length - ok.length, totalCost: costOf([...ok, ...maybe]), levels: valid, sentIndices: [...ok, ...maybe].map((o) => o.index), postOnly: req.postOnly,
+        sent: ok, failed: orders.length - ok, totalCost: costOf(placed), levels: valid, sentIndices: placed.map((o) => o.index), postOnly: req.postOnly,
       })
       if (req.draftId) markDraftReleased(req.draftId, userref)
-    }
-    return { userref, validate: req.validate, orders, check: await checkPlaced(ex, orders) }
-  }
-  return { userref, validate: req.validate, orders }
+    },
+  })
 }))
 
 /** Restliche Stufen eines Plans nachschicken (gleiche userref, damit „Plan stornieren“ alles erfasst) */
 handle('plan:rest', (userref: number, validate: boolean): Promise<SendResult> => oneAtATime(async () => {
-  const plan = getPlans().find((p) => p.userref === userref)
-  if (!plan?.levels) throw new Error(tr('Für diesen Plan sind keine Stufen gespeichert.', 'No levels are stored for this plan.'))
+  const plan = planFor(userref)
   const sent = new Set(plan.sentIndices ?? [])
-  const ex = exchangeOf(plan)
-  const rules = (await pairsFor(ex, SEND_RULES_MAX_AGE_MS)).find((p) => p.id === plan.pairId)
   // Entschärfte Zonen gehen nicht mit „Rest senden“ raus, die haben ihren eigenen Knopf
   const held = heldZones(plan.input)
-  const rest = conformToRules(plan.levels.filter((l) => !sent.has(l.index) && !isHeld(l, held)), rules, plan.side, ex, { action: validate ? 'validate' : 'rest', pair: plan.pairName, side: plan.side, count: 0, amount: 0, userref })
-  if (!rest.length) throw new Error(tr('Alle Stufen dieses Plans sind schon gesendet.', 'All levels of this plan have already been sent.'))
-  const total = checkLimit(rest, ex)
-  const base = { action: validate ? 'validate' : 'rest', pair: plan.pairName, side: plan.side, count: rest.length, amount: total, userref }
-  if (!validate) await confirmWithTouchId(tr(`${rest.length} weitere echte Orders über ${total.toFixed(2)} € an ${exchangeName(ex)} senden`, `send ${rest.length} more real orders worth ${total.toFixed(2)} € to ${exchangeName(ex)}`), base)
-  await freshPriceGuard(ex, plan.pairId, plan.side, rest, base)
-  let orders: SendResult['orders']
-  try {
-    orders = await clientFor(ex).placeLadder(plan.pairId, plan.side, rest, { validate, userref, postOnly: plan.postOnly ?? true, rules })
-  } catch (e) {
-    addLog({ ...base, success: false, message: (e as Error).message })
-    throw e
-  }
-  logResult(base, orders)
-  if (!validate) {
-    const ok = orders.filter((o) => o.txid)
-    const maybe = orders.filter((o) => o.uncertain)
-    updatePlan(userref, (p) => ({
-      ...p, sent: p.sent + ok.length, failed: p.failed + orders.length - ok.length, totalCost: p.totalCost + costOf([...ok, ...maybe]),
-      sentIndices: [...(p.sentIndices ?? []), ...ok.map((o) => o.index), ...maybe.map((o) => o.index)],
-    }))
-    return { userref, validate, orders, check: await checkPlaced(ex, orders) }
-  }
-  return { userref, validate, orders }
+  const ex = exchangeOf(plan)
+  return runSend({
+    ex, pairId: plan.pairId, pairName: plan.pairName, side: plan.side, validate, postOnly: plan.postOnly ?? true, action: 'rest', userref,
+    candidates: plan.levels.filter((l) => !sent.has(l.index) && !isHeld(l, held)),
+    emptyText: tr('Alle Stufen dieses Plans sind schon gesendet.', 'All levels of this plan have already been sent.'),
+    touchText: (n, total) => tr(`${n} weitere echte Orders über ${total} € an ${exchangeName(ex)} senden`, `send ${n} more real orders worth ${total} € to ${exchangeName(ex)}`),
+    record: ({ orders }) => updatePlan(userref, (p) => addSent(p, orders)),
+  })
 }))
 
 /**
  * Eine entschärfte Zone scharf schalten: ihre noch nicht gesendeten Stufen gehen jetzt mit derselben Plan-Nummer raus.
  * Mit `edited` ersetzt der Nutzer die Stufen der Zone vorher (anderer Preisbereich oder andere Stufenzahl).
- * Dieselben Sicherungen wie beim normalen Senden: Regeln der Börse, Obergrenze, Touch ID, frischer Kurs.
  */
 handle('plan:zone', (userref: number, zone: number, validate: boolean, edited?: LadderLevel[]): Promise<SendResult> => oneAtATime(async () => {
-  const plan = getPlans().find((p) => p.userref === userref)
-  if (!plan?.levels) throw new Error(tr('Für diesen Plan sind keine Stufen gespeichert.', 'No levels are stored for this plan.'))
+  const plan = planFor(userref)
   const zones = plan.input.zones ?? []
   if (!Number.isInteger(zone) || !zones[zone]) throw new Error(tr('Diese Zone gibt es in dem Plan nicht.', 'This zone does not exist in the plan.'))
   if (zones[zone].armed !== false) throw new Error(tr(`Zone ${zone + 1} ist schon scharf.`, `Zone ${zone + 1} is already armed.`))
   const sent = new Set(plan.sentIndices ?? [])
-  const original = plan.levels.filter((l) => l.zone === zone && !sent.has(l.index))
-  let candidates: LadderLevel[] = original
+  let candidates: LadderLevel[] = plan.levels.filter((l) => l.zone === zone && !sent.has(l.index))
   if (edited !== undefined) {
     if (!Array.isArray(edited) || !edited.length || edited.length > MAX_STEPS) throw new Error(tr('Keine gültigen Stufen.', 'No valid levels.'))
     // neue Nummern hinter allen bisherigen Stufen, damit nichts mit schon gesendeten Stufen verwechselt wird
     const next = Math.max(-1, ...plan.levels.map((l) => l.index)) + 1
     candidates = edited.filter((l) => !l.problem).map((l, i) => ({ index: next + i, price: Number(l.price), volume: Number(l.volume), cost: Number(l.price) * Number(l.volume), share: Number(l.share) || 0, zone }))
   }
-  if (!candidates.length) throw new Error(tr(`Zone ${zone + 1} hat keine Stufen mehr zum Senden.`, `Zone ${zone + 1} has no levels left to send.`))
+  const emptyText = tr(`Zone ${zone + 1} hat keine Stufen mehr zum Senden.`, `Zone ${zone + 1} has no levels left to send.`)
+  if (!candidates.length) throw new Error(emptyText)
   const ex = exchangeOf(plan)
-  const rules = (await pairsFor(ex, SEND_RULES_MAX_AGE_MS)).find((p) => p.id === plan.pairId)
-  const base0 = { action: validate ? 'validate' : 'zone', pair: plan.pairName, side: plan.side, count: 0, amount: 0, userref }
-  const levels = conformToRules(candidates, rules, plan.side, ex, base0)
-  const total = checkLimit(levels, ex)
-  const base = { ...base0, count: levels.length, amount: total }
-  if (!validate) await confirmWithTouchId(tr(`Zone ${zone + 1} scharf schalten: ${levels.length} echte Orders über ${total.toFixed(2)} € an ${exchangeName(ex)} senden`, `arm zone ${zone + 1}: send ${levels.length} real orders worth ${total.toFixed(2)} € to ${exchangeName(ex)}`), base)
-  await freshPriceGuard(ex, plan.pairId, plan.side, levels, base)
-  let orders: SendResult['orders']
-  try {
-    orders = await clientFor(ex).placeLadder(plan.pairId, plan.side, levels, { validate, userref, postOnly: plan.postOnly ?? true, rules })
-  } catch (e) {
-    addLog({ ...base, success: false, message: (e as Error).message })
-    throw e
-  }
-  logResult(base, orders)
-  if (!validate) {
-    const ok = orders.filter((o) => o.txid)
-    const maybe = orders.filter((o) => o.uncertain)
-    if (ok.length + maybe.length > 0) {
+  return runSend({
+    ex, pairId: plan.pairId, pairName: plan.pairName, side: plan.side, validate, postOnly: plan.postOnly ?? true, action: 'zone', userref,
+    candidates, emptyText,
+    touchText: (n, total) => tr(`Zone ${zone + 1} scharf schalten: ${n} echte Orders über ${total} € an ${exchangeName(ex)} senden`, `arm zone ${zone + 1}: send ${n} real orders worth ${total} € to ${exchangeName(ex)}`),
+    record: ({ levels, orders }) => {
+      if (!sentPart(orders).any) return
+      const replaced = edited !== undefined
       updatePlan(userref, (p) => {
-        const replaced = edited !== undefined
         const keep = (p.levels ?? []).filter((l) => !(replaced && l.zone === zone && !(p.sentIndices ?? []).includes(l.index)))
         const zs = (p.input.zones ?? []).map((z, i) => (i === zone ? { ...z, armed: true, ...(replaced ? { priceStart: levels[0].price, priceEnd: levels[levels.length - 1].price, steps: levels.length } : {}) } : z))
-        return {
-          ...p, input: { ...p.input, zones: zs }, levels: replaced ? [...keep, ...levels] : p.levels,
-          sent: p.sent + ok.length, failed: p.failed + orders.length - ok.length, totalCost: p.totalCost + costOf([...ok, ...maybe]),
-          sentIndices: [...(p.sentIndices ?? []), ...ok.map((o) => o.index), ...maybe.map((o) => o.index)],
-        }
+        return addSent({ ...p, input: { ...p.input, zones: zs }, levels: replaced ? [...keep, ...levels] : p.levels }, orders)
       })
-    }
-    return { userref, validate, orders, check: await checkPlaced(ex, orders) }
-  }
-  return { userref, validate, orders }
+    },
+  })
 }))
 
 /**
