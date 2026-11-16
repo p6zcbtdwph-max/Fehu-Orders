@@ -1,0 +1,32 @@
+# Automatische Prüfung bei jedem Pull Request und auf main:
+# Tests, Typprüfung und Lint. Ein roter Haken heißt: nicht mergen, erst reparieren.
+name: Prüfung
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  pruefung:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # Electron selbst wird für Tests nicht gebraucht (wird in den Tests nachgebildet)
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Typprüfung
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Tests
+        run: npm test
