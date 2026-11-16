@@ -18,6 +18,7 @@ import { planStatus, zoneProgress, type OrderSnapshot } from '../shared/plan-sta
 import { hasZones, heldZones, isHeld, MAX_MIN_ORDER_EUR, MAX_STEPS, prepareForSend, type LadderLevel, type Side } from '../shared/ladder'
 import { langFromLocale, setLang, tr } from '../shared/i18n'
 import { moneyText, toInputText, type NumberFormat } from '../shared/number-format'
+import { splitSend } from '../shared/send-split'
 import { ipKind, ipProblem, maskIp, MAX_IPS, type HomeIpView } from '../shared/ip'
 
 /** Sprache aus den Einstellungen, sonst die Systemsprache des Macs */
@@ -632,12 +633,10 @@ handle('send', (req: SendRequest): Promise<SendResult> => oneAtATime(async () =>
     candidates: req.levels.filter((l) => !l.problem),
     pick: (valid) => {
       if (!valid.length) throw new Error(tr('Keine gültigen Stufen.', 'No valid levels.'))
-      // Entschärfte Preiszonen bleiben im Plan gespeichert, gehen aber jetzt nicht raus
-      const held = heldZones(req.input ?? {})
-      const armed = valid.filter((l) => !isHeld(l, held))
-      if (!armed.length) throw new Error(tr('Alle Zonen sind entschärft. Schalte mindestens eine Zone scharf, sonst wird nichts gesendet.', 'All zones are disarmed. Arm at least one zone, otherwise nothing is sent.'))
-      const count = req.sendCount ? Math.max(1, Math.min(armed.length, Math.floor(req.sendCount))) : armed.length
-      return armed.slice(0, count)
+      // Entschärfte Preiszonen bleiben im Plan gespeichert, gehen aber jetzt nicht raus. Dieselbe Regel wie im Planer.
+      const split = splitSend(valid, req.input ?? {}, req.sendCount)
+      if (!split.armedLevels.length) throw new Error(tr('Alle Zonen sind entschärft. Schalte mindestens eine Zone scharf, sonst wird nichts gesendet.', 'All zones are disarmed. Arm at least one zone, otherwise nothing is sent.'))
+      return split.toSend
     },
     emptyText: tr('Keine gültigen Stufen.', 'No valid levels.'),
     touchText: (n, total) => tr(`${n} echte Orders über ${total} an ${exchangeName(ex)} senden`, `send ${n} real orders worth ${total} to ${exchangeName(ex)}`),

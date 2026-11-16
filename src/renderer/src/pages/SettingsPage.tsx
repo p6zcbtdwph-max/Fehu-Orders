@@ -7,6 +7,7 @@ import Modal from '../components/ui/Modal'
 import { NumberField } from './PlannerPage'
 import RiskNotice from '../components/RiskNotice'
 import { dateLocale, num } from '../format'
+import { resetHints, seenHintCount } from '../components/Hint'
 import { tr } from '@shared/i18n'
 import { exName, FIRST_TEST_MAX_EUR } from '@shared/exchanges'
 import { DEFAULT_MIN_ORDER_EUR, effectiveMinCost, MAX_MIN_ORDER_EUR } from '@shared/ladder'
@@ -181,6 +182,10 @@ export default function SettingsPage({ hasKey, onOpenKey }: { hasKey: boolean; o
           </div>
         </SectionCard>
 
+        <SectionCard title={tr('Erklärungen', 'Explanations')}>
+          <HintsReset />
+        </SectionCard>
+
         <SectionCard title={tr('Risiko-Hinweis', 'Risk notice')}>
           <RiskNotice />
         </SectionCard>
@@ -202,6 +207,19 @@ export default function SettingsPage({ hasKey, onOpenKey }: { hasKey: boolean; o
           </div>
         </Modal>
       )}
+    </div>
+  )
+}
+
+/** Erklärungen, die mit „Verstanden“ eingeklappt wurden, wieder ganz zeigen */
+function HintsReset(): JSX.Element {
+  const [count, setCount] = useState(seenHintCount())
+  return (
+    <div className="space-y-2 text-sm">
+      <p className="text-ink-muted">{tr('Erklärungen im Planer lassen sich mit „Verstanden“ auf eine Zeile einklappen. Warnungen bleiben immer sichtbar.', 'Explanations in the planner can be collapsed to one line with “Got it”. Warnings always stay visible.')}</p>
+      <button type="button" className="btn btn-secondary" disabled={count === 0} onClick={() => { resetHints(); setCount(0) }}>
+        {count === 0 ? tr('Alle Erklärungen werden ganz gezeigt', 'All explanations are shown in full') : tr(`${count} eingeklappte Erklärungen wieder zeigen`, `Show ${count} collapsed explanations again`)}
+      </button>
     </div>
   )
 }
