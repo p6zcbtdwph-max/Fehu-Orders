@@ -34,11 +34,29 @@ export function parseNumber(text: string, format: NumberFormat): number {
   return Number(`${m[1] ?? ''}${intPart}.${m[3] || '0'}`)
 }
 
-/** Zahl für ein Eingabefeld: ohne Tausendertrenner, mit dem Dezimalzeichen des Formats */
-export function toInputText(value: number, format: NumberFormat): string {
+/**
+ * Zahl für ein Eingabefeld mit dem Dezimalzeichen des Formats, ohne Rundung.
+ * group: Tausendertrenner wie in der Anzeige (78.467,1), damit Eingabe und Tabelle gleich aussehen.
+ * parseNumber liest beide Schreibweisen.
+ */
+export function toInputText(value: number, format: NumberFormat, group = false): string {
   if (!Number.isFinite(value)) return ''
   const s = String(value).includes('e') ? value.toFixed(12).replace(/0+$/, '').replace(/\.$/, '') : String(value)
-  return format === 'de' ? s.replace('.', ',') : s
+  const [int, frac] = s.split('.')
+  const sign = int.startsWith('-') ? '-' : ''
+  const digits = sign ? int.slice(1) : int
+  const grouped = group ? digits.replace(/\B(?=(\d{3})+(?!\d))/g, SEP[format].group) : digits
+  return `${sign}${grouped}${frac !== undefined ? SEP[format].decimal + frac : ''}`
+}
+
+/** Währungszeichen statt Kürzel: EUR → €, USD → $. Coins (BTC, SOL …) bleiben, wie sie heißen. */
+export function currencySign(code: string): string {
+  return ({ EUR: '€', USD: '$' } as Record<string, string>)[code] ?? code
+}
+
+/** Geldbetrag mit zwei Nachkommastellen im gewählten Format, z. B. „1.234,50 €“. Auch für Meldungen aus dem Hauptprozess. */
+export function moneyText(n: number, format: NumberFormat, sign = '€'): string {
+  return `${new Intl.NumberFormat(localeOf(format), { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)} ${sign}`
 }
 
 /**

@@ -64,7 +64,7 @@ export function loadHomeIps(): HomeIp[] {
 }
 
 export interface Settings {
-  /** Obergrenze pro Plan in EUR, schützt vor Tippfehlern */
+  /** Obergrenze pro Sendung in EUR, schützt vor Tippfehlern */
   maxPlanEur: number
   /** Handelspaare (Anzeigename wie BTC/EUR), die oben als Schnellauswahl stehen */
   watchlist: string[]

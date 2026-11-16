@@ -101,14 +101,14 @@ export const guideSteps = (): Step[] => [
     page: 'settings', target: 'limit', title: tr('5. Dein erster echter Test: höchstens 50 €', '5. Your first real test: at most 50 €'),
     body: tr(
       <>
-        <p className="notice notice-warning"><strong>Aus Sicherheitsgründen kannst du am Anfang pro Plan nur bis 50 € senden.</strong> Ein größerer Plan wird nicht abgeschickt, und die App sagt dir, dass die Obergrenze erreicht ist. Das ist kein Fehler, sondern Absicht.</p>
+        <p className="notice notice-warning"><strong>Aus Sicherheitsgründen kannst du am Anfang pro Sendung nur bis 50 € senden.</strong> Ein größerer Plan wird nicht abgeschickt, und die App sagt dir, dass die Obergrenze erreicht ist. Das ist kein Fehler, sondern Absicht.</p>
         <p>So bleibt dein erster echter Test klein, falls du dich vertippst oder noch etwas nicht ganz verstanden hast. Im Planer lädt <strong>Erster Test</strong> dafür einen fertigen Mini-Plan.</p>
-        <p>Wenn alles geklappt hat, hebst du die Grenze hier unter <strong>Einstellungen › Sicherheit › Obergrenze pro Plan</strong> an, zum Beispiel auf 500 €. Sie gilt für jede einzelne Sendung.</p>
+        <p>Wenn alles geklappt hat, hebst du die Grenze hier unter <strong>Einstellungen › Sicherheit › Obergrenze pro Sendung</strong> an, zum Beispiel auf 500 €. Sie gilt für jede einzelne Sendung.</p>
       </>,
       <>
-        <p className="notice notice-warning"><strong>For safety reasons you can only send up to 50 € per plan at the start.</strong> A larger plan is not sent, and the app tells you that the limit has been reached. This is not a bug, it is on purpose.</p>
+        <p className="notice notice-warning"><strong>For safety reasons you can only send up to 50 € per send at the start.</strong> A larger plan is not sent, and the app tells you that the limit has been reached. This is not a bug, it is on purpose.</p>
         <p>That keeps your first real test small in case you make a typo or have not fully understood something yet. In the planner, <strong>First test</strong> loads a ready-made mini plan for this.</p>
-        <p>Once everything has worked, raise the limit here under <strong>Settings › Safety › Limit per plan</strong>, for example to 500 €. It applies to every single send.</p>
+        <p>Once everything has worked, raise the limit here under <strong>Settings › Safety › Limit per send</strong>, for example to 500 €. It applies to every single send.</p>
       </>,
     ),
   },
@@ -158,11 +158,11 @@ export const guideSteps = (): Step[] => [
     body: tr(
       <>
         <p>Im <strong>Demo-Modus</strong> spielst du alles mit Beispielkursen und erfundenem Guthaben durch. Es geht nichts an {exName()}, du brauchst keinen Schlüssel.</p>
-        <p>Für den ersten echten Test denk an die <strong>Grenze von 50 € pro Plan</strong>. Die Einführung findest du jederzeit wieder unten links unter <strong>Einführung</strong>, die Sprache stellst du dort unter <strong>Sprache</strong> um.</p>
+        <p>Für den ersten echten Test denk an die <strong>Grenze von 50 € pro Sendung</strong>. Die Einführung findest du jederzeit wieder unten links unter <strong>Einführung</strong>, die Sprache stellst du dort unter <strong>Sprache</strong> um.</p>
       </>,
       <>
         <p>In <strong>demo mode</strong> you can try everything with sample prices and made-up balances. Nothing goes to {exName()} and you need no key.</p>
-        <p>For your first real test, remember the <strong>limit of 50 € per plan</strong>. You can reopen the introduction at any time bottom left under <strong>Introduction</strong>, and switch the language there under <strong>Language</strong>.</p>
+        <p>For your first real test, remember the <strong>limit of 50 € per send</strong>. You can reopen the introduction at any time bottom left under <strong>Introduction</strong>, and switch the language there under <strong>Language</strong>.</p>
       </>,
     ),
   },

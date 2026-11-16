@@ -17,6 +17,7 @@ import { alarmHit, checkKeyFormat, normalizeCoinbase, priceGuard } from '../shar
 import { planStatus, zoneProgress, type OrderSnapshot } from '../shared/plan-status'
 import { hasZones, heldZones, isHeld, MAX_MIN_ORDER_EUR, MAX_STEPS, prepareForSend, type LadderLevel, type Side } from '../shared/ladder'
 import { langFromLocale, setLang, tr } from '../shared/i18n'
+import { moneyText, toInputText, type NumberFormat } from '../shared/number-format'
 import { ipKind, ipProblem, maskIp, MAX_IPS, type HomeIpView } from '../shared/ip'
 
 /** Sprache aus den Einstellungen, sonst die Systemsprache des Macs */
@@ -33,6 +34,9 @@ export function createExchange(ex: ExchangeId, creds: Credentials | null): Excha
 
 /** Börse, mit der die App gerade arbeitet (Einstellungen) */
 const activeEx = (): ExchangeId => getSettings().exchange
+/** Zahlen in Meldungen im gewählten Zahlenformat, wie in der Oberfläche */
+const numberFormat = (): NumberFormat => getSettings().numberFormat ?? (getSettings().language === 'en' ? 'en' : 'de')
+const money = (n: number): string => moneyText(n, numberFormat())
 // Je Börse eine gemeinsame Verbindung, damit alle privaten Anfragen nacheinander laufen
 // (Kraken lehnt Zeitstempel ab, die nicht in steigender Reihenfolge ankommen)
 const clients = new Map<ExchangeId, Exchange>()
@@ -442,7 +446,7 @@ async function freshPriceGuard(ex: ExchangeId, pairId: string, side: 'buy' | 'se
     addLog({ ...base, success: false, message: msg })
     throw new Error(msg)
   }
-  const msg = priceGuard(side, levels.map((l) => l.price), last, (n) => `${n} €`)
+  const msg = priceGuard(side, levels.map((l) => l.price), last, (n) => `${toInputText(n, numberFormat(), true)} €`)
   if (msg) {
     addLog({ ...base, success: false, message: msg })
     throw new Error(msg)
@@ -495,13 +499,13 @@ function checkLimit(levels: { price: number; volume: number }[], ex: ExchangeId)
   if (!(total <= limit)) {
     if (first && limit < maxPlanEur) {
       throw new Error(tr(
-        `Diese Sendung hat einen Gegenwert von ${total.toFixed(2)} €. Auf ${exchangeName(ex)} hast du noch keinen echten Plan angelegt. Zur Sicherheit geht der erste Test dort mit höchstens ${limit} €. Danach gilt deine Obergrenze von ${maxPlanEur} €.`,
-        `This send is worth ${total.toFixed(2)} €. You have not placed a real plan on ${exchangeName(ex)} yet. For safety, the first test there is limited to ${limit} €. After that your limit of ${maxPlanEur} € applies.`,
+        `Diese Sendung hat einen Gegenwert von ${money(total)}. Auf ${exchangeName(ex)} hast du noch keinen echten Plan angelegt. Zur Sicherheit geht der erste Test dort mit höchstens ${limit} €. Danach gilt deine Obergrenze von ${maxPlanEur} €.`,
+        `This send is worth ${money(total)}. You have not placed a real plan on ${exchangeName(ex)} yet. For safety, the first test there is limited to ${limit} €. After that your limit of ${maxPlanEur} € applies.`,
       ))
     }
     throw new Error(tr(
-      `Diese Sendung hat einen Gegenwert von ${total.toFixed(2)} €. Deine Obergrenze pro Plan ist ${maxPlanEur} €. Zur Sicherheit steht sie anfangs auf 50 €, damit der erste echte Test klein bleibt. Ändern kannst du sie unter Einstellungen › Obergrenze pro Plan.`,
-      `This send is worth ${total.toFixed(2)} €. Your limit per plan is ${maxPlanEur} €. For safety it starts at 50 € so your first real test stays small. You can change it under Settings › Limit per plan.`,
+      `Diese Sendung hat einen Gegenwert von ${money(total)}. Deine Obergrenze pro Sendung ist ${maxPlanEur} €. Zur Sicherheit steht sie anfangs auf 50 €, damit der erste echte Test klein bleibt. Ändern kannst du sie unter Einstellungen › Obergrenze pro Sendung.`,
+      `This send is worth ${money(total)}. Your limit per send is ${maxPlanEur} €. For safety it starts at 50 € so your first real test stays small. You can change it under Settings › Limit per send.`,
     ))
   }
   return total
@@ -579,7 +583,7 @@ async function runSend<T extends LadderLevel>(job: SendJob<T>): Promise<SendResu
   if (!levels.length) throw new Error(job.emptyText)
   const total = checkLimit(levels, ex)
   const base: LogBase = { ...base0, count: levels.length, amount: total }
-  if (!validate) await confirmWithTouchId(job.touchText(levels.length, total.toFixed(2)), base)
+  if (!validate) await confirmWithTouchId(job.touchText(levels.length, money(total)), base)
   await freshPriceGuard(ex, job.pairId, job.side, levels, base)
   const userref = job.userref ?? newUserref()
   let orders: Orders
@@ -636,7 +640,7 @@ handle('send', (req: SendRequest): Promise<SendResult> => oneAtATime(async () =>
       return armed.slice(0, count)
     },
     emptyText: tr('Keine gültigen Stufen.', 'No valid levels.'),
-    touchText: (n, total) => tr(`${n} echte Orders über ${total} € an ${exchangeName(ex)} senden`, `send ${n} real orders worth ${total} € to ${exchangeName(ex)}`),
+    touchText: (n, total) => tr(`${n} echte Orders über ${total} an ${exchangeName(ex)} senden`, `send ${n} real orders worth ${total} to ${exchangeName(ex)}`),
     record: ({ userref, valid, orders }) => {
       const { placed, any } = sentPart(orders)
       if (!any) return
@@ -661,7 +665,7 @@ handle('plan:rest', (userref: number, validate: boolean): Promise<SendResult> =>
     ex, pairId: plan.pairId, pairName: plan.pairName, side: plan.side, validate, postOnly: plan.postOnly ?? true, action: 'rest', userref,
     candidates: plan.levels.filter((l) => !sent.has(l.index) && !isHeld(l, held)),
     emptyText: tr('Alle Stufen dieses Plans sind schon gesendet.', 'All levels of this plan have already been sent.'),
-    touchText: (n, total) => tr(`${n} weitere echte Orders über ${total} € an ${exchangeName(ex)} senden`, `send ${n} more real orders worth ${total} € to ${exchangeName(ex)}`),
+    touchText: (n, total) => tr(`${n} weitere echte Orders über ${total} an ${exchangeName(ex)} senden`, `send ${n} more real orders worth ${total} to ${exchangeName(ex)}`),
     record: ({ orders }) => updatePlan(userref, (p) => addSent(p, orders)),
   })
 }))
@@ -689,7 +693,7 @@ handle('plan:zone', (userref: number, zone: number, validate: boolean, edited?: 
   return runSend({
     ex, pairId: plan.pairId, pairName: plan.pairName, side: plan.side, validate, postOnly: plan.postOnly ?? true, action: 'zone', userref,
     candidates, emptyText,
-    touchText: (n, total) => tr(`Zone ${zone + 1} scharf schalten: ${n} echte Orders über ${total} € an ${exchangeName(ex)} senden`, `arm zone ${zone + 1}: send ${n} real orders worth ${total} € to ${exchangeName(ex)}`),
+    touchText: (n, total) => tr(`Zone ${zone + 1} scharf schalten: ${n} echte Orders über ${total} an ${exchangeName(ex)} senden`, `arm zone ${zone + 1}: send ${n} real orders worth ${total} to ${exchangeName(ex)}`),
     record: ({ levels, orders }) => {
       if (!sentPart(orders).any) return
       const replaced = edited !== undefined

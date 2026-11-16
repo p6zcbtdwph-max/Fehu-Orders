@@ -23,7 +23,7 @@ import Modal from '../components/ui/Modal'
 import { useChartTheme } from '../utils/chartTheme'
 import { dateLocale, num, numberFormat, pct } from '../format'
 import { tr } from '@shared/i18n'
-import { parseWeightList, toInputText } from '@shared/number-format'
+import { currencySign, parseWeightList, toInputText } from '@shared/number-format'
 import { useMoney } from '../money'
 import { activeExchange, exName, FIRST_TEST_MAX_EUR, probeHint, probeOk } from '@shared/exchanges'
 
@@ -304,7 +304,7 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
       if (top) setPairId(top.pair.id)
     }
   }, [selling, sellPairs])
-  const quote = pair?.name.split('/')[1] ?? 'EUR'
+  const quote = currencySign(pair?.name.split('/')[1] ?? 'EUR')
   const base = pair?.name.split('/')[0] ?? ''
   const sendable = ladder?.levels.filter((l) => !l.problem) ?? []
   // Nur die ersten N Stufen (nah am Kurs) gehen jetzt raus, der Rest bleibt im Plan
@@ -329,7 +329,7 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
   const watched = pairs.filter((p) => watchlist.includes(p.name))
   // Stufen auf der falschen Seite des Kurses würden sofort ausgeführt (oder mit Post-only sofort storniert)
   const wrong = wrongSide(input.side, toSend.map((l) => l.price), last)
-  // Über der Obergrenze pro Plan schickt der Hauptprozess nichts raus. Lieber vorher sagen als hinterher.
+  // Über der Obergrenze pro Sendung schickt der Hauptprozess nichts raus. Lieber vorher sagen als hinterher.
   const overLimit = limit !== null && nowCost > limit + 1e-9
   // Rückblick: wie oft der Kurs die Stufen im gewählten Zeitraum erreicht hat (Tageskerzen)
   const nowSec = Date.now() / 1000
@@ -619,8 +619,8 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
             <p className="notice notice-warning flex flex-wrap items-start gap-x-3 gap-y-1">
               <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" />
               <span className="min-w-0 flex-1">{tr(
-                <><strong>Über deiner Obergrenze von {eur(limit)} pro Plan.</strong> Aus Sicherheitsgründen steht sie am Anfang auf 50 €, damit dein erster echter Test klein bleibt. So wird nichts gesendet. Verkleinere den Betrag, sende mit „Davon jetzt senden“ erst einen Teil, oder hebe die Grenze in den Einstellungen an.</>,
-                <><strong>Above your limit of {eur(limit)} per plan.</strong> For safety it starts at 50 € so your first real test stays small. Nothing will be sent like this. Lower the amount, send only part of it with “Send now”, or raise the limit in Settings.</>,
+                <><strong>Über deiner Obergrenze von {eur(limit)} pro Sendung.</strong> Aus Sicherheitsgründen steht sie am Anfang auf 50 €, damit dein erster echter Test klein bleibt. So wird nichts gesendet. Verkleinere den Betrag, sende mit „Davon jetzt senden“ erst einen Teil, oder hebe die Grenze in den Einstellungen an.</>,
+                <><strong>Above your limit of {eur(limit)} per send.</strong> For safety it starts at 50 € so your first real test stays small. Nothing will be sent like this. Lower the amount, send only part of it with “Send now”, or raise the limit in Settings.</>,
               )}</span>
               {onOpenSettings && <button type="button" className="btn-link" onClick={onOpenSettings}>{tr('Zu den Einstellungen', 'Open settings')}</button>}
             </p>
@@ -839,8 +839,8 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
           </>}>
           <div className="space-y-3 text-sm">
             <p className="notice notice-warning">{tr(
-              <><strong>Beim ersten Test kannst du höchstens 50 € pro Plan senden.</strong> Das ist eine Sicherheitsgrenze, kein Fehler. Ist ein Plan größer, schickt die App nichts ab und sagt dir Bescheid. Später hebst du die Grenze unter Einstellungen › Sicherheit an.</>,
-              <><strong>For your first test you can send at most 50 € per plan.</strong> This is a safety limit, not a bug. If a plan is bigger, the app sends nothing and tells you so. Later you can raise the limit under Settings › Safety.</>,
+              <><strong>Beim ersten Test kannst du höchstens 50 € pro Sendung senden.</strong> Das ist eine Sicherheitsgrenze, kein Fehler. Ist ein Plan größer, schickt die App nichts ab und sagt dir Bescheid. Später hebst du die Grenze unter Einstellungen › Sicherheit an.</>,
+              <><strong>For your first test you can send at most 50 € per send.</strong> This is a safety limit, not a bug. If a plan is bigger, the app sends nothing and tells you so. Later you can raise the limit under Settings › Safety.</>,
             )}</p>
             <p>{tr('So testest du Senden, Anzeige und Stornieren mit echtem Geld, aber praktisch ohne Risiko:', 'This is how you test sending, display and cancelling with real money but practically without risk:')}</p>
             <ol className="list-decimal space-y-1.5 pl-5">
@@ -887,8 +887,8 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
           </>}>
           <div className="space-y-2 text-sm">
             {overLimit && limit !== null && <p className="notice notice-warning">{tr(
-              <><strong>Über deiner Obergrenze von {eur(limit)} pro Plan.</strong> Zur Sicherheit wird so nichts gesendet. Am Anfang steht sie auf 50 €, damit der erste Test klein bleibt. Ändern kannst du sie unter Einstellungen › Sicherheit.</>,
-              <><strong>Above your limit of {eur(limit)} per plan.</strong> For safety nothing is sent like this. It starts at 50 € so your first test stays small. You can change it under Settings › Safety.</>,
+              <><strong>Über deiner Obergrenze von {eur(limit)} pro Sendung.</strong> Zur Sicherheit wird so nichts gesendet. Am Anfang steht sie auf 50 €, damit der erste Test klein bleibt. Ändern kannst du sie unter Einstellungen › Sicherheit.</>,
+              <><strong>Above your limit of {eur(limit)} per send.</strong> For safety nothing is sent like this. It starts at 50 € so your first test stays small. You can change it under Settings › Safety.</>,
             )}</p>}
             <p>{tr(
               <><strong>{input.side === 'buy' ? 'Kaufen' : 'Verkaufen'}</strong> {pair.name} in {nowCount} Stufen von {fmtPrice(toSend[0]?.price ?? input.priceStart, pair.priceDecimals)} bis {fmtPrice(toSend[toSend.length - 1]?.price ?? input.priceEnd, pair.priceDecimals)} {sym}.</>,

@@ -28,6 +28,12 @@ describe('Zahlenformat', () => {
     expect(toInputText(78428.4, 'de')).toBe('78428,4')
     expect(toInputText(78428.4, 'en')).toBe('78428.4')
     expect(toInputText(5e-7, 'de')).toBe('0,0000005')
+    expect(toInputText(78467.1, 'de', true)).toBe('78.467,1')
+    expect(toInputText(78467.1, 'en', true)).toBe('78,467.1')
+    expect(toInputText(-1234567, 'de', true)).toBe('-1.234.567')
+    expect(toInputText(999.5, 'de', true)).toBe('999,5')
+    // was angezeigt wird, lässt sich auch wieder lesen
+    for (const v of [78467.1, 1234567.891, 0.00012, 1000]) for (const f of ['de', 'en'] as const) expect(parseNumber(toInputText(v, f, true), f)).toBe(v)
   })
   it('Eigene Prozente mit Dezimalkomma bleiben ganz', () => {
     expect(parseWeightList('12,5; 12,5; 25; 50', 'de')).toEqual([12.5, 12.5, 25, 50])
