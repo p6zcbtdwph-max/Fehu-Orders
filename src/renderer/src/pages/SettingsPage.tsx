@@ -171,8 +171,8 @@ export default function SettingsPage({ hasKey, onOpenKey }: { hasKey: boolean; o
         <SectionCard title={tr('Datensicherung', 'Backup')}>
           <div className="space-y-3 text-sm">
             <p className="text-ink-muted">{tr(
-              <>Pläne, Entwürfe, Vorlagen, Einstellungen und Protokoll liegen nur auf diesem Mac. Sichere sie ab und zu in eine Datei, zum Beispiel in iCloud Drive. Der API-Schlüssel kommt bewusst <strong className="text-ink">nicht</strong> mit hinein. Auf einem neuen Mac legst du ihn im Reiter „Schlüssel“ neu an.</>,
-              <>Plans, drafts, templates, settings and log are stored only on this Mac. Back them up to a file now and then, for example to iCloud Drive. The API key is deliberately <strong className="text-ink">not</strong> included. On a new Mac you add it again in the “API key” tab.</>,
+              <>Pläne, Ausführungen, Entwürfe, Vorlagen, Einstellungen und Protokoll liegen nur auf diesem Mac. Sichere sie ab und zu in eine Datei, zum Beispiel in iCloud Drive. Der API-Schlüssel kommt bewusst <strong className="text-ink">nicht</strong> mit hinein. Auf einem neuen Mac legst du ihn im Reiter „Schlüssel“ neu an.</>,
+              <>Plans, fills, drafts, templates, settings and log are stored only on this Mac. Back them up to a file now and then, for example to iCloud Drive. The API key is deliberately <strong className="text-ink">not</strong> included. On a new Mac you add it again in the “API key” tab.</>,
             )}</p>
             <div className="flex flex-wrap gap-2">
               <button type="button" className="btn btn-secondary" onClick={doExport}><Download size={16} /> {tr('Sichern', 'Back up')}</button>
@@ -218,7 +218,7 @@ function HintsReset(): JSX.Element {
     <div className="space-y-2 text-sm">
       <p className="text-ink-muted">{tr('Erklärungen im Planer lassen sich mit „Verstanden“ auf eine Zeile einklappen. Warnungen bleiben immer sichtbar.', 'Explanations in the planner can be collapsed to one line with “Got it”. Warnings always stay visible.')}</p>
       <button type="button" className="btn btn-secondary" disabled={count === 0} onClick={() => { resetHints(); setCount(0) }}>
-        {count === 0 ? tr('Alle Erklärungen werden ganz gezeigt', 'All explanations are shown in full') : tr(`${count} eingeklappte Erklärungen wieder zeigen`, `Show ${count} collapsed explanations again`)}
+        {count === 0 ? tr('Alle Erklärungen werden ganz gezeigt', 'All explanations are shown in full') : count === 1 ? tr('1 eingeklappte Erklärung wieder zeigen', 'Show 1 collapsed explanation again') : tr(`${count} eingeklappte Erklärungen wieder zeigen`, `Show ${count} collapsed explanations again`)}
       </button>
     </div>
   )

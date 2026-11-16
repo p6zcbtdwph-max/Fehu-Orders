@@ -1,7 +1,7 @@
 {
   "name": "fehu-orders",
   "version": "0.1.0",
-  "description": "Fehu Orders: gestaffelte Krypto-Orders planen und an Kraken senden",
+  "description": "Fehu Orders: gestaffelte Krypto-Orders planen und an Kraken, Bitvavo oder Coinbase senden",
   "main": "./out/main/index.js",
   "private": true,
   "scripts": {
