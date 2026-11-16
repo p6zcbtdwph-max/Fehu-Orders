@@ -13,6 +13,8 @@ export interface OrderSnapshot {
   price: number
   /** Limitpreis (bei geschlossenen Orders ist price der Ausführungspreis). Für die Zuordnung zu Stufen und Zonen. */
   limitPrice?: number
+  /** Zeitpunkt der letzten Ausführung (Unix-Sekunden), aus dem Ausführungsbuch */
+  closedAt?: number
 }
 
 export interface PlanStatus {
@@ -27,6 +29,9 @@ export interface PlanStatus {
   fees: number
   /** Durchschnittspreis der Ausführungen */
   averagePrice: number
+  /** Erste und letzte Ausführung (Unix-Sekunden), soweit die Börse sie nennt. Wichtig z. B. für die Haltefrist. */
+  firstFillAt?: number
+  lastFillAt?: number
   /** txids, die vollständig oder teilweise ausgeführt sind */
   executedTxids: string[]
 }
@@ -45,6 +50,10 @@ export function planStatus(orders: OrderSnapshot[]): PlanStatus {
       s.filledCost += o.cost > 0 ? o.cost : o.filled * o.price
       s.fees += o.fee
       s.executedTxids.push(o.txid)
+      if (o.closedAt && o.status !== 'open') {
+        s.firstFillAt = Math.min(s.firstFillAt ?? Infinity, o.closedAt)
+        s.lastFillAt = Math.max(s.lastFillAt ?? 0, o.closedAt)
+      }
     }
   }
   s.averagePrice = s.filledVolume > 0 ? s.filledCost / s.filledVolume : 0

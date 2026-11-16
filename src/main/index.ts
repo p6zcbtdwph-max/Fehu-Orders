@@ -10,7 +10,7 @@ import { Coinbase } from './coinbase'
 import type { ClosedOrder, Credentials, Exchange, PairInfo } from './exchange'
 import { EXCHANGE_IDS, exchangeName, exchangeOf, isExchangeId, sendLimit, type ExchangeId } from '../shared/exchanges'
 import {
-  addLog, addPlan, loadHomeIps, saveHomeIps, systemLocale, clearCredentials, exportAll, importAll, getLog, markAlarmFired, deleteDraft, deleteTemplate, getDrafts, markDraftReleased, saveDraft, getNotified, getPlans, getSettings, getTemplates, hasRealPlan, loadCredentials, newUserref, saveCredentials, saveSettings, saveTemplate, setNotified, updatePlan, type PlanRecord, type Settings,
+  addLog, addPlan, loadHomeIps, saveHomeIps, systemLocale, clearCredentials, exportAll, importAll, getLog, markAlarmFired, deleteDraft, deleteTemplate, getDrafts, getFillBook, saveFillBook, markDraftReleased, saveDraft, getNotified, getPlans, getSettings, getTemplates, hasRealPlan, loadCredentials, newUserref, saveCredentials, saveSettings, saveTemplate, setNotified, updatePlan, type PlanRecord, type Settings,
 } from './store'
 import type { DraftDto, LogEntry, PlanStatusDto, SaveKeyResult, SendRequest, SendResult, TemplateDto } from '../shared/ipc'
 import { alarmHit, checkKeyFormat, normalizeCoinbase, priceGuard } from '../shared/safety'
@@ -63,10 +63,16 @@ async function pairsFor(ex: ExchangeId, maxAgeMs = PAIR_CACHE_MS): Promise<PairI
 /** Vor dem Senden: Regeln höchstens 10 Minuten alt */
 const SEND_RULES_MAX_AGE_MS = 10 * 60_000
 // Neuer Schlüssel kann ein anderes Konto sein: dann auch die geladenen geschlossenen Orders verwerfen
+/**
+ * Neuer oder gelöschter Schlüssel: Verbindung neu aufbauen und beim nächsten Mal alles bei der Börse neu abfragen
+ * (könnte ein anderes Konto sein). Die schon bekannten Ausführungen im Buch bleiben, sie gehören zu deinen Plänen.
+ */
 const resetClient = (ex: ExchangeId) => {
   clients.delete(ex)
   closedCaches.delete(ex)
   statusCache.delete(ex)
+  const book = getFillBook(ex)
+  if (book.orders.length || book.fetchedAt) saveFillBook(ex, { ...book, coveredFrom: Infinity, fetchedAt: 0, pairs: [] })
 }
 
 function createWindow(): void {
@@ -319,14 +325,24 @@ const statusCache = new Map<ExchangeId, { at: number; value: PlanStatusDto[]; ex
 /**
  * Geschlossene Orders je Börse, einmal vollständig geladen und danach nur noch ergänzt.
  * Geschlossene Orders ändern sich nicht mehr, deshalb reicht beim nächsten Mal alles seit der letzten Abfrage.
+ * Der Stand liegt dauerhaft im Ausführungsbuch (fills.json), so muss nach einem Neustart nichts neu geladen werden.
  * pairs: für Börsen, die je Paar abfragen (Bitvavo). Kommt ein neues Paar dazu, wird es ab dem Anfang geladen.
  */
 interface ClosedCache { orders: Map<string, ClosedOrder>; coveredFrom: number; fetchedAt: number; pairs: Set<string> }
 const closedCaches = new Map<ExchangeId, ClosedCache>()
 
-async function closedOrdersFrom(ex: ExchangeId, from: number, pairIds: string[]): Promise<ClosedOrder[]> {
+function bookFor(ex: ExchangeId): ClosedCache {
   let c = closedCaches.get(ex)
-  if (!c) closedCaches.set(ex, (c = { orders: new Map(), coveredFrom: Infinity, fetchedAt: 0, pairs: new Set() }))
+  if (!c) {
+    const b = getFillBook(ex)
+    c = { orders: new Map(b.orders.map((o) => [o.txid, o])), coveredFrom: b.coveredFrom, fetchedAt: b.fetchedAt, pairs: new Set(b.pairs) }
+    closedCaches.set(ex, c)
+  }
+  return c
+}
+
+async function closedOrdersFrom(ex: ExchangeId, from: number, pairIds: string[]): Promise<ClosedOrder[]> {
+  const c = bookFor(ex)
   const k = clientFor(ex)
   const now = Date.now() / 1000
   const newPairs = pairIds.filter((id) => !c.pairs.has(id))
@@ -337,10 +353,13 @@ async function closedOrdersFrom(ex: ExchangeId, from: number, pairIds: string[])
     ...(newPairs.length ? await k.closedOrdersSince(from, 100, newPairs) : []),
     ...(oldPairs.length || !pairIds.length ? await k.closedOrdersSince(start, 100, oldPairs) : []),
   ]
-  for (const o of fresh) c.orders.set(o.txid, o)
+  // Ins Buch kommen nur Orders der eigenen Pläne, nicht was du anderswo an der Börse handelst
+  const mine = new Set(getPlans().filter((p) => exchangeOf(p) === ex).map((p) => p.userref))
+  for (const o of fresh) if (mine.has(o.userref)) c.orders.set(o.txid, o)
   c.coveredFrom = Math.min(c.coveredFrom, start, newPairs.length ? from : Infinity)
   c.fetchedAt = now
   newPairs.forEach((id) => c.pairs.add(id))
+  saveFillBook(ex, { orders: [...c.orders.values()], coveredFrom: c.coveredFrom, fetchedAt: c.fetchedAt, pairs: [...c.pairs] })
   return [...c.orders.values()]
 }
 
@@ -352,17 +371,21 @@ async function computeStatuses(ex: ExchangeId = activeEx()): Promise<PlanStatusD
   const open = mine.length ? await k.openOrders() : []
   const refs = new Set(open.map((o) => o.userref))
   lastOpenRefs.set(ex, refs)
-  const plans = activePlans(ex, refs)
+  const active = activePlans(ex, refs)
   // eine Abfrage für alle Pläne statt einer pro Plan (Anfrage-Grenze der Börse)
-  const since = plans.length ? Math.min(...plans.map((p) => Date.parse(p.createdAt))) / 1000 - 60 : 0
-  const allClosed = plans.length ? await closedOrdersFrom(ex, since, [...new Set(plans.map((p) => p.pairId))]) : []
+  const since = active.length ? Math.min(...active.map((p) => Date.parse(p.createdAt))) / 1000 - 60 : 0
+  const allClosed = active.length ? await closedOrdersFrom(ex, since, [...new Set(active.map((p) => p.pairId))]) : [...bookFor(ex).orders.values()]
+  // Ältere Pläne zeigen ihren Stand weiter, wenn das Ausführungsbuch ihre Orders kennt
+  const booked = new Set(allClosed.map((o) => o.userref))
+  const activeRefs = new Set(active.map((p) => p.userref))
+  const plans = mine.filter((p) => activeRefs.has(p.userref) || booked.has(p.userref))
   const value: PlanStatusDto[] = []
   const executed = new Map<number, string[]>()
   for (const p of plans) {
     const closed = allClosed.filter((o) => o.userref === p.userref)
     const snaps: OrderSnapshot[] = [
       ...open.filter((o) => o.userref === p.userref).map((o) => ({ txid: o.txid, status: 'open', volume: o.volume, filled: o.filled, cost: o.cost, fee: o.fee, price: o.price, limitPrice: o.price })),
-      ...closed.map((o) => ({ txid: o.txid, status: o.status, volume: o.volume, filled: o.filled, cost: o.cost, fee: o.fee, price: o.price, limitPrice: o.limitPrice })),
+      ...closed.map((o) => ({ txid: o.txid, status: o.status, volume: o.volume, filled: o.filled, cost: o.cost, fee: o.fee, price: o.price, limitPrice: o.limitPrice, closedAt: o.closedAt })),
     ]
     const st = planStatus(snaps)
     const zones = p.levels && hasZones(p.input) ? zoneProgress(p.levels, p.sentIndices ?? [], snaps) : []

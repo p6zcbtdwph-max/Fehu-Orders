@@ -340,6 +340,7 @@ export class Kraken implements Exchange {
       price: Number(o.price) || Number(o.descr.price),
       limitPrice: Number(o.descr.price),
       userref: o.userref ?? 0,
+      ...(Number(o.closetm) > 0 ? { closedAt: Number(o.closetm) } : {}),
     }))
   }
 

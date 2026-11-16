@@ -46,6 +46,8 @@ export interface ClosedOrder {
   /** Limitpreis der Order */
   limitPrice: number
   userref: number
+  /** Wann die Order zuletzt ausgeführt bzw. geschlossen wurde (Unix-Sekunden), falls die Börse es nennt */
+  closedAt?: number
 }
 
 export interface OpenOrder {

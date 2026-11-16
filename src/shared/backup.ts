@@ -1,4 +1,4 @@
-// Datensicherung: Pläne, Entwürfe, Vorlagen, Einstellungen, Protokoll in einer Datei.
+// Datensicherung: Pläne, Entwürfe, Vorlagen, Einstellungen, Protokoll und Ausführungsbuch in einer Datei.
 // Der API-Schlüssel kommt nie hinein. Rein, ohne Dateizugriff, damit es testbar ist.
 import { tr } from './i18n'
 
@@ -15,6 +15,8 @@ export interface BackupData {
   templates: unknown[]
   log: unknown[]
   notified: string[]
+  /** Ausführungsbuch je Börse ({ exchange, orders }). Fehlt in Sicherungen vor November 2026. */
+  fills: unknown[]
 }
 
 export interface BackupSummary {
@@ -49,6 +51,7 @@ export function parseBackup(text: string): BackupData {
     templates: arr(raw.templates).filter((t: any) => typeof t?.id === 'string' && t?.input),
     log: arr(raw.log).filter((e: any) => typeof e?.at === 'string' && typeof e?.action === 'string'),
     notified: arr(raw.notified).filter((x: unknown): x is string => typeof x === 'string'),
+    fills: arr(raw.fills).filter((f: any) => typeof f?.exchange === 'string' && Array.isArray(f?.orders)),
   }
   return data
 }
