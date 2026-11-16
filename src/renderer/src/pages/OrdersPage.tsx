@@ -11,6 +11,9 @@ import SectionCard from '../components/ui/SectionCard'
 import Modal from '../components/ui/Modal'
 import { SendSuccessModal } from '../components/SendSuccess'
 import { dateLocale, num } from '../format'
+
+/** Datum einer Ausführung aus dem Ausführungsbuch (Unix-Sekunden) */
+const fillDate = (t: number): string => new Date(t * 1000).toLocaleDateString(dateLocale(), { dateStyle: 'medium' })
 import { tr } from '@shared/i18n'
 import { useMoney } from '../money'
 import { activeExchange, exName, probeOk } from '@shared/exchanges'
@@ -201,6 +204,11 @@ export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; on
                         <td className="num">{orders ? open : '–'}</td>
                         <td className="num">
                           {st ? <span className={st.filled + st.partial > 0 ? 'text-success-fg' : ''}>{st.filled}{st.partial ? ` + ${st.partial} ${tr('teilw.', 'partial')}` : ''}</span> : '–'}
+                          {st?.lastFillAt && (
+                            <span className="block text-xs text-ink-muted" title={st.firstFillAt && st.firstFillAt !== st.lastFillAt ? tr(`Erste Ausführung ${fillDate(st.firstFillAt)}`, `First fill ${fillDate(st.firstFillAt)}`) : undefined}>
+                              {tr('zuletzt', 'last')} {fillDate(st.lastFillAt)}
+                            </span>
+                          )}
                         </td>
                         <td className="num">{st && st.averagePrice ? `${fmtPrice(st.averagePrice, dec(p.pairId))} ${sym}` : '–'}</td>
                         <td className="num">{eur(p.totalCost)}</td>
@@ -262,7 +270,7 @@ export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; on
                       <tr key={o.txid}>
                         <td>{o.pair}</td>
                         <td>{o.side === 'buy' ? tr('Kauf', 'Buy') : tr('Verkauf', 'Sell')}</td>
-                        <td className="num">{fmtPrice(o.price, 8)}</td>
+                        <td className="num">{fmtPrice(o.price, 8)} {sym}</td>
                         <td className="num">{num(o.volume, 8)}</td>
                         <td className="num">{num(o.filled, 8)}</td>
                         <td className="tabular-nums text-ink-muted">{o.userref || '–'}</td>

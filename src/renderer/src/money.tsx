@@ -27,8 +27,8 @@ export function useMoney() {
   return {
     ...s,
     usd,
-    /** Kürzel der Anzeigewährung */
-    sym: usd ? 'USD' : 'EUR',
+    /** Zeichen der Anzeigewährung (überall gleich: Zahl, Leerzeichen, €) */
+    sym: usd ? '$' : '€',
     /** Betrag in EUR in der Anzeigewährung */
     eur: (n: number) => (usd ? `${usdFmt.format(n * k)} $` : fmtEur(n)),
     /** Preis in EUR in der Anzeigewährung (ohne Kürzel) */

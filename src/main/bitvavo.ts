@@ -261,6 +261,7 @@ export class Bitvavo implements Exchange {
           found.set(txidOf(market, o.orderId), {
             txid: txidOf(market, o.orderId), status, side: o.side, volume: Number(o.amount), filled, cost,
             fee: Number(o.feePaid ?? 0), price: filled > 0 ? cost / filled : Number(o.price), limitPrice: Number(o.price), userref: refFromClientId(o.clientOrderId),
+            ...(Number(o.updated) > 0 ? { closedAt: Number(o.updated) / 1000 } : {}),
           })
         }
         if (r.length < 1000) break

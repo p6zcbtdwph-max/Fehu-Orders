@@ -65,4 +65,27 @@ describe('Status der Pläne', () => {
     expect(r.value.find((s: any) => s.userref === 3).filled).toBe(1)
     expect(r.value.find((s: any) => s.userref === 20).filled).toBe(1) // aus dem Zwischenspeicher
   })
+  it('hält Ausführungen mit Zeitpunkt im Ausführungsbuch fest, fremde Orders nicht', () => {
+    const book = store.getFillBook('kraken')
+    expect(book.orders.some((o) => o.txid === 'OFILL-NEU' && o.userref === 3)).toBe(true)
+    expect(book.orders.some((o) => o.txid === 'OFILL-1')).toBe(true)
+    expect(Number.isFinite(book.fetchedAt) && book.fetchedAt > 0).toBe(true)
+  })
+  it('zeigt Pläne älter als 90 Tage weiter an, wenn das Buch ihre Ausführungen kennt', { timeout: 30_000 }, async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(Date.now() + 1_200_000)
+    store.addPlan({ userref: 900, createdAt: new Date(Date.now() - 200 * 86_400_000).toISOString(), pairId: 'XXBTZEUR', pairName: 'BTC/EUR', side: 'buy', input: {} as any, sent: 1, failed: 0, totalCost: 60 })
+    closed = { 'OALT-1': { ...fill(900), closetm: 1_700_000_000 }, 'OFREMD-1': { ...fill(0), userref: 0 } }
+    await call('key:clear')
+    store.saveCredentials({ key: 'k', secret: 's' })
+    vi.setSystemTime(Date.now() + 30_000)
+    await call('plans:status')
+    vi.setSystemTime(Date.now() + 30_000)
+    const r = await call('plans:status')
+    vi.useRealTimers()
+    const old = r.value.find((s: any) => s.userref === 900)
+    expect(old?.filled).toBe(1)
+    expect(old?.lastFillAt).toBe(1_700_000_000)
+    expect(store.getFillBook('kraken').orders.some((o) => o.txid === 'OFREMD-1')).toBe(false)
+  })
 })

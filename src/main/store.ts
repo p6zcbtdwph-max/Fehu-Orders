@@ -4,7 +4,7 @@
 import { app, safeStorage } from 'electron'
 import { copyFileSync, existsSync, readFileSync, renameSync, writeFileSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
-import type { Credentials } from './exchange'
+import type { ClosedOrder, Credentials } from './exchange'
 import { exchangeOf, isExchangeId, type ExchangeId } from '../shared/exchanges'
 import { DEFAULT_MIN_ORDER_EUR, MAX_MIN_ORDER_EUR, type LadderInput, type LadderLevel, type Side } from '../shared/ladder'
 import type { DraftDto, LogEntry } from '../shared/ipc'
@@ -64,7 +64,7 @@ export function loadHomeIps(): HomeIp[] {
 }
 
 export interface Settings {
-  /** Obergrenze pro Plan in EUR, schützt vor Tippfehlern */
+  /** Obergrenze pro Sendung in EUR, schützt vor Tippfehlern */
   maxPlanEur: number
   /** Handelspaare (Anzeigename wie BTC/EUR), die oben als Schnellauswahl stehen */
   watchlist: string[]
@@ -239,6 +239,47 @@ export function setNotified(txids: string[]): void {
 }
 
 /** Entwürfe: Order-Gruppen, die erst nach Freigabe an Kraken gehen */
+/**
+ * Ausführungsbuch je Börse: alle geschlossenen Orders der eigenen Pläne mit Zeitpunkt, dauerhaft gespeichert.
+ * So bleiben Ausführungen nach einem Neustart erhalten (kein Neuladen ab Plan-Beginn) und auch dann,
+ * wenn die Börse alte Orders nicht mehr liefert. Grundlage für Einstand, Haltefrist und Gegenorder.
+ * coveredFrom/fetchedAt (Unix-Sekunden): Zeitraum, der bei der Börse schon vollständig abgefragt wurde.
+ */
+export interface FillBook {
+  orders: ClosedOrder[]
+  coveredFrom: number
+  fetchedAt: number
+  /** Paare, die schon abgefragt wurden (für Börsen, die je Paar abfragen) */
+  pairs: string[]
+}
+
+const emptyBook = (): FillBook => ({ orders: [], coveredFrom: Infinity, fetchedAt: 0, pairs: [] })
+
+function cleanBook(raw: any): FillBook {
+  if (!raw || typeof raw !== 'object') return emptyBook()
+  const orders = (Array.isArray(raw.orders) ? raw.orders : []).filter((o: any) => typeof o?.txid === 'string' && typeof o?.userref === 'number' && Number.isFinite(Number(o?.filled)))
+  // JSON kennt kein Infinity: fehlt coveredFrom, gilt noch nichts als abgefragt
+  const coveredFrom = Number.isFinite(raw.coveredFrom) ? raw.coveredFrom : Infinity
+  return { orders, coveredFrom, fetchedAt: Number.isFinite(raw.fetchedAt) ? raw.fetchedAt : 0, pairs: (Array.isArray(raw.pairs) ? raw.pairs : []).filter((x: unknown) => typeof x === 'string') }
+}
+
+export function getFillBooks(): Partial<Record<ExchangeId, FillBook>> {
+  const raw = readJson<{ books?: Record<string, unknown> }>('fills.json', {}).books ?? {}
+  const out: Partial<Record<ExchangeId, FillBook>> = {}
+  for (const [ex, b] of Object.entries(raw)) if (isExchangeId(ex)) out[ex] = cleanBook(b)
+  return out
+}
+
+export function getFillBook(ex: ExchangeId): FillBook {
+  return getFillBooks()[ex] ?? emptyBook()
+}
+
+export function saveFillBook(ex: ExchangeId, book: FillBook): void {
+  const books = getFillBooks()
+  books[ex] = book
+  writeJson('fills.json', { books: Object.fromEntries(Object.entries(books).map(([k, b]) => [k, { ...b, coveredFrom: Number.isFinite(b.coveredFrom) ? b.coveredFrom : null }])) }, false)
+}
+
 export function getDrafts(): DraftDto[] {
   return readJson<{ drafts: DraftDto[] }>('drafts.json', { drafts: [] }).drafts
 }
@@ -290,6 +331,7 @@ export function exportAll(): BackupData {
     templates: getTemplates(),
     log: getLog(),
     notified: getNotified(),
+    fills: Object.entries(getFillBooks()).map(([exchange, b]) => ({ exchange, orders: b.orders })),
   })
 }
 
@@ -303,5 +345,11 @@ export function importAll(d: BackupData): string {
   writeJson('templates.json', { templates: d.templates })
   writeJson('log.json', { entries: d.log }, false)
   writeJson('notified.json', { txids: d.notified.length ? d.notified : ['-'] }, false)
+  // Ältere Sicherungen haben kein Ausführungsbuch: dann bleibt das vorhandene, es lässt sich bei der Börse neu abfragen
+  if (d.fills.length) {
+    const books: Record<string, unknown> = {}
+    for (const f of d.fills as { exchange: unknown; orders: unknown }[]) if (isExchangeId(f.exchange)) books[f.exchange] = { orders: f.orders, coveredFrom: null, fetchedAt: 0, pairs: [] }
+    writeJson('fills.json', { books }, false)
+  }
   return safety
 }

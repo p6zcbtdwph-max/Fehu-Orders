@@ -57,7 +57,7 @@ export default function AmountInput({ input, ladder, alt, last, quote, base, vol
     onChange({ perLevel: next, total })
   }
   /** Anteil am freien Bestand (minus „behalten“) als Menge übernehmen, in der gewählten Einheit */
-  function useShare(fraction: number) {
+  function applyShare(fraction: number) {
     if (!holding) return
     const pieces = shareOfHolding(holding.available, fraction, keep, volumeDecimals)
     const inUnit = unit === 'base' ? pieces : last && last > 0 ? Math.floor(pieces * last * 100) / 100 : 0
@@ -113,7 +113,7 @@ export default function AmountInput({ input, ladder, alt, last, quote, base, vol
           </p>
           <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label={tr('Anteil vom Bestand', 'Share of holdings')}>
             {SHARES.map((f) => (
-              <button key={f} type="button" className="btn-chip" onClick={() => useShare(f)}
+              <button key={f} type="button" className="btn-chip" onClick={() => applyShare(f)}
                 title={tr(`${f === 1 ? 'Alles' : `${f * 100} %`} vom freien Bestand${keep > 0 ? `, nach Abzug von ${num(keep, volumeDecimals)} ${base} zum Behalten` : ''}`, `${f === 1 ? 'All' : `${f * 100} %`} of free holdings${keep > 0 ? `, after keeping ${num(keep, volumeDecimals)} ${base}` : ''}`)}>
                 {f === 1 ? tr('Alles', 'All') : `${f * 100} %`}
               </button>

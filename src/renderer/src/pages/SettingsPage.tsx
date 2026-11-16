@@ -6,7 +6,8 @@ import SectionCard from '../components/ui/SectionCard'
 import Modal from '../components/ui/Modal'
 import { NumberField } from './PlannerPage'
 import RiskNotice from '../components/RiskNotice'
-import { dateLocale } from '../format'
+import { dateLocale, num } from '../format'
+import { resetHints, seenHintCount } from '../components/Hint'
 import { tr } from '@shared/i18n'
 import { exName, FIRST_TEST_MAX_EUR } from '@shared/exchanges'
 import { DEFAULT_MIN_ORDER_EUR, effectiveMinCost, MAX_MIN_ORDER_EUR } from '@shared/ladder'
@@ -140,8 +141,8 @@ export default function SettingsPage({ hasKey, onOpenKey }: { hasKey: boolean; o
               <>For safety, the limit starts at <strong className="text-ink">50 €</strong>. That keeps your first real test small, even if you make a typo. Once everything works, you can raise it here.</>,
             )}</p>
             <div className="max-w-xs">
-              <NumberField label={tr('Obergrenze pro Plan (EUR)', 'Limit per plan (EUR)')} value={maxPlan} onChange={(v) => { setMaxPlan(v); setSavedMax(false) }}
-                hint={tr('Ein Plan mit höherem Gegenwert wird nicht gesendet. Schützt vor Tippfehlern.', 'A plan worth more than this is not sent. Protects against typos.')} />
+              <NumberField label={tr('Obergrenze pro Sendung (€)', 'Limit per send (€)')} value={maxPlan} onChange={(v) => { setMaxPlan(v); setSavedMax(false) }}
+                hint={tr('Gilt für jede einzelne Sendung: Senden, „Rest senden“ und „Zone scharf schalten“ werden je für sich geprüft, jede mit Touch ID. Schützt vor Tippfehlern.', 'Applies to every single send: Send, “Send rest” and “Arm zone” are each checked on their own, each with Touch ID. Protects against typos.')} />
             </div>
             <button type="button" className="btn btn-secondary" disabled={!(maxPlan >= 1)} onClick={() => api().saveSettings({ maxPlanEur: maxPlan }).then(() => setSavedMax(true))}>{savedMax ? tr('Gespeichert', 'Saved') : tr('Speichern', 'Save')}</button>
           </div>
@@ -155,12 +156,12 @@ export default function SettingsPage({ hasKey, onOpenKey }: { hasKey: boolean; o
             )}</p>
             <div className="flex flex-wrap items-end gap-3">
               <div className="w-48">
-                <NumberField label={tr('Mindest-Orderwert (EUR)', 'Minimum order value (EUR)')} value={minOrder} onChange={(v) => { setMinOrder(v); setMinMsg(null) }}
-                  hint={tr(`Standard ${DEFAULT_MIN_ORDER_EUR} €, erlaubt 1 bis ${MAX_MIN_ORDER_EUR.toLocaleString('de-DE')} €`, `Default ${DEFAULT_MIN_ORDER_EUR} €, allowed 1 to ${MAX_MIN_ORDER_EUR.toLocaleString('en-US')} €`)} />
+                <NumberField label={tr('Mindest-Orderwert (€)', 'Minimum order value (€)')} value={minOrder} onChange={(v) => { setMinOrder(v); setMinMsg(null) }}
+                  hint={tr(`Standard ${DEFAULT_MIN_ORDER_EUR} €, erlaubt 1 bis ${num(MAX_MIN_ORDER_EUR)} €`, `Default ${DEFAULT_MIN_ORDER_EUR} €, allowed 1 to ${MAX_MIN_ORDER_EUR.toLocaleString('en-US')} €`)} />
               </div>
               <button type="button" className="btn btn-secondary mb-5" disabled={!minValid || minOrder === savedMinOrder} onClick={saveMin}>{tr('Speichern', 'Save')}</button>
             </div>
-            {minValid && minOrder > maxPlan && <p className="notice notice-warning">{tr(`Der Mindest-Orderwert ist höher als deine Obergrenze pro Plan (${maxPlan} €). Dann passt keine einzige Order in einen Plan.`, `The minimum order value is higher than your limit per plan (${maxPlan} €). Then not a single order fits into a plan.`)}</p>}
+            {minValid && minOrder > maxPlan && <p className="notice notice-warning">{tr(`Der Mindest-Orderwert ist höher als deine Obergrenze pro Sendung (${maxPlan} €). Dann passt keine einzige Order in eine Sendung.`, `The minimum order value is higher than your limit per send (${maxPlan} €). Then not a single order fits into a send.`)}</p>}
             {minValid && minOrder <= maxPlan && minOrder * 1.02 > FIRST_TEST_MAX_EUR && <p className="notice notice-warning">{tr(`Beim ersten echten Test auf einer Börse gilt höchstens ${FIRST_TEST_MAX_EUR} € pro Plan. Mit diesem Mindest-Orderwert passt dort keine Order hinein.`, `The first real test on an exchange is capped at ${FIRST_TEST_MAX_EUR} € per plan. With this minimum order value no order fits.`)}</p>}
             {minMsg && <p className={`notice ${minMsg.ok ? 'notice-success' : 'notice-danger'}`}>{minMsg.text}</p>}
             <ExchangeMinimums userMin={savedMinOrder} />
@@ -170,8 +171,8 @@ export default function SettingsPage({ hasKey, onOpenKey }: { hasKey: boolean; o
         <SectionCard title={tr('Datensicherung', 'Backup')}>
           <div className="space-y-3 text-sm">
             <p className="text-ink-muted">{tr(
-              <>Pläne, Entwürfe, Vorlagen, Einstellungen und Protokoll liegen nur auf diesem Mac. Sichere sie ab und zu in eine Datei, zum Beispiel in iCloud Drive. Der API-Schlüssel kommt bewusst <strong className="text-ink">nicht</strong> mit hinein. Auf einem neuen Mac legst du ihn im Reiter „Schlüssel“ neu an.</>,
-              <>Plans, drafts, templates, settings and log are stored only on this Mac. Back them up to a file now and then, for example to iCloud Drive. The API key is deliberately <strong className="text-ink">not</strong> included. On a new Mac you add it again in the “API key” tab.</>,
+              <>Pläne, Ausführungen, Entwürfe, Vorlagen, Einstellungen und Protokoll liegen nur auf diesem Mac. Sichere sie ab und zu in eine Datei, zum Beispiel in iCloud Drive. Der API-Schlüssel kommt bewusst <strong className="text-ink">nicht</strong> mit hinein. Auf einem neuen Mac legst du ihn im Reiter „Schlüssel“ neu an.</>,
+              <>Plans, fills, drafts, templates, settings and log are stored only on this Mac. Back them up to a file now and then, for example to iCloud Drive. The API key is deliberately <strong className="text-ink">not</strong> included. On a new Mac you add it again in the “API key” tab.</>,
             )}</p>
             <div className="flex flex-wrap gap-2">
               <button type="button" className="btn btn-secondary" onClick={doExport}><Download size={16} /> {tr('Sichern', 'Back up')}</button>
@@ -179,6 +180,10 @@ export default function SettingsPage({ hasKey, onOpenKey }: { hasKey: boolean; o
             </div>
             {backupMsg && <p className={`notice break-all ${backupMsg.ok ? 'notice-success' : 'notice-danger'}`}>{backupMsg.text}</p>}
           </div>
+        </SectionCard>
+
+        <SectionCard title={tr('Erklärungen', 'Explanations')}>
+          <HintsReset />
         </SectionCard>
 
         <SectionCard title={tr('Risiko-Hinweis', 'Risk notice')}>
@@ -202,6 +207,19 @@ export default function SettingsPage({ hasKey, onOpenKey }: { hasKey: boolean; o
           </div>
         </Modal>
       )}
+    </div>
+  )
+}
+
+/** Erklärungen, die mit „Verstanden“ eingeklappt wurden, wieder ganz zeigen */
+function HintsReset(): JSX.Element {
+  const [count, setCount] = useState(seenHintCount())
+  return (
+    <div className="space-y-2 text-sm">
+      <p className="text-ink-muted">{tr('Erklärungen im Planer lassen sich mit „Verstanden“ auf eine Zeile einklappen. Warnungen bleiben immer sichtbar.', 'Explanations in the planner can be collapsed to one line with “Got it”. Warnings always stay visible.')}</p>
+      <button type="button" className="btn btn-secondary" disabled={count === 0} onClick={() => { resetHints(); setCount(0) }}>
+        {count === 0 ? tr('Alle Erklärungen werden ganz gezeigt', 'All explanations are shown in full') : count === 1 ? tr('1 eingeklappte Erklärung wieder zeigen', 'Show 1 collapsed explanation again') : tr(`${count} eingeklappte Erklärungen wieder zeigen`, `Show ${count} collapsed explanations again`)}
+      </button>
     </div>
   )
 }

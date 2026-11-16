@@ -172,6 +172,9 @@ export interface PlanStatusDto {
   filledCost: number
   fees: number
   averagePrice: number
+  /** Erste und letzte Ausführung (Unix-Sekunden) aus dem Ausführungsbuch */
+  firstFillAt?: number
+  lastFillAt?: number
   /** Nur bei Plänen mit Preiszonen: Fortschritt je Zone */
   zones?: ZoneProgress[]
 }

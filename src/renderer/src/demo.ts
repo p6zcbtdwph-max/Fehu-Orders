@@ -81,7 +81,7 @@ export function createDemoApi(): Api {
     place(plan, [3, 4, 5])
     const done = levels.slice(0, 3)
     const vol = done.reduce((a, l) => a + l.volume, 0)
-    fills.set(plan.userref, { userref: plan.userref, open: 3, filled: 3, partial: 0, canceled: 0, filledVolume: vol, filledCost: 150, fees: 0.38, averagePrice: 150 / vol })
+    fills.set(plan.userref, { userref: plan.userref, open: 3, filled: 3, partial: 0, canceled: 0, filledVolume: vol, filledCost: 150, fees: 0.38, averagePrice: 150 / vol, firstFillAt: Date.now() / 1000 - 5 * 86_400, lastFillAt: Date.now() / 1000 - 2 * 86_400 })
   }
 
   // Ein Beispielplan mit Preiszonen: Zone 1 ganz und Zone 2 zu zwei Dritteln ausgeführt, Zone 3 entschärft

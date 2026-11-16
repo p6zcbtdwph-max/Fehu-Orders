@@ -288,6 +288,7 @@ export class Coinbase implements Exchange {
         txid: String(o.order_id), status: STATUS[o.status] ?? 'canceled', side: String(o.side).toLowerCase() as Side,
         volume: Number(cfg.base_size ?? filled), filled, cost: Number(o.filled_value ?? 0), fee: Number(o.total_fees ?? 0),
         price: Number(o.average_filled_price) || Number(cfg.limit_price ?? 0), limitPrice: Number(cfg.limit_price ?? 0), userref: refFromClientId(o.client_order_id),
+        ...(Date.parse(o.last_fill_time) > 0 ? { closedAt: Date.parse(o.last_fill_time) / 1000 } : {}),
       }
     })
   }
