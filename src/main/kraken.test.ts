@@ -160,7 +160,7 @@ describe('Verbindungsabbruch beim Senden', () => {
     expect(res[16].uncertain).toBeUndefined()
   })
 
-  it('setzt beim echten Senden eine Frist (deadline), beim Probelauf nicht', async () => {
+  it('setzt beim echten Senden eine Frist (deadline), beim Test nicht', async () => {
     const { http, calls } = fakeHttp((_u, b) => ({ error: [], result: { orders: b.orders.map(() => ({ txid: 'T' })) } }))
     const k = new Kraken({ key: 'k', secret: 'cw==' }, http, async () => {})
     await k.placeLadder('XXBTZEUR', 'buy', levels(2), { validate: false, userref: 1 })

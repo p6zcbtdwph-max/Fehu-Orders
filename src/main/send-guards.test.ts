@@ -114,7 +114,7 @@ describe('Sicherungen vor dem Senden', () => {
     expect(r2.value.check).toEqual({ found: 1, placed: 2 })
   })
 
-  it('beim Probelauf gibt es keine Nachkontrolle', async () => {
+  it('beim Test gibt es keine Nachkontrolle', async () => {
     const r = await call('send', { pairId: 'BTC-EUR', pairName: 'BTC/EUR', side: 'buy', input: {} as any, levels: lv(2, 49000, 0.0004), validate: true, postOnly: true })
     expect(r.ok).toBe(true)
     expect(r.value.check).toBeUndefined()

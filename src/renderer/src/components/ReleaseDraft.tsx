@@ -81,7 +81,7 @@ export function ReleaseModal({ draft, pair, last, minOrder, hasKey, onNeedKey, o
         <button type="button" className="btn btn-primary" onClick={() => onClose(result)}>{tr('Fertig', 'Done')}</button>
       ) : <>
         <button type="button" className="btn btn-secondary" disabled={!!busy} onClick={() => onClose(null)}>{tr('Abbrechen', 'Cancel')}</button>
-        <button type="button" className="btn btn-secondary" disabled={blocked} onClick={() => run(true)}><FlaskConical size={16} /> {busy === 'validate' ? tr('Prüfe …', 'Checking …') : tr('Probelauf', 'Test run')}</button>
+        <button type="button" className="btn btn-secondary" disabled={blocked} onClick={() => run(true)}><FlaskConical size={16} /> {busy === 'validate' ? tr('Prüfe …', 'Checking …') : tr('Testen', 'Test')}</button>
         <button type="button" className="btn btn-primary" disabled={blocked} onClick={() => run(false)}><Rocket size={16} /> {busy === 'send' ? tr('Sende …', 'Sending …') : tr(`${ev?.count ?? 0} Orders senden`, `Send ${ev?.count ?? 0} orders`)}</button>
       </>}>
       {sentOk && result ? <SendSummary result={result} pairName={draft.pairName} side={draft.side} priceDecimals={dec} /> : (
@@ -116,12 +116,12 @@ export function ReleaseModal({ draft, pair, last, minOrder, hasKey, onNeedKey, o
         {result && (
           <div className={`notice ${failed.length ? 'notice-warning' : 'notice-success'}`}>
             {result.validate
-              ? failed.length ? tr(`Probelauf: ${failed.length} Orders würden abgelehnt. Grund: ${failed[0].error}`, `Test run: ${failed.length} orders would be rejected. Reason: ${failed[0].error}`) : probeOk(ok)
+              ? failed.length ? tr(`Test: ${failed.length} Orders würden abgelehnt. Grund: ${failed[0].error}`, `Test run: ${failed.length} orders would be rejected. Reason: ${failed[0].error}`) : probeOk(ok)
               : tr(`${ok} Orders angelegt${failed.length ? `, ${failed.length} fehlgeschlagen (${failed[0].error})` : ''}. Plan-Nummer ${result.userref}.`, `${ok} orders placed${failed.length ? `, ${failed.length} failed (${failed[0].error})` : ''}. Plan number ${result.userref}.`)}
             {result.orders.some((o) => o.uncertain) && <p className="mt-1 text-xs font-medium">{tr('Die Verbindung brach ab. Schau unter „Meine Pläne“ nach, was wirklich angelegt wurde.', 'The connection dropped. Check under “My plans” what was really placed.')}</p>}
           </div>
         )}
-        {!result && !err && <p className="text-xs text-ink-muted">{tr(`Erst der Knopf „Orders senden“ legt die Orders echt bei ${exName()} an. Ab dann sperrt ${exName()} den vollen Betrag auf deinem Konto, bis die Orders ausgeführt oder storniert sind. Der Probelauf prüft nur.`, `Only the “Send orders” button really places the orders at ${exName()}. From then on ${exName()} locks the full amount in your account until the orders are filled or cancelled. The test run only checks.`)}</p>}
+        {!result && !err && <p className="text-xs text-ink-muted">{tr(`Erst der Knopf „Orders senden“ legt die Orders echt bei ${exName()} an. Ab dann sperrt ${exName()} den vollen Betrag auf deinem Konto, bis die Orders ausgeführt oder storniert sind. Der Test prüft nur.`, `Only the “Send orders” button really places the orders at ${exName()}. From then on ${exName()} locks the full amount in your account until the orders are filled or cancelled. The test run only checks.`)}</p>}
       </div>
       )}
     </Modal>

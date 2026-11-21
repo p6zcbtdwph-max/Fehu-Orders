@@ -44,7 +44,7 @@ export function FirstTestDialog({ limit, setLimit, minOrder, hasKey, onNeedKey, 
           {tr(
             <>
               <li><strong>Mini-Plan laden:</strong> BTC/EUR kaufen, 2 Stufen etwa 20 % unter dem Kurs, knapp über deinem Mindest-Orderwert ({eur(minOrder)}) und dem Mindestbetrag von {exName()}. So tief wird der Kurs kaum fallen, die Orders bleiben also nur liegen.</li>
-              <li><strong>Probelauf</strong> klicken. {probeHint()}.</li>
+              <li><strong>Testen</strong> klicken. {probeHint()}.</li>
               <li><strong>An {exName()} senden</strong> und bestätigen.</li>
               <li>Unter <strong>Meine Pläne</strong> nachsehen, ob beide Orders da sind, und den Plan <strong>stornieren</strong>.</li>
               <li>Im <strong>Verlauf</strong> siehst du danach jeden Schritt mit Uhrzeit.</li>
@@ -173,10 +173,10 @@ export function DraftDialog({ form, setForm, editing, scenarios, input, pair, sp
           <input className="input w-full" autoFocus value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
         </label>
         <label className="block">
-          <span className="label">{tr('Szenario (optional)', 'Scenario (optional)')}</span>
+          <span className="label">{tr('Gruppe (optional)', 'Group (optional)')}</span>
           <input className="input w-full" list="draft-scenarios" value={form.scenario} placeholder={tr('z. B. Crash, Bullrun, Nach dem Halving', 'e.g. Crash, Bull run, After the halving')} onChange={(e) => setForm({ ...form, scenario: e.target.value })} />
           <datalist id="draft-scenarios">{scenarios.map((x) => <option key={x} value={x} />)}</datalist>
-          <span className="mt-1 block text-xs text-ink-muted">{tr('Entwürfe mit gleichem Szenario stehen zusammen.', 'Drafts with the same scenario are grouped together.')}</span>
+          <span className="mt-1 block text-xs text-ink-muted">{tr('Steht unter „Meine Pläne“ beim Entwurf und hilft beim Wiederfinden.', 'Shown with the draft under “My plans” and helps you find it again.')}</span>
         </label>
         <label className="flex items-start gap-2">
           <input type="checkbox" className="checkbox mt-0.5" checked={form.alarm} onChange={(e) => setForm({ ...form, alarm: e.target.checked })} />

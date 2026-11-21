@@ -95,7 +95,7 @@ describe('Coinbase Orders', () => {
     expect(res[0].uncertain).toBe(true)
     expect(res[2].error).toMatch(/Nicht gesendet/)
   })
-  it('Probelauf über die Vorschau von Coinbase, legt nichts an', async () => {
+  it('Test über die Vorschau von Coinbase, legt nichts an', async () => {
     const rules = { id: 'BTC-EUR', name: 'BTC/EUR', base: 'BTC', quote: 'EUR', priceDecimals: 2, volumeDecimals: 8, orderMin: 0, costMin: 1, tickSize: 0.01 }
     const { http, calls } = fakeHttp((_m, url) => {
       if (url.includes('/accounts')) return { body: { accounts: [{ currency: 'EUR', available_balance: { value: '1000' }, hold: { value: '0' } }], has_next: false } }
