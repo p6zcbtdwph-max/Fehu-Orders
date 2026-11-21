@@ -297,7 +297,7 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
       setResult(r)
       if (!validate) setSentInfo({ result: r, pairName: pair.name, side: input.side, priceDecimals: pair.priceDecimals })
       if (!validate && draft && r.orders.some((o) => o.txid || o.uncertain)) {
-        setDraftMsg(tr(`Der Entwurf „${draft.name}“ ist jetzt freigegeben (Plan-Nummer ${r.userref}).`, `The draft “${draft.name}” is now released (plan number ${r.userref}).`))
+        setDraftMsg(tr(`Der Entwurf „${draft.name}“ ist jetzt gesendet (Plan-Nummer ${r.userref}).`, `The draft “${draft.name}” is now sent (plan number ${r.userref}).`))
         setDraft(null)
       }
     } catch (e) {
@@ -320,7 +320,7 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
           <button type="button" className="btn btn-ghost" onClick={openFirstTest} title={tr('Einen kleinen, sicheren Plan für den ersten echten Test laden (bis 50 €)', 'Load a small, safe plan for your first real test (up to 50 €)')}>
             <GraduationCap size={16} /> {tr('Erster Test', 'First test')}
           </button>
-          <button type="button" className="btn btn-secondary" disabled={!ladder?.valid || !!busy} onClick={openDraftForm} title={tr('Zwischenspeichern und später im Reiter „Entwürfe“ freigeben', 'Save for now and release later in the “Drafts” tab')}>
+          <button type="button" className="btn btn-secondary" disabled={!ladder?.valid || !!busy} onClick={openDraftForm} title={tr('Zwischenspeichern und später unter „Entwürfe“ senden', 'Save for now and send later under “Drafts”')}>
             <ClipboardList size={16} /> {tr('Als Entwurf', 'Save as draft')}
           </button>
           <button type="button" className="btn btn-secondary" disabled={!hasKey || !ladder?.valid || !!busy} onClick={() => run(true)} title={probeHint()}>

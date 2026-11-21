@@ -140,7 +140,7 @@ export default function PlanResults({ input, ladder, pair, last, candles, daily,
                       {l.problem ? <span className="text-warning-fg">{l.problem}</span>
                         : r?.error ? <span className="text-danger-fg">{r.error}</span>
                         : r ? <span className="text-success-fg">{result?.validate ? tr('geprüft', 'checked') : tr('angelegt', 'placed')}</span>
-                        : isHeld(l, held) ? <span className="text-ink-faint">{tr('entschärft', 'disarmed')}</span>
+                        : isHeld(l, held) ? <span className="text-ink-faint">{tr('pausiert', 'paused')}</span>
                         : later.has(l.index) ? <span className="text-ink-faint">{tr('später', 'later')}</span>
                         : l.raised ? <span className="text-warning-fg" title={tr('Auf den Mindest-Orderwert angehoben', 'Raised to the minimum order value')}>{tr('angehoben', 'raised')}</span>
                         : <span className="text-ink-muted">{tr('bereit', 'ready')}</span>}

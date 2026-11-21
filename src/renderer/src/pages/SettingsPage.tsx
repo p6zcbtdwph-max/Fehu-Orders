@@ -1,8 +1,9 @@
 import { api } from '../api'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { DatabaseBackup, Download, Upload } from 'lucide-react'
 import type { BackupSummary } from '@shared/backup'
 import SectionCard from '../components/ui/SectionCard'
+import Tabs from '../components/ui/Tabs'
 import Modal from '../components/ui/Modal'
 import { NumberField } from './PlannerPage'
 import RiskNotice from '../components/RiskNotice'
@@ -54,7 +55,28 @@ function ExchangeMinimums({ userMin }: { userMin: number }) {
   )
 }
 
-export default function SettingsPage({ hasKey, onOpenKey }: { hasKey: boolean; onOpenKey: () => void }): JSX.Element {
+export type SettingsSection = 'exchanges' | 'safety' | 'display' | 'data' | 'about'
+
+const SECTIONS = (): { id: SettingsSection; label: string }[] => [
+  { id: 'exchanges', label: tr('Börsen und Schlüssel', 'Exchanges and keys') },
+  { id: 'safety', label: tr('Sicherheit', 'Safety') },
+  { id: 'display', label: tr('Anzeige', 'Display') },
+  { id: 'data', label: tr('Daten', 'Data') },
+  { id: 'about', label: tr('Über die App', 'About') },
+]
+
+/**
+ * Alle Einstellungen an einem Ort, in Gruppen. Schlüssel und Anzeige kommen fertig aus App.tsx,
+ * weil dort der Zustand liegt (aktive Börse, Sprache, Währung, Zahlenformat).
+ */
+export default function SettingsPage({ section, onSection, keys, display }: {
+  section: SettingsSection
+  onSection: (s: SettingsSection) => void
+  /** Inhalt von „Börsen und Schlüssel“ */
+  keys: ReactNode
+  /** Inhalt von „Anzeige“ */
+  display: ReactNode
+}): JSX.Element {
   const [maxPlan, setMaxPlan] = useState(500)
   const [savedMax, setSavedMax] = useState(false)
   const [minOrder, setMinOrder] = useState(DEFAULT_MIN_ORDER_EUR)
@@ -126,14 +148,10 @@ export default function SettingsPage({ hasKey, onOpenKey }: { hasKey: boolean; o
           <h1 className="page-title">{tr('Einstellungen', 'Settings')}</h1>
         </div>
       </header>
-      <div className="space-y-4">
-        <SectionCard title={tr(`${exName()}-API-Schlüssel`, `${exName()} API key`)}>
-          <div className="flex flex-wrap items-center gap-3 text-sm">
-            <p className="flex-1 text-ink-muted">{hasKey ? tr('Ein Schlüssel ist hinterlegt.', 'A key is saved.') : tr('Noch kein Schlüssel hinterlegt.', 'No key saved yet.')} {tr('Anlegen, prüfen und löschen geht im Reiter „Schlüssel“.', 'Create, check and delete it in the “API key” tab.')}</p>
-            <button type="button" className="btn btn-secondary" onClick={onOpenKey}>{tr('Zum Reiter Schlüssel', 'Open API key tab')}</button>
-          </div>
-        </SectionCard>
-
+      <Tabs<SettingsSection> className="mb-5" tabs={SECTIONS()} active={section} onChange={onSection} />
+      {section === 'exchanges' && keys}
+      {section === 'display' && display}
+      {section === 'safety' && <div className="space-y-4">
         <div data-guide="limit"><SectionCard title={tr('Sicherheit', 'Safety')}>
           <div className="space-y-3 text-sm">
             <p className="text-ink-muted">{tr(
@@ -142,7 +160,7 @@ export default function SettingsPage({ hasKey, onOpenKey }: { hasKey: boolean; o
             )}</p>
             <div className="max-w-xs">
               <NumberField label={tr('Obergrenze pro Sendung (€)', 'Limit per send (€)')} value={maxPlan} onChange={(v) => { setMaxPlan(v); setSavedMax(false) }}
-                hint={tr('Gilt für jede einzelne Sendung: Senden, „Rest senden“ und „Zone scharf schalten“ werden je für sich geprüft, jede mit Touch ID. Schützt vor Tippfehlern.', 'Applies to every single send: Send, “Send rest” and “Arm zone” are each checked on their own, each with Touch ID. Protects against typos.')} />
+                hint={tr('Gilt für jede einzelne Sendung: Senden, „Rest senden“ und „Zone aktivieren“ werden je für sich geprüft, jede mit Touch ID. Schützt vor Tippfehlern.', 'Applies to every single send: Send, “Send rest” and “Arm zone” are each checked on their own, each with Touch ID. Protects against typos.')} />
             </div>
             <button type="button" className="btn btn-secondary" disabled={!(maxPlan >= 1)} onClick={() => api().saveSettings({ maxPlanEur: maxPlan }).then(() => setSavedMax(true))}>{savedMax ? tr('Gespeichert', 'Saved') : tr('Speichern', 'Save')}</button>
           </div>
@@ -168,11 +186,14 @@ export default function SettingsPage({ hasKey, onOpenKey }: { hasKey: boolean; o
           </div>
         </SectionCard>
 
+      </div>}
+
+      {section === 'data' && <div className="space-y-4">
         <SectionCard title={tr('Datensicherung', 'Backup')}>
           <div className="space-y-3 text-sm">
             <p className="text-ink-muted">{tr(
-              <>Pläne, Ausführungen, Entwürfe, Vorlagen, Einstellungen und Protokoll liegen nur auf diesem Mac. Sichere sie ab und zu in eine Datei, zum Beispiel in iCloud Drive. Der API-Schlüssel kommt bewusst <strong className="text-ink">nicht</strong> mit hinein. Auf einem neuen Mac legst du ihn im Reiter „Schlüssel“ neu an.</>,
-              <>Plans, fills, drafts, templates, settings and log are stored only on this Mac. Back them up to a file now and then, for example to iCloud Drive. The API key is deliberately <strong className="text-ink">not</strong> included. On a new Mac you add it again in the “API key” tab.</>,
+              <>Pläne, Ausführungen, Entwürfe, Vorlagen, Einstellungen und Protokoll liegen nur auf diesem Mac. Sichere sie ab und zu in eine Datei, zum Beispiel in iCloud Drive. Der API-Schlüssel kommt bewusst <strong className="text-ink">nicht</strong> mit hinein. Auf einem neuen Mac legst du ihn unter „Börsen und Schlüssel“ neu an.</>,
+              <>Plans, fills, drafts, templates, settings and log are stored only on this Mac. Back them up to a file now and then, for example to iCloud Drive. The API key is deliberately <strong className="text-ink">not</strong> included. On a new Mac you add it again under “Exchanges and keys”.</>,
             )}</p>
             <div className="flex flex-wrap gap-2">
               <button type="button" className="btn btn-secondary" onClick={doExport}><Download size={16} /> {tr('Sichern', 'Back up')}</button>
@@ -182,6 +203,9 @@ export default function SettingsPage({ hasKey, onOpenKey }: { hasKey: boolean; o
           </div>
         </SectionCard>
 
+      </div>}
+
+      {section === 'about' && <div className="space-y-4">
         <SectionCard title={tr('Erklärungen', 'Explanations')}>
           <HintsReset />
         </SectionCard>
@@ -189,7 +213,7 @@ export default function SettingsPage({ hasKey, onOpenKey }: { hasKey: boolean; o
         <SectionCard title={tr('Risiko-Hinweis', 'Risk notice')}>
           <RiskNotice />
         </SectionCard>
-      </div>
+      </div>}
 
       {restore && (
         <Modal title={tr('Sicherung wiederherstellen?', 'Restore backup?')} size="sm" onClose={() => !busy && setRestore(null)}

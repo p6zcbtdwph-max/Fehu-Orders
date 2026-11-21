@@ -113,15 +113,15 @@ export const guideSteps = (): Step[] => [
     ),
   },
   {
-    page: 'drafts', target: 'drafts', title: tr('6. Entwürfe: erst planen, später freigeben', '6. Drafts: plan now, release later'),
+    page: 'drafts', target: 'drafts', title: tr('6. Entwürfe: erst planen, später senden', '6. Drafts: plan now, send later'),
     body: tr(
       <>
         <p>Mit <strong>Als Entwurf</strong> im Planer speicherst du eine Order-Gruppe, ohne dass etwas an {exName()} geht.</p>
-        <p>Unter <strong>Entwürfe</strong> stehen sie nach <strong>Szenario</strong> sortiert, zum Beispiel „Crash“ oder „Bullrun“. Erst mit <strong>Freigeben</strong> werden die Orders echt angelegt. Mit dem <strong>Kursalarm</strong> meldet sich dein Mac, wenn der Kurs die erste Stufe erreicht. Die App zeigt dir vorher, ob die Stufen zum aktuellen Kurs noch passen.</p>
+        <p>Unter <strong>Entwürfe</strong> stehen sie nach <strong>Szenario</strong> sortiert, zum Beispiel „Crash“ oder „Bullrun“. Erst mit <strong>Senden</strong> werden die Orders echt angelegt. Mit dem <strong>Kursalarm</strong> meldet sich dein Mac, wenn der Kurs die erste Stufe erreicht. Die App zeigt dir vorher, ob die Stufen zum aktuellen Kurs noch passen.</p>
       </>,
       <>
         <p>With <strong>Save as draft</strong> in the planner you store a group of orders without sending anything to {exName()}.</p>
-        <p>Under <strong>Drafts</strong> they are sorted by <strong>scenario</strong>, for example “Crash” or “Bull run”. Only <strong>Release</strong> really places the orders. With a <strong>price alert</strong> your Mac notifies you when the price reaches the first level. Beforehand the app shows you whether the levels still fit the current price.</p>
+        <p>Under <strong>Drafts</strong> they are sorted by <strong>scenario</strong>, for example “Crash” or “Bull run”. Only <strong>Send</strong> really places the orders. With a <strong>price alert</strong> your Mac notifies you when the price reaches the first level. Beforehand the app shows you whether the levels still fit the current price.</p>
       </>,
     ),
   },
@@ -130,12 +130,12 @@ export const guideSteps = (): Step[] => [
     body: tr(
       <>
         <p>Unter <strong>Offene Orders</strong> stehen deine Pläne: wie viele Stufen offen und wie viele schon ausgeführt sind.</p>
-        <p><strong>Gewinnstaffel</strong> plant nach einem Kauf passende Verkäufe über deinem Durchschnittspreis. <strong>Rest senden</strong> schickt die zurückgehaltenen Stufen, <strong>Stornieren</strong> löscht alle offenen Orders des Plans.</p>
+        <p><strong>Verkaufsplan</strong> plant nach einem Kauf passende Verkäufe über deinem Durchschnittspreis. <strong>Rest senden</strong> schickt die zurückgehaltenen Stufen, <strong>Stornieren</strong> löscht alle offenen Orders des Plans.</p>
         <p>Wird eine Order ausgeführt, meldet sich der Mac mit einer Mitteilung. Die <strong>Notbremse</strong> storniert im Notfall alle offenen Orders auf einmal, und unter <strong>Protokoll</strong> steht jeder Schritt mit Uhrzeit.</p>
       </>,
       <>
         <p>Under <strong>Open orders</strong> you see your plans: how many levels are open and how many are already filled.</p>
-        <p><strong>Profit ladder</strong> plans matching sells above your average price after a buy. <strong>Send rest</strong> sends the levels you held back, <strong>Cancel</strong> deletes all open orders of the plan.</p>
+        <p><strong>Sell plan</strong> plans matching sells above your average price after a buy. <strong>Send rest</strong> sends the levels you held back, <strong>Cancel</strong> deletes all open orders of the plan.</p>
         <p>When an order is filled, your Mac shows a notification. The <strong>emergency stop</strong> cancels all open orders at once, and the <strong>Log</strong> records every step with its time.</p>
       </>,
     ),
@@ -145,11 +145,11 @@ export const guideSteps = (): Step[] => [
     body: tr(
       <>
         <p>Für echte Orders brauchst du einen <strong>API-Schlüssel</strong> von {exName()}. Er erlaubt der App, in deinem Namen Orders anzulegen.</p>
-        <p>Im Reiter <strong>Schlüssel</strong> zeigt dir eine Anleitung, welche Häkchen du bei {exName()} setzt. {exName()} zeigt die Namen auf Englisch, deshalb steht bei jedem Häkchen der englische Originalname und die deutsche Bedeutung. Erlaube nur Abfragen und Orders, <strong>niemals Auszahlungen</strong> („Withdraw Funds“). Die App prüft das beim Speichern. Der Schlüssel bleibt verschlüsselt im Schlüsselbund dieses Macs und wird nirgendwo anders hin geschickt.</p>
+        <p>Unter <strong>Einstellungen › Börsen und Schlüssel</strong> zeigt dir eine Anleitung, welche Häkchen du bei {exName()} setzt. {exName()} zeigt die Namen auf Englisch, deshalb steht bei jedem Häkchen der englische Originalname und die deutsche Bedeutung. Erlaube nur Abfragen und Orders, <strong>niemals Auszahlungen</strong> („Withdraw Funds“). Die App prüft das beim Speichern. Der Schlüssel bleibt verschlüsselt im Schlüsselbund dieses Macs und wird nirgendwo anders hin geschickt.</p>
       </>,
       <>
         <p>For real orders you need an <strong>API key</strong> from {exName()}. It allows the app to place orders on your behalf.</p>
-        <p>In the <strong>API key</strong> tab a guide shows you which boxes to tick at {exName()}. Only allow queries and orders, <strong>never withdrawals</strong> (“Withdraw Funds”). The app checks this when saving. The key stays encrypted in this Mac’s keychain and is never sent anywhere else.</p>
+        <p>Under <strong>Settings › Exchanges and keys</strong> a guide shows you which boxes to tick at {exName()}. Only allow queries and orders, <strong>never withdrawals</strong> (“Withdraw Funds”). The app checks this when saving. The key stays encrypted in this Mac’s keychain and is never sent anywhere else.</p>
       </>,
     ),
   },
@@ -158,11 +158,11 @@ export const guideSteps = (): Step[] => [
     body: tr(
       <>
         <p>Im <strong>Demo-Modus</strong> spielst du alles mit Beispielkursen und erfundenem Guthaben durch. Es geht nichts an {exName()}, du brauchst keinen Schlüssel.</p>
-        <p>Für den ersten echten Test denk an die <strong>Grenze von 50 € pro Sendung</strong>. Die Einführung findest du jederzeit wieder unten links unter <strong>Einführung</strong>, die Sprache stellst du dort unter <strong>Sprache</strong> um.</p>
+        <p>Für den ersten echten Test denk an die <strong>Grenze von 50 € pro Sendung</strong>. Die Einführung findest du jederzeit wieder unten links unter <strong>Einführung</strong>. Sprache und Zahlenformat stellst du unter <strong>Einstellungen › Anzeige</strong> um.</p>
       </>,
       <>
         <p>In <strong>demo mode</strong> you can try everything with sample prices and made-up balances. Nothing goes to {exName()} and you need no key.</p>
-        <p>For your first real test, remember the <strong>limit of 50 € per send</strong>. You can reopen the introduction at any time bottom left under <strong>Introduction</strong>, and switch the language there under <strong>Language</strong>.</p>
+        <p>For your first real test, remember the <strong>limit of 50 € per send</strong>. You can reopen the introduction at any time bottom left under <strong>Introduction</strong>. Language and number format are under <strong>Settings › Display</strong>.</p>
       </>,
     ),
   },

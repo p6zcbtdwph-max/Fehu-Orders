@@ -96,11 +96,11 @@ export interface LadderZone {
   share: number
   /**
    * false = entschärft: die Zone wird beim Senden zurückgehalten, sperrt also noch kein Guthaben.
-   * Unter „Offene Orders“ lässt sie sich später scharf schalten. Fehlt der Wert, ist die Zone scharf.
+   * Unter „Offene Orders“ lässt sie sich später aktivieren. Fehlt der Wert, ist die Zone scharf.
    */
   armed?: boolean
   /**
-   * Nur für entschärfte Zonen: wann der Knopf „scharf schalten“ aufleuchtet,
+   * Nur für entschärfte Zonen: wann der Knopf „aktivieren“ aufleuchtet,
    * z. B. { zone: 1, percent: 50 } = sobald Zone 2 zu mindestens 50 % ausgeführt ist. Fehlt der Wert: vorige Zone, 50 %.
    */
   trigger?: ZoneTrigger
@@ -496,7 +496,7 @@ export function validateZones(input: LadderInput): string[] {
   const zs = input.zones ?? []
   const buy = input.side === 'buy'
   if (zs.length > MAX_ZONES) e.push(tr(`Höchstens ${MAX_ZONES} Zonen.`, `At most ${MAX_ZONES} zones.`))
-  if (zs.length && zs.every((z) => z.armed === false)) e.push(tr('Mindestens eine Zone muss scharf sein, sonst wird nichts gesendet.', 'At least one zone must be armed, otherwise nothing is sent.'))
+  if (zs.length && zs.every((z) => z.armed === false)) e.push(tr('Mindestens eine Zone muss aktiv sein, sonst wird nichts gesendet.', 'At least one zone must be armed, otherwise nothing is sent.'))
   if (input.curve === 'custom') e.push(tr('Mit Preiszonen gibt es keine eigenen Prozente je Stufe. Den Anteil legst du je Zone fest.', 'Custom percentages per level are not available with price zones. Set the share per zone instead.'))
   const total = zs.reduce((a, z) => a + (Number.isFinite(z.steps) ? z.steps : 0), 0)
   if (total > MAX_STEPS) e.push(tr(`Alle Zonen zusammen höchstens ${MAX_STEPS} Stufen (jetzt ${total}).`, `All zones together at most ${MAX_STEPS} levels (now ${total}).`))

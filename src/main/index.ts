@@ -543,7 +543,7 @@ type LogBase = Omit<LogEntry, 'at' | 'success'>
 type Orders = SendResult['orders']
 
 /**
- * Ein Sendeauftrag. Senden, „Rest senden“ und „Zone scharf schalten“ beschreiben nur, welche Stufen in Frage kommen
+ * Ein Sendeauftrag. Senden, „Rest senden“ und „Zone aktivieren“ beschreiben nur, welche Stufen in Frage kommen
  * und wie das Ergebnis im Plan landet. Alle Sicherungen laufen in runSend, für alle drei gleich und in derselben Reihenfolge.
  */
 interface SendJob<T extends LadderLevel> {
@@ -621,13 +621,13 @@ function planFor(userref: number): PlanRecord & { levels: LadderLevel[] } {
 
 handle('send', (req: SendRequest): Promise<SendResult> => oneAtATime(async () => {
   const ex = activeEx()
-  // Wurde inzwischen links unten die Börse gewechselt, gehören Paar und Regeln zur anderen Börse
+  // Wurde inzwischen oben links die Börse gewechselt, gehören Paar und Regeln zur anderen Börse
   if (req.exchange && req.exchange !== ex) throw new Error(tr(`Dieser Plan wurde für ${exchangeName(req.exchange)} berechnet, gewählt ist aber ${exchangeName(ex)}. Es wurde nichts gesendet.`, `This plan was calculated for ${exchangeName(req.exchange)}, but ${exchangeName(ex)} is selected. Nothing was sent.`))
   if (req.side !== 'buy' && req.side !== 'sell') throw new Error(tr('Unbekannte Richtung (Kauf oder Verkauf).', 'Unknown side (buy or sell).'))
   if (!Array.isArray(req.levels)) throw new Error(tr('Keine gültigen Stufen.', 'No valid levels.'))
   // Ein Entwurf gehört zu der Börse, auf der er geplant wurde (die Paar-Kennungen unterscheiden sich)
   const draft = req.draftId ? getDrafts().find((d) => d.id === req.draftId) : undefined
-  if (draft && exchangeOf(draft) !== ex) throw new Error(tr(`Dieser Entwurf gehört zu ${exchangeName(exchangeOf(draft))}. Wechsle links unten auf ${exchangeName(exchangeOf(draft))}, um ihn freizugeben.`, `This draft belongs to ${exchangeName(exchangeOf(draft))}. Switch to ${exchangeName(exchangeOf(draft))} at the bottom left to release it.`))
+  if (draft && exchangeOf(draft) !== ex) throw new Error(tr(`Dieser Entwurf gehört zu ${exchangeName(exchangeOf(draft))}. Wechsle oben links auf ${exchangeName(exchangeOf(draft))}, um ihn zu senden.`, `This draft belongs to ${exchangeName(exchangeOf(draft))}. Switch to ${exchangeName(exchangeOf(draft))} at the top left to send it.`))
   return runSend({
     ex, pairId: req.pairId, pairName: req.pairName, side: req.side, validate: req.validate, postOnly: req.postOnly, action: 'send',
     candidates: req.levels.filter((l) => !l.problem),
@@ -635,7 +635,7 @@ handle('send', (req: SendRequest): Promise<SendResult> => oneAtATime(async () =>
       if (!valid.length) throw new Error(tr('Keine gültigen Stufen.', 'No valid levels.'))
       // Entschärfte Preiszonen bleiben im Plan gespeichert, gehen aber jetzt nicht raus. Dieselbe Regel wie im Planer.
       const split = splitSend(valid, req.input ?? {}, req.sendCount)
-      if (!split.armedLevels.length) throw new Error(tr('Alle Zonen sind entschärft. Schalte mindestens eine Zone scharf, sonst wird nichts gesendet.', 'All zones are disarmed. Arm at least one zone, otherwise nothing is sent.'))
+      if (!split.armedLevels.length) throw new Error(tr('Alle Zonen sind pausiert. Aktiviere mindestens eine Zone, sonst wird nichts gesendet.', 'All zones are disarmed. Arm at least one zone, otherwise nothing is sent.'))
       return split.toSend
     },
     emptyText: tr('Keine gültigen Stufen.', 'No valid levels.'),
@@ -670,14 +670,14 @@ handle('plan:rest', (userref: number, validate: boolean): Promise<SendResult> =>
 }))
 
 /**
- * Eine entschärfte Zone scharf schalten: ihre noch nicht gesendeten Stufen gehen jetzt mit derselben Plan-Nummer raus.
+ * Eine entschärfte Zone aktivieren: ihre noch nicht gesendeten Stufen gehen jetzt mit derselben Plan-Nummer raus.
  * Mit `edited` ersetzt der Nutzer die Stufen der Zone vorher (anderer Preisbereich oder andere Stufenzahl).
  */
 handle('plan:zone', (userref: number, zone: number, validate: boolean, edited?: LadderLevel[]): Promise<SendResult> => oneAtATime(async () => {
   const plan = planFor(userref)
   const zones = plan.input.zones ?? []
   if (!Number.isInteger(zone) || !zones[zone]) throw new Error(tr('Diese Zone gibt es in dem Plan nicht.', 'This zone does not exist in the plan.'))
-  if (zones[zone].armed !== false) throw new Error(tr(`Zone ${zone + 1} ist schon scharf.`, `Zone ${zone + 1} is already armed.`))
+  if (zones[zone].armed !== false) throw new Error(tr(`Zone ${zone + 1} ist schon aktiv.`, `Zone ${zone + 1} is already armed.`))
   const sent = new Set(plan.sentIndices ?? [])
   let candidates: LadderLevel[] = plan.levels.filter((l) => l.zone === zone && !sent.has(l.index))
   if (edited !== undefined) {
@@ -692,7 +692,7 @@ handle('plan:zone', (userref: number, zone: number, validate: boolean, edited?: 
   return runSend({
     ex, pairId: plan.pairId, pairName: plan.pairName, side: plan.side, validate, postOnly: plan.postOnly ?? true, action: 'zone', userref,
     candidates, emptyText,
-    touchText: (n, total) => tr(`Zone ${zone + 1} scharf schalten: ${n} echte Orders über ${total} an ${exchangeName(ex)} senden`, `arm zone ${zone + 1}: send ${n} real orders worth ${total} to ${exchangeName(ex)}`),
+    touchText: (n, total) => tr(`Zone ${zone + 1} aktivieren: ${n} echte Orders über ${total} an ${exchangeName(ex)} senden`, `arm zone ${zone + 1}: send ${n} real orders worth ${total} to ${exchangeName(ex)}`),
     record: ({ levels, orders }) => {
       if (!sentPart(orders).any) return
       const replaced = edited !== undefined
