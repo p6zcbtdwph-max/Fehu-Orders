@@ -68,8 +68,8 @@ export default function PlanChecks(p: PlanChecksProps): JSX.Element {
             const t = zoneTrigger(input.zones!, z)
             const cost = heldLevels.filter((l) => l.zone === z).reduce((a, l) => a + l.cost, 0)
             return <span key={z} className="block">{tr(
-              <><strong>Zone {z + 1} ist pausiert.</strong> {input.side === 'buy' ? eur(cost) : `≈ ${eur(cost)}`} gehen beim Senden noch nicht raus und sperren kein Guthaben. Unter „Offene Orders“ leuchtet „Zone {z + 1} aktivieren“ auf, sobald Zone {t.zone + 1} zu {t.percent} % ausgeführt ist.</>,
-              <><strong>Zone {z + 1} is disarmed.</strong> {input.side === 'buy' ? eur(cost) : `≈ ${eur(cost)}`} will not be sent yet and lock no funds. Under “Open orders”, “Arm zone {z + 1}” lights up once zone {t.zone + 1} is {t.percent} % filled.</>,
+              <><strong>Zone {z + 1} ist pausiert.</strong> {input.side === 'buy' ? eur(cost) : `≈ ${eur(cost)}`} gehen beim Senden noch nicht raus und sperren kein Guthaben. Unter „Meine Pläne“ leuchtet „Zone {z + 1} aktivieren“ auf, sobald Zone {t.zone + 1} zu {t.percent} % ausgeführt ist.</>,
+              <><strong>Zone {z + 1} is disarmed.</strong> {input.side === 'buy' ? eur(cost) : `≈ ${eur(cost)}`} will not be sent yet and lock no funds. Under “My plans”, “Arm zone {z + 1}” lights up once zone {t.zone + 1} is {t.percent} % filled.</>,
             )}</span>
           })}</span>
         </p>
@@ -135,7 +135,7 @@ export default function PlanChecks(p: PlanChecksProps): JSX.Element {
           {result.validate
             ? failed.length ? tr(`Probelauf: ${failed.length} Orders würden abgelehnt.`, `Test run: ${failed.length} orders would be rejected.`) : probeOk(ok)
             : tr(`${ok} Orders angelegt${failed.length ? `, ${failed.length} fehlgeschlagen` : ''}. Plan-Nummer ${result.userref}.`, `${ok} orders placed${failed.length ? `, ${failed.length} failed` : ''}. Plan number ${result.userref}.`)}
-          {result.orders.some((o) => o.uncertain) && <p className="mt-1 text-xs font-medium">{tr('Die Verbindung brach ab. Schau unter „Offene Orders“ nach, was wirklich angelegt wurde, bevor du noch einmal sendest.', 'The connection dropped. Check under “Open orders” what was really placed before you send again.')}</p>}
+          {result.orders.some((o) => o.uncertain) && <p className="mt-1 text-xs font-medium">{tr('Die Verbindung brach ab. Schau unter „Meine Pläne“ nach, was wirklich angelegt wurde, bevor du noch einmal sendest.', 'The connection dropped. Check under “My plans” what was really placed before you send again.')}</p>}
           {failed.length > 0 && <p className="mt-1 text-xs">{tr('Grund', 'Reason')}: {failed[0].error}</p>}
         </div>
       )}

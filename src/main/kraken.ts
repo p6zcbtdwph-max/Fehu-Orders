@@ -261,7 +261,7 @@ export class Kraken implements Exchange {
           const found = await this.findPlaced(opts.userref, chunk, new Set(out.map((o) => o.txid).filter(Boolean) as string[]))
           chunk.forEach((l) => {
             const base = { index: l.index, price: l.price, volume: l.volume }
-            if (!found) out.push({ ...base, uncertain: true, error: tr(`${err.message} Unklar, ob diese Order angelegt wurde. Bitte unter „Offene Orders“ nachsehen.`, `${err.message} Unclear whether this order was placed. Please check under “Open orders”.`) })
+            if (!found) out.push({ ...base, uncertain: true, error: tr(`${err.message} Unklar, ob diese Order angelegt wurde. Bitte unter „Meine Pläne“ nachsehen.`, `${err.message} Unclear whether this order was placed. Please check under “My plans”.`) })
             else if (found.has(l.index)) out.push({ ...base, txid: found.get(l.index) })
             else out.push({ ...base, error: tr(`${err.message} Diese Order wurde nicht angelegt.`, `${err.message} This order was not placed.`) })
           })

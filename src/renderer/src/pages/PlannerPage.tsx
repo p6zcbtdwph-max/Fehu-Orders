@@ -40,6 +40,11 @@ export interface Prefill {
   draft?: DraftDto
 }
 
+/** Neuer Plan aus der Übersicht: nur die Richtung vorgeben, der Rest bleibt wie zuletzt */
+export interface SideStart {
+  side: 'buy' | 'sell'
+}
+
 /** Kurzer Vorschlag für den Namen eines Entwurfs */
 export const draftTitle = (pairName: string, input: LadderInput) => tr(
   `${pairName.split('/')[0]} ${input.side === 'buy' ? 'Kauf' : 'Verkauf'} ${input.steps} Stufen`,
@@ -52,7 +57,7 @@ const weightsText = (w?: number[]) => (w ?? []).map((x) => toInputText(x, number
 
 export { NumberField }
 
-export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed, onOpenDrafts, onOpenOrders, onOpenSettings, active = true }: { hasKey: boolean; onNeedKey: () => void; prefill?: Prefill | null; onPrefillUsed?: () => void; onOpenDrafts?: () => void; onOpenOrders?: () => void; onOpenSettings?: () => void; active?: boolean }): JSX.Element {
+export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed, onOpenDrafts, onOpenOrders, onOpenSettings, firstTest: firstTestRequest = 0, active = true }: { hasKey: boolean; onNeedKey: () => void; prefill?: Prefill | SideStart | null; /** Zählt hoch, wenn „Erster Test“ von außen geöffnet werden soll */ firstTest?: number; onPrefillUsed?: () => void; onOpenDrafts?: () => void; onOpenOrders?: () => void; onOpenSettings?: () => void; active?: boolean }): JSX.Element {
   const { eur, fmtPrice, sym, usdHint } = useMoney()
   /** Börse, für die die Paare geladen wurden (die Seite wird beim Börsenwechsel neu aufgebaut) */
   const [pairsExchange] = useState(activeExchange)
@@ -142,9 +147,18 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
   }, [])
 
 
-  // Vorschlag von „Offene Orders“ (Gewinnstaffel) übernehmen
+  // Vorschlag von „Meine Pläne“ (Gewinnstaffel) übernehmen
   useEffect(() => {
     if (!prefill) return
+    if (!('input' in prefill)) {
+      // Nur Richtung wählen (Kaufplan / Verkaufsplan aus der Übersicht)
+      setInput((s) => ({ ...s, side: prefill.side }))
+      setDraft(null)
+      setDraftMsg(null)
+      setResult(null)
+      onPrefillUsed?.()
+      return
+    }
     setKeepPrices(true)
     setPairId(prefill.pairId)
     setInput(prefill.input)
@@ -248,6 +262,9 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
     setDraftForm({ name: draft?.name ?? draftTitle(pair.name, input), scenario: draft?.scenario ?? '', note: draft?.note ?? '', alarm: draft?.alarm ?? true })
   }
 
+  // „Erster Test“ aus der Übersicht
+  useEffect(() => { if (firstTestRequest > 0) openFirstTest() }, [firstTestRequest])
+
   function openFirstTest() {
     api().settings().then((s) => setLimit(s.maxPlanEur)).catch(() => setLimit(null))
     setFirstTest(true)
@@ -320,7 +337,7 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
           <button type="button" className="btn btn-ghost" onClick={openFirstTest} title={tr('Einen kleinen, sicheren Plan für den ersten echten Test laden (bis 50 €)', 'Load a small, safe plan for your first real test (up to 50 €)')}>
             <GraduationCap size={16} /> {tr('Erster Test', 'First test')}
           </button>
-          <button type="button" className="btn btn-secondary" disabled={!ladder?.valid || !!busy} onClick={openDraftForm} title={tr('Zwischenspeichern und später unter „Entwürfe“ senden', 'Save for now and send later under “Drafts”')}>
+          <button type="button" className="btn btn-secondary" disabled={!ladder?.valid || !!busy} onClick={openDraftForm} title={tr('Zwischenspeichern und später unter „Meine Pläne“ senden', 'Save for now and send later under “My plans”')}>
             <ClipboardList size={16} /> {tr('Als Entwurf', 'Save as draft')}
           </button>
           <button type="button" className="btn btn-secondary" disabled={!hasKey || !ladder?.valid || !!busy} onClick={() => run(true)} title={probeHint()}>
@@ -397,7 +414,7 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
                 : <NumberField label={tr('Anzahl Stufen', 'Number of levels')} step="1" value={input.steps} onChange={(v) => set('steps', Math.round(v))} hint={tr(`1 bis ${MAX_STEPS}`, `1 to ${MAX_STEPS}`)} />}
               <NumberField label={tr('Davon jetzt senden', 'Send now')} step="1" value={sendCount ?? armedLevels.length}
                 onChange={(v) => setSendCount(Number.isFinite(v) && v > 0 && Math.round(v) < armedLevels.length ? Math.round(v) : null)}
-                hint={partial ? tr(`Die ${nowCount} Stufen nah am Kurs. Den Rest sendest du später unter „Offene Orders“.`, `The ${nowCount} levels close to the price. Send the rest later under “Open orders”.`) : tr('Alle Stufen', 'All levels')} />
+                hint={partial ? tr(`Die ${nowCount} Stufen nah am Kurs. Den Rest sendest du später unter „Meine Pläne“.`, `The ${nowCount} levels close to the price. Send the rest later under “My plans”.`) : tr('Alle Stufen', 'All levels')} />
             </div>
             {pair && <MinOrderLine userMin={minOrder} price={input.priceStart} rules={pair} pairName={pair.name} eur={eur} onOpenSettings={onOpenSettings} />}
             <DistributionFields input={input} set={set} zoned={zoned} ladder={ladder} pair={pair} customText={customText} setCustomText={setCustomText} />

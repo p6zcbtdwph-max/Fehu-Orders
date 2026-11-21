@@ -117,11 +117,11 @@ export const guideSteps = (): Step[] => [
     body: tr(
       <>
         <p>Mit <strong>Als Entwurf</strong> im Planer speicherst du eine Order-Gruppe, ohne dass etwas an {exName()} geht.</p>
-        <p>Unter <strong>Entwürfe</strong> stehen sie nach <strong>Szenario</strong> sortiert, zum Beispiel „Crash“ oder „Bullrun“. Erst mit <strong>Senden</strong> werden die Orders echt angelegt. Mit dem <strong>Kursalarm</strong> meldet sich dein Mac, wenn der Kurs die erste Stufe erreicht. Die App zeigt dir vorher, ob die Stufen zum aktuellen Kurs noch passen.</p>
+        <p>Unter <strong>Meine Pläne</strong> findest du sie im Filter <strong>Entwürfe</strong>. Ein Entwurf sperrt kein Guthaben. Erst mit <strong>Senden</strong> werden die Orders echt angelegt. Mit dem <strong>Kursalarm</strong> meldet sich dein Mac, wenn der Kurs die erste Stufe erreicht, und der Entwurf erscheint in der <strong>Übersicht</strong> unter „Zu tun“. Die App zeigt dir vorher, ob die Stufen zum aktuellen Kurs noch passen.</p>
       </>,
       <>
         <p>With <strong>Save as draft</strong> in the planner you store a group of orders without sending anything to {exName()}.</p>
-        <p>Under <strong>Drafts</strong> they are sorted by <strong>scenario</strong>, for example “Crash” or “Bull run”. Only <strong>Send</strong> really places the orders. With a <strong>price alert</strong> your Mac notifies you when the price reaches the first level. Beforehand the app shows you whether the levels still fit the current price.</p>
+        <p>Under <strong>My plans</strong> you find them with the <strong>Drafts</strong> filter. A draft locks no funds. Only <strong>Send</strong> really places the orders. With a <strong>price alert</strong> your Mac notifies you when the price reaches the first level, and the draft shows up in the <strong>Overview</strong> under “To do”. Beforehand the app shows you whether the levels still fit the current price.</p>
       </>,
     ),
   },
@@ -129,14 +129,14 @@ export const guideSteps = (): Step[] => [
     page: 'orders', target: 'plans', title: tr('7. Pläne verfolgen', '7. Track your plans'),
     body: tr(
       <>
-        <p>Unter <strong>Offene Orders</strong> stehen deine Pläne: wie viele Stufen offen und wie viele schon ausgeführt sind.</p>
-        <p><strong>Verkaufsplan</strong> plant nach einem Kauf passende Verkäufe über deinem Durchschnittspreis. <strong>Rest senden</strong> schickt die zurückgehaltenen Stufen, <strong>Stornieren</strong> löscht alle offenen Orders des Plans.</p>
-        <p>Wird eine Order ausgeführt, meldet sich der Mac mit einer Mitteilung. Die <strong>Notbremse</strong> storniert im Notfall alle offenen Orders auf einmal, und unter <strong>Protokoll</strong> steht jeder Schritt mit Uhrzeit.</p>
+        <p>Unter <strong>Meine Pläne</strong> stehen alle Pläne mit ihrem Status: <strong>Entwurf</strong>, <strong>Wartet auf dich</strong>, <strong>Läuft</strong> oder <strong>Fertig</strong>. Ein Klick öffnet den Plan mit allen Knöpfen.</p>
+        <p><strong>Verkaufsplan</strong> plant nach einem Kauf passende Verkäufe über deinem Durchschnittspreis. <strong>Restliche Stufen senden</strong> schickt die zurückgehaltenen Stufen, <strong>Stornieren</strong> löscht alle offenen Orders des Plans.</p>
+        <p>Wird eine Order ausgeführt, meldet sich der Mac mit einer Mitteilung. Die <strong>Notbremse</strong> oben rechts storniert im Notfall alle offenen Orders auf einmal, und unter <strong>Verlauf</strong> steht jeder Schritt mit Uhrzeit.</p>
       </>,
       <>
-        <p>Under <strong>Open orders</strong> you see your plans: how many levels are open and how many are already filled.</p>
+        <p>Under <strong>My plans</strong> you see every plan with its status: <strong>Draft</strong>, <strong>Waiting for you</strong>, <strong>Running</strong> or <strong>Done</strong>. A click opens the plan with all its buttons.</p>
         <p><strong>Sell plan</strong> plans matching sells above your average price after a buy. <strong>Send rest</strong> sends the levels you held back, <strong>Cancel</strong> deletes all open orders of the plan.</p>
-        <p>When an order is filled, your Mac shows a notification. The <strong>emergency stop</strong> cancels all open orders at once, and the <strong>Log</strong> records every step with its time.</p>
+        <p>When an order is filled, your Mac shows a notification. The <strong>emergency stop</strong> at the top right cancels all open orders at once, and <strong>History</strong> records every step with its time.</p>
       </>,
     ),
   },

@@ -1,5 +1,5 @@
 // Rückmeldung nach dem echten Senden: Ist alles angelegt? Steht es wirklich bei der Börse?
-// Damit man nicht erst unter „Offene Orders“ nachsehen muss.
+// Damit man nicht erst unter „Meine Pläne“ nachsehen muss.
 import { AlertTriangle, CheckCircle2, ListChecks } from 'lucide-react'
 import type { SendResult } from '@shared/ipc'
 import { exName } from '@shared/exchanges'
@@ -77,15 +77,15 @@ export function SendSummary({ result, pairName, side, priceDecimals }: Props): J
         ? s.checkOk
           ? <p className="notice notice-success flex items-center gap-2"><ListChecks size={16} aria-hidden className="shrink-0" />{tr(`Gerade nachgeprüft: Alle ${s.placed} Orders stehen bei ${ex} in den offenen Orders.`, `Just checked: all ${s.placed} orders are listed as open orders at ${ex}.`)}</p>
           : <p className="notice notice-warning">{tr(
-            `Nachgeprüft: ${result.check.found} von ${result.check.placed} Orders stehen in den offenen Orders. Die übrigen wurden vielleicht schon ausgeführt (Kurs war schon da). Schau zur Sicherheit unter „Offene Orders“ nach.`,
-            `Checked: ${result.check.found} of ${result.check.placed} orders are listed as open. The others may already have been filled (the price was already there). To be safe, look under “Open orders”.`,
+            `Nachgeprüft: ${result.check.found} von ${result.check.placed} Orders stehen in den offenen Orders. Die übrigen wurden vielleicht schon ausgeführt (Kurs war schon da). Schau zur Sicherheit unter „Meine Pläne“ nach.`,
+            `Checked: ${result.check.found} of ${result.check.placed} orders are listed as open. The others may already have been filled (the price was already there). To be safe, look under “My plans”.`,
           )}</p>
         : <p className="text-ink-muted">{tr(`${ex} hat jede dieser Orders mit einer eigenen Order-Nummer bestätigt. Die Nachkontrolle der offenen Orders klappte gerade nicht, das ändert daran nichts.`, `${ex} confirmed each of these orders with its own order number. Checking the open orders did not work just now, which does not change that.`)}</p>
       )}
 
       {s.uncertain > 0 && <p className="notice notice-warning">{tr(
-        `Bei ${s.uncertain} Orders brach die Verbindung ab. Ob sie angelegt wurden, ist unklar. Schau unter „Offene Orders“ nach, bevor du noch einmal sendest.`,
-        `The connection dropped for ${s.uncertain} orders. It is unclear whether they were placed. Check under “Open orders” before you send again.`,
+        `Bei ${s.uncertain} Orders brach die Verbindung ab. Ob sie angelegt wurden, ist unklar. Schau unter „Meine Pläne“ nach, bevor du noch einmal sendest.`,
+        `The connection dropped for ${s.uncertain} orders. It is unclear whether they were placed. Check under “My plans” before you send again.`,
       )}</p>}
       {s.failed.length > 0 && <p className="notice notice-danger">{tr(
         `${s.failed.length} Orders wurden nicht angelegt. Grund: ${s.failed[0].error}`,
@@ -100,7 +100,7 @@ export function SendSuccessModal({ onClose, onOpenOrders, ...props }: Props & { 
   return (
     <Modal title={tr('Gesendet', 'Sent')} size="sm" onClose={onClose}
       footer={<>
-        {onOpenOrders && <button type="button" className="btn btn-secondary" onClick={() => { onClose(); onOpenOrders() }}>{tr('Offene Orders ansehen', 'View open orders')}</button>}
+        {onOpenOrders && <button type="button" className="btn btn-secondary" onClick={() => { onClose(); onOpenOrders() }}>{tr('Meine Pläne ansehen', 'View my plans')}</button>}
         <button type="button" className="btn btn-primary" onClick={onClose}>{tr('Fertig', 'Done')}</button>
       </>}>
       <SendSummary {...props} />

@@ -103,7 +103,7 @@ export default function ZoneEditor({ side, zones, ladder, last, daily, days, quo
                   ]} />
                 {disarmed && (
                   <div className="mt-2 text-xs">
-                    <p className="text-ink-muted">{tr('Geht beim Senden noch nicht raus und sperrt kein Guthaben. Unter „Offene Orders“ leuchtet der Knopf zum Scharfschalten auf, wenn diese Zone so weit ausgeführt ist:', 'Not sent yet and locks no funds. Under “Open orders” the button to arm it lights up once this zone is filled this far:')}</p>
+                    <p className="text-ink-muted">{tr('Geht beim Senden noch nicht raus und sperrt kein Guthaben. Unter „Meine Pläne“ leuchtet der Knopf zum Scharfschalten auf, wenn diese Zone so weit ausgeführt ist:', 'Not sent yet and locks no funds. Under “My plans” the button to arm it lights up once this zone is filled this far:')}</p>
                     <div className="mt-1 grid grid-cols-2 gap-2">
                       <label className="block">
                         <span className="label">{tr('Zone', 'Zone')}</span>

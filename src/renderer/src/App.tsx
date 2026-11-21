@@ -7,33 +7,37 @@ import { num, setNumberFormat } from './format'
 import { NUMBER_FORMATS, type NumberFormat } from '@shared/number-format'
 import { LANGS, langFromLocale, setLang, tr, type Lang } from '@shared/i18n'
 import { exName, setActiveExchange, type ExchangeId } from '@shared/exchanges'
-import { AlertTriangle, ClipboardList, GraduationCap, History, ListOrdered, PlayCircle, Settings, SlidersHorizontal } from 'lucide-react'
+import { AlertTriangle, ClipboardList, GraduationCap, History, LayoutDashboard, ListOrdered, PlayCircle, Settings, SlidersHorizontal } from 'lucide-react'
 import logoUrl from './assets/logo.png'
-import PlannerPage, { type Prefill } from './pages/PlannerPage'
-import OrdersPage from './pages/OrdersPage'
+import PlannerPage, { type Prefill, type SideStart } from './pages/PlannerPage'
+import PlansPage, { type PlansView, type PlanFilter } from './pages/PlansPage'
+import OverviewPage, { DEMO_TRIED } from './pages/OverviewPage'
+import { usePlanData } from './plan-data'
 import SettingsPage, { type SettingsSection } from './pages/SettingsPage'
 import SectionCard from './components/ui/SectionCard'
 import TopBar from './components/TopBar'
 import KeyPage from './pages/KeyPage'
-import DraftsPage from './pages/DraftsPage'
 import LogPage from './pages/LogPage'
 
-type PageId = 'planner' | 'drafts' | 'orders' | 'log' | 'settings'
-/** Seiten, die man von außen ansteuern kann. „key“ ist seit der neuen Navigation ein Teil der Einstellungen. */
-type PageTarget = PageId | 'key'
+type PageId = 'overview' | 'planner' | 'plans' | 'log' | 'settings'
+/**
+ * Seiten, die man von außen ansteuern kann. Seit der neuen Navigation sind „key“ ein Teil der Einstellungen
+ * und „drafts“/„orders“ Filter von „Meine Pläne“ (Kursalarm aus dem Hauptprozess, Einführung).
+ */
+type PageTarget = PageId | 'key' | 'drafts' | 'orders'
 
 /** Die Arbeitsbereiche oben in der Seitenleiste, in der Reihenfolge, in der man arbeitet */
 const NAV_IDS: { id: PageId; icon: typeof ListOrdered }[] = [
+  { id: 'overview', icon: LayoutDashboard },
   { id: 'planner', icon: SlidersHorizontal },
-  { id: 'drafts', icon: ClipboardList },
-  { id: 'orders', icon: ListOrdered },
+  { id: 'plans', icon: ClipboardList },
   { id: 'log', icon: History },
 ]
 
 const navLabel = (id: PageId): string => ({
+  overview: tr('Übersicht', 'Overview'),
   planner: tr('Planer', 'Planner'),
-  drafts: tr('Entwürfe', 'Drafts'),
-  orders: tr('Offene Orders', 'Open orders'),
+  plans: tr('Meine Pläne', 'My plans'),
   log: tr('Verlauf', 'History'),
   settings: tr('Einstellungen', 'Settings'),
 })[id]
@@ -78,16 +82,26 @@ function NavButton({ on, icon: Icon, label, onClick, tone }: { on: boolean; icon
 }
 
 export default function App(): JSX.Element {
-  const [page, setPageState] = useState<PageId>('planner')
+  const [page, setPageState] = useState<PageId>('overview')
+  const [plansView, setPlansView] = useState<PlansView>({ filter: 'all', id: null })
+  /** Zählt hoch, wenn „Erster Test“ im Planer geöffnet werden soll */
+  const [firstTest, setFirstTest] = useState(0)
   const [section, setSection] = useState<SettingsSection>('exchanges')
   /** Zählt hoch nach der Notbremse, damit „Offene Orders“ neu lädt */
   const [reload, setReload] = useState(0)
   /** Seite öffnen. „key“ führt zu Einstellungen › Börsen und Schlüssel. */
   const setPage = (p: PageTarget) => {
-    if (p === 'key') { setSection('exchanges'); setPageState('settings') } else setPageState(p)
+    if (p === 'key') { setSection('exchanges'); setPageState('settings') }
+    else if (p === 'drafts' || p === 'orders') { setPlansView({ filter: p === 'drafts' ? 'drafts' : 'running', id: null }); setPageState('plans') }
+    else setPageState(p)
+  }
+  /** „Meine Pläne“ öffnen, optional mit Filter oder einem bestimmten Plan */
+  const openPlans = (filter: PlanFilter = 'all', id: string | null = null) => {
+    setPlansView({ filter, id })
+    setPageState('plans')
   }
   const [hasKey, setHasKey] = useState<boolean | null>(null)
-  const [prefill, setPrefill] = useState<Prefill | null>(null)
+  const [prefill, setPrefill] = useState<Prefill | SideStart | null>(null)
   const [currency, setCurrencyState] = useState<Currency>('EUR')
   const [rate, setRate] = useState<number | null>(null)
   const [lng, setLngState] = useState<Lang>(startLang)
@@ -122,7 +136,8 @@ export default function App(): JSX.Element {
     setDemo(on)
     setDemoState(on)
     setPrefill(null)
-    setPage('planner')
+    setPage('overview')
+    if (on) try { localStorage.setItem(DEMO_TRIED, '1') } catch { /* egal */ }
     api().keyStatus().then((s) => setHasKey(s.hasKey))
   }
 
@@ -184,8 +199,13 @@ export default function App(): JSX.Element {
 
   // Klick auf einen Kursalarm öffnet die Entwürfe
   useEffect(() => api().onOpenPage((p) => {
-    if (NAV_IDS.some((n) => n.id === p) || p === 'settings' || p === 'key') setPage(p as PageTarget)
+    if (NAV_IDS.some((n) => n.id === p) || ['settings', 'key', 'drafts', 'orders'].includes(p)) setPage(p as PageTarget)
   }), [demo])
+
+  // Daten für „Übersicht“ und „Meine Pläne“. Neu laden beim Öffnen dieser Seiten, nach der Notbremse
+  // und beim Wechsel von Börse oder Demo-Modus.
+  const planView = page === 'overview' || page === 'plans' ? page : ''
+  const planData = usePlanData(!!hasKey, `${reload}|${demo}|${exchange}|${planView}`)
 
   const refreshKey = () => api().keyStatus().then((s) => {
     setHasKey(s.hasKey)
@@ -232,10 +252,14 @@ export default function App(): JSX.Element {
         )}
         <div key={`${demo ? 'demo' : 'live'}-${exchange}`} className="contents">
         {/* Der Planer bleibt beim Reiterwechsel erhalten (nur versteckt), damit keine Eingaben verloren gehen */}
-        <div className={page === 'planner' ? 'contents' : 'hidden'}><PlannerPage hasKey={!!hasKey} active={page === 'planner'} onOpenSettings={() => { setSection('safety'); setPage('settings') }} onNeedKey={() => setPage('key')} prefill={prefill} onPrefillUsed={() => setPrefill(null)} onOpenDrafts={() => setPage('drafts')} onOpenOrders={() => setPage('orders')} /></div>
-        {page === 'drafts' && <DraftsPage hasKey={!!hasKey} onNeedKey={() => setPage('key')}
-          onEdit={(d) => { setPrefill({ pairId: d.pairId, input: d.input, postOnly: d.postOnly, sendCount: d.sendCount, draft: d }); setPage('planner') }} />}
-        {page === 'orders' && <OrdersPage hasKey={!!hasKey} reload={reload} onPlanSell={(p) => { setPrefill(p); setPage('planner') }} />}
+        {page === 'overview' && <OverviewPage hasKey={!!hasKey} demo={demo} data={planData}
+          onOpenPlan={(id) => openPlans('all', id)} onOpenPlans={() => openPlans('running')}
+          onNewPlan={(side) => { setPrefill({ side }); setPage('planner') }} onGuide={() => setGuideStep(0)} onDemo={() => switchDemo(true)}
+          onNeedKey={() => setPage('key')} onFirstTest={() => { setPage('planner'); setFirstTest((n) => n + 1) }} />}
+        <div className={page === 'planner' ? 'contents' : 'hidden'}><PlannerPage hasKey={!!hasKey} active={page === 'planner'} onOpenSettings={() => { setSection('safety'); setPage('settings') }} onNeedKey={() => setPage('key')} prefill={prefill} onPrefillUsed={() => setPrefill(null)} onOpenDrafts={() => openPlans('drafts')} onOpenOrders={() => openPlans('running')} firstTest={firstTest} /></div>
+        {page === 'plans' && <PlansPage hasKey={!!hasKey} data={planData} view={plansView} onView={setPlansView} onNeedKey={() => setPage('key')}
+          onEditDraft={(d) => { setPrefill({ pairId: d.pairId, input: d.input, postOnly: d.postOnly, sendCount: d.sendCount, draft: d }); setPage('planner') }}
+          onPlanSell={(p) => { setPrefill(p); setPage('planner') }} />}
         {page === 'log' && <LogPage />}
         {page === 'settings' && <SettingsPage section={section} onSection={setSection}
           keys={<KeyPage active={exchange} keys={keys} onKeyChanged={refreshKey} onUse={switchExchange} />}

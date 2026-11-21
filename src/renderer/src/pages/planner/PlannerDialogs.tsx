@@ -46,14 +46,14 @@ export function FirstTestDialog({ limit, setLimit, minOrder, hasKey, onNeedKey, 
               <li><strong>Mini-Plan laden:</strong> BTC/EUR kaufen, 2 Stufen etwa 20 % unter dem Kurs, knapp über deinem Mindest-Orderwert ({eur(minOrder)}) und dem Mindestbetrag von {exName()}. So tief wird der Kurs kaum fallen, die Orders bleiben also nur liegen.</li>
               <li><strong>Probelauf</strong> klicken. {probeHint()}.</li>
               <li><strong>An {exName()} senden</strong> und bestätigen.</li>
-              <li>Unter <strong>Offene Orders</strong> nachsehen, ob beide Orders da sind, und den Plan <strong>stornieren</strong>.</li>
+              <li>Unter <strong>Meine Pläne</strong> nachsehen, ob beide Orders da sind, und den Plan <strong>stornieren</strong>.</li>
               <li>Im <strong>Verlauf</strong> siehst du danach jeden Schritt mit Uhrzeit.</li>
             </>,
             <>
               <li><strong>Load mini plan:</strong> buy BTC/EUR, 2 levels about 20 % below the price, just above your minimum order value ({eur(minOrder)}) and {exName()}’s minimum. The price will hardly fall that far, so the orders just sit there.</li>
               <li>Click <strong>Test run</strong>. {probeHint()}.</li>
               <li><strong>Send to {exName()}</strong> and confirm.</li>
-              <li>Check under <strong>Open orders</strong> that both orders are there, and <strong>cancel</strong> the plan.</li>
+              <li>Check under <strong>My plans</strong> that both orders are there, and <strong>cancel</strong> the plan.</li>
               <li>Afterwards <strong>History</strong> shows every step with its time.</li>
             </>,
           )}
@@ -63,7 +63,7 @@ export function FirstTestDialog({ limit, setLimit, minOrder, hasKey, onNeedKey, 
           `Your minimum order value is ${eur(minOrder)}. Even a single order would then be larger than the 50 € first-test limit, so the app would send nothing. Lower it in Settings for the test, for example to 10 €.`,
         )}</p>}
         {!hasKey && <p className="notice notice-info">{tr('Für Schritt 3 bis 5 brauchst du einen Schlüssel.', 'For steps 3 to 5 you need a key.')} <button type="button" className="btn-link" onClick={() => { onClose(); onNeedKey() }}>{tr('Schlüssel anlegen', 'Create key')}</button></p>}
-        {onOpenOrders && <p className="text-xs text-ink-muted">{tr(<>Geht etwas schief, stoppt die <strong>Notbremse</strong> unter „Offene Orders“ alle offenen Orders auf einmal.</>, <>If something goes wrong, the <strong>emergency stop</strong> under “Open orders” stops all open orders at once.</>)}</p>}
+        {onOpenOrders && <p className="text-xs text-ink-muted">{tr(<>Geht etwas schief, stoppt die <strong>Notbremse</strong> oben rechts alle offenen Orders auf einmal.</>, <>If something goes wrong, the <strong>emergency stop</strong> at the top right stops all open orders at once.</>)}</p>}
       </div>
     </Modal>
   )
@@ -112,13 +112,13 @@ export function ConfirmSendDialog({ input, pair, last, busy, limit, overLimit, t
           `Achtung: ${wrong.length} ${wrong.length === 1 ? 'Stufe liegt' : 'Stufen liegen'} auf der falschen Seite des Kurses (${fmtPrice(last ?? 0, pair.priceDecimals)} ${sym}) und ${postOnly ? 'werden sofort wieder storniert' : 'würden sofort ausgeführt'}.`,
           `Warning: ${wrong.length} ${wrong.length === 1 ? 'level is' : 'levels are'} on the wrong side of the price (${fmtPrice(last ?? 0, pair.priceDecimals)} ${sym}) and ${postOnly ? 'will be cancelled right away' : 'would be filled immediately'}.`,
         )}</p>}
-        {heldLevels.length > 0 && <p className="text-ink-muted">{tr(`Pausiert und nicht dabei: ${[...held].map((z) => `Zone ${z + 1}`).join(', ')} mit ${heldLevels.length} Stufen. Die schaltest du später unter „Offene Orders“ scharf.`, `Disarmed and not included: ${[...held].map((z) => `zone ${z + 1}`).join(', ')} with ${heldLevels.length} levels. You arm them later under “Open orders”.`)}</p>}
-        {partial && <p className="text-ink-muted">{tr(`Die restlichen ${armedLevels.length - nowCount} Stufen bleiben im Plan. Du kannst sie später unter „Offene Orders“ mit „Rest senden“ nachschicken.`, `The remaining ${armedLevels.length - nowCount} levels stay in the plan. You can send them later under “Open orders” with “Send rest”.`)}</p>}
+        {heldLevels.length > 0 && <p className="text-ink-muted">{tr(`Pausiert und nicht dabei: ${[...held].map((z) => `Zone ${z + 1}`).join(', ')} mit ${heldLevels.length} Stufen. Die schaltest du später unter „Meine Pläne“ scharf.`, `Disarmed and not included: ${[...held].map((z) => `zone ${z + 1}`).join(', ')} with ${heldLevels.length} levels. You arm them later under “My plans”.`)}</p>}
+        {partial && <p className="text-ink-muted">{tr(`Die restlichen ${armedLevels.length - nowCount} Stufen bleiben im Plan. Du kannst sie später unter „Meine Pläne“ mit „Rest senden“ nachschicken.`, `The remaining ${armedLevels.length - nowCount} levels stay in the plan. You can send them later under “My plans” with “Send rest”.`)}</p>}
         <p>{tr(
           <>{exName()} sperrt dafür jetzt <strong>{input.side === 'buy' ? eur(nowCost) : `${num(toSend.reduce((a, l) => a + l.volume, 0), pair.volumeDecimals)} ${base}`}</strong> von deinem Guthaben, bis die Orders ausgeführt oder storniert sind.</>,
           <>{exName()} now locks <strong>{input.side === 'buy' ? eur(nowCost) : `${num(toSend.reduce((a, l) => a + l.volume, 0), pair.volumeDecimals)} ${base}`}</strong> of your balance for this until the orders are filled or cancelled.</>,
         )}</p>
-        <p className="text-ink-muted">{tr(`Die Orders werden echt bei ${exName()} angelegt. Du kannst sie unter „Offene Orders“ jederzeit stornieren, solange sie noch nicht ausgeführt sind. Dann ist das Geld sofort wieder frei.`, `The orders are really placed at ${exName()}. You can cancel them any time under “Open orders” as long as they are not filled yet. The money is then free again right away.`)}</p>
+        <p className="text-ink-muted">{tr(`Die Orders werden echt bei ${exName()} angelegt. Du kannst sie unter „Meine Pläne“ jederzeit stornieren, solange sie noch nicht ausgeführt sind. Dann ist das Geld sofort wieder frei.`, `The orders are really placed at ${exName()}. You can cancel them any time under “My plans” as long as they are not filled yet. The money is then free again right away.`)}</p>
         <p className="text-xs text-ink-muted">{tr('Hat dein Mac Touch ID, fragt er nach dem Klick noch nach deinem Finger.', 'If your Mac has Touch ID, it asks for your fingerprint after the click.')}</p>
       </div>
     </Modal>
@@ -193,8 +193,8 @@ export function DraftDialog({ form, setForm, editing, scenarios, input, pair, sp
           <input className="input w-full" value={form.note} placeholder={tr('z. B. nur senden, wenn BTC unter 60.000 € fällt', 'e.g. only send if BTC falls below 60,000 €')} onChange={(e) => setForm({ ...form, note: e.target.value })} />
         </label>
         <p className="text-xs text-ink-muted">{tr(
-          `${input.side === 'buy' ? 'Kauf' : 'Verkauf'} ${pair.name}, ${nowCount} ${partial || heldLevels.length ? `von ${sendable.length} ` : ''}Stufen, ${eur(nowCost)}. Es geht nichts an ${exName()}. Senden kannst du den Entwurf später unter „Entwürfe“.`,
-          `${input.side === 'buy' ? 'Buy' : 'Sell'} ${pair.name}, ${nowCount} ${partial || heldLevels.length ? `of ${sendable.length} ` : ''}levels, ${eur(nowCost)}. Nothing goes to ${exName()}. You can send the draft later under “Drafts”.`,
+          `${input.side === 'buy' ? 'Kauf' : 'Verkauf'} ${pair.name}, ${nowCount} ${partial || heldLevels.length ? `von ${sendable.length} ` : ''}Stufen, ${eur(nowCost)}. Es geht nichts an ${exName()}. Senden kannst du den Entwurf später unter „Meine Pläne“.`,
+          `${input.side === 'buy' ? 'Buy' : 'Sell'} ${pair.name}, ${nowCount} ${partial || heldLevels.length ? `of ${sendable.length} ` : ''}levels, ${eur(nowCost)}. Nothing goes to ${exName()}. You can send the draft later under “My plans”.`,
         )}</p>
       </div>
     </Modal>
