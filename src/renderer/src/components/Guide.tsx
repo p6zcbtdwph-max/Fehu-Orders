@@ -59,13 +59,13 @@ export const guideSteps = (): Step[] => [
         <p><strong>Erste und letzte Stufe</strong> sind Anfang und Ende deiner Staffel, beim Kaufen meist knapp unter und deutlich unter dem Kurs. Dazwischen liegen so viele Stufen, wie du bei <strong>Anzahl</strong> einträgst.</p>
         <p><strong>Preisabstände</strong>: gleiche Euro-Abstände oder gleiche Prozent-Abstände zwischen den Stufen.</p>
         <p><strong>Mengenverteilung</strong> bestimmt, wie viel Geld auf jede Stufe kommt. „Gleich“ heißt überall gleich viel, „Linear“ oder „Exponentiell“ heißt: je weiter weg vom Kurs, desto mehr.</p>
-        <p>Mit <strong>Davon jetzt senden</strong> schickst du erst die Stufen nah am Kurs. Den Rest kannst du später nachschieben.</p>
+        <p>Der Planer führt dich in vier Schritten: <strong>Was?</strong>, <strong>Zu welchen Preisen?</strong>, <strong>Prüfen</strong> und <strong>Abschließen</strong>. Oben rechts kannst du auf <strong>Alles auf einer Seite</strong> umschalten.</p>
       </>,
       <>
         <p><strong>First and last level</strong> are the start and end of your ladder, when buying usually just below and well below the price. In between there are as many levels as you enter under <strong>Count</strong>.</p>
         <p><strong>Price spacing</strong>: equal euro steps or equal percentage steps between the levels.</p>
         <p><strong>Size distribution</strong> decides how much money goes on each level. “Equal” means the same everywhere, “Linear” or “Exponential” means: the further from the price, the more.</p>
-        <p>With <strong>Send now</strong> you only send the levels close to the price first. You can add the rest later.</p>
+        <p>The planner guides you in four steps: <strong>What?</strong>, <strong>At what prices?</strong>, <strong>Check</strong> and <strong>Finish</strong>. At the top right you can switch to <strong>All on one page</strong>.</p>
       </>,
     ),
   },
@@ -88,11 +88,13 @@ export const guideSteps = (): Step[] => [
     page: 'planner', target: 'actions', title: tr('4. Erst prüfen, dann senden', '4. Check first, then send'),
     body: tr(
       <>
-        <p><strong>Probelauf</strong>: {exName()} prüft jede Order, legt aber nichts an. Mach das vor jedem echten Plan.</p>
+        <p><strong>Testen</strong> im Schritt „Prüfen“: {exName()} prüft jede Order, legt aber nichts an. Mach das vor jedem echten Plan.</p>
+        <p>Im Schritt <strong>Abschließen</strong> wählst du, ob du alle Stufen sofort sendest oder mit <strong>Davon jetzt senden</strong> erst die nah am Kurs. Oder du hebst den Plan als <strong>Entwurf</strong> auf.</p>
         <p><strong>An {exName()} senden</strong> legt die Orders wirklich an, erst nach einer Bestätigung und, wenn dein Mac es hat, mit Touch ID.</p>
       </>,
       <>
-        <p><strong>Test run</strong>: {exName()} checks every order but places nothing. Do this before every real plan.</p>
+        <p><strong>Test</strong> in the “Check” step: {exName()} checks every order but places nothing. Do this before every real plan.</p>
+        <p>In the <strong>Finish</strong> step you choose whether to send all levels right away or only those close to the price with <strong>Send now</strong>. Or you keep the plan as a <strong>draft</strong>.</p>
         <p><strong>Send to {exName()}</strong> really places the orders, only after a confirmation and, if your Mac has it, with Touch ID.</p>
       </>,
     ),
@@ -102,7 +104,7 @@ export const guideSteps = (): Step[] => [
     body: tr(
       <>
         <p className="notice notice-warning"><strong>Aus Sicherheitsgründen kannst du am Anfang pro Sendung nur bis 50 € senden.</strong> Ein größerer Plan wird nicht abgeschickt, und die App sagt dir, dass die Obergrenze erreicht ist. Das ist kein Fehler, sondern Absicht.</p>
-        <p>So bleibt dein erster echter Test klein, falls du dich vertippst oder noch etwas nicht ganz verstanden hast. Im Planer lädt <strong>Erster Test</strong> dafür einen fertigen Mini-Plan.</p>
+        <p>So bleibt dein erster echter Test klein, falls du dich vertippst oder noch etwas nicht ganz verstanden hast. Unter <strong>Neuer Plan</strong> lädt <strong>Erster Test</strong> dafür einen fertigen Mini-Plan.</p>
         <p>Wenn alles geklappt hat, hebst du die Grenze hier unter <strong>Einstellungen › Sicherheit › Obergrenze pro Sendung</strong> an, zum Beispiel auf 500 €. Sie gilt für jede einzelne Sendung.</p>
       </>,
       <>
@@ -116,7 +118,7 @@ export const guideSteps = (): Step[] => [
     page: 'drafts', target: 'drafts', title: tr('6. Entwürfe: erst planen, später senden', '6. Drafts: plan now, send later'),
     body: tr(
       <>
-        <p>Mit <strong>Als Entwurf</strong> im Planer speicherst du eine Order-Gruppe, ohne dass etwas an {exName()} geht.</p>
+        <p>Mit <strong>Als Entwurf aufheben</strong> unter „Neuer Plan“ speicherst du eine Order-Gruppe, ohne dass etwas an {exName()} geht.</p>
         <p>Unter <strong>Meine Pläne</strong> findest du sie im Filter <strong>Entwürfe</strong>. Ein Entwurf sperrt kein Guthaben. Erst mit <strong>Senden</strong> werden die Orders echt angelegt. Mit dem <strong>Kursalarm</strong> meldet sich dein Mac, wenn der Kurs die erste Stufe erreicht, und der Entwurf erscheint in der <strong>Übersicht</strong> unter „Zu tun“. Die App zeigt dir vorher, ob die Stufen zum aktuellen Kurs noch passen.</p>
       </>,
       <>
@@ -194,6 +196,8 @@ export default function Guide({ step, onStep, onClose, onPage, demo, onStartDemo
   useEffect(() => {
     if (s.page) onPage(s.page)
     if (!s.target) return
+    // Der Planer zeigt den passenden Schritt, damit der Bereich sichtbar ist
+    window.dispatchEvent(new CustomEvent('fehu-guide', { detail: s.target }))
     let el: HTMLElement | null = null
     const t = setTimeout(() => {
       el = document.querySelector<HTMLElement>(`[data-guide="${s.target}"]`)

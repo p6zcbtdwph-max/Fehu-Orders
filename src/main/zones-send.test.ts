@@ -69,7 +69,7 @@ describe('Entschärfte Zonen', () => {
     expect(posted).toHaveLength(0)
   })
 
-  it('Zone aktivieren: Probelauf ändert nichts, echtes Senden schickt die Zone mit derselben Plan-Nummer', async () => {
+  it('Zone aktivieren: Test ändert nichts, echtes Senden schickt die Zone mit derselben Plan-Nummer', async () => {
     const ref = store.getPlans()[0].userref
     posted.length = 0
     const probe = await call('plan:zone', ref, 1, true)

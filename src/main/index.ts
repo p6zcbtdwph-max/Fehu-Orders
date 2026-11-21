@@ -458,7 +458,7 @@ function logResult(base: Omit<LogEntry, 'at' | 'success'>, orders: SendResult['o
   const ok = orders.filter((o) => o.txid || (base.action === 'validate' && !o.error)).length
   const failed = orders.filter((o) => o.error).length
   const firstError = orders.find((o) => o.error)?.error
-  addLog({ ...base, ok, failed, success: failed === 0, message: firstError ?? (base.action === 'validate' ? tr('Probelauf ohne Fehler', 'Test run without errors') : tr(`${ok} Orders angelegt`, `${ok} orders placed`)) })
+  addLog({ ...base, ok, failed, success: failed === 0, message: firstError ?? (base.action === 'validate' ? tr('Test ohne Fehler', 'Test run without errors') : tr(`${ok} Orders angelegt`, `${ok} orders placed`)) })
 }
 
 /** Hat dieser Mac Touch ID (und ist ein Finger eingerichtet)? */

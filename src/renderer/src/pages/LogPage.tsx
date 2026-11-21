@@ -12,7 +12,7 @@ import { useMoney } from '../money'
 /** Name einer Aktion im Protokoll, in der gewählten Sprache */
 export const actionLabel = (a: string): string => ({
   send: tr('Gesendet', 'Sent'),
-  validate: tr('Probelauf', 'Test run'),
+  validate: tr('Test ohne Senden', 'Test without sending'),
   rest: tr('Rest gesendet', 'Rest sent'),
   zone: tr('Zone aktiviert', 'Zone armed'),
   'cancel-plan': tr('Plan storniert', 'Plan cancelled'),
@@ -82,7 +82,7 @@ export default function LogPage(): JSX.Element {
 
       <SectionCard title={tr(`${shown.length} ${shown.length === 1 ? 'Eintrag' : 'Einträge'}`, `${shown.length} ${shown.length === 1 ? 'entry' : 'entries'}`)}
         action={<Segmented<Filter> value={filter} onChange={setFilter} options={[{ id: 'all', label: tr('Alles', 'All') }, { id: 'orders', label: 'Orders' }, { id: 'errors', label: tr('Fehler', 'Errors') }]} />}>
-        {shown.length === 0 ? <p className="text-sm text-ink-muted">{tr('Noch keine Einträge. Sobald du einen Probelauf machst oder etwas sendest, steht es hier.', 'No entries yet. As soon as you do a test run or send something, it shows up here.')}</p> : (
+        {shown.length === 0 ? <p className="text-sm text-ink-muted">{tr('Noch keine Einträge. Sobald du einen Test machst oder etwas sendest, steht es hier.', 'No entries yet. As soon as you do a test run or send something, it shows up here.')}</p> : (
           <div className="overflow-x-auto">
             <table className="data-table">
               <thead><tr><th>{tr('Zeit', 'Time')}</th><th>{tr('Aktion', 'Action')}</th><th>{tr('Paar', 'Pair')}</th><th className="num">Orders</th><th className="num">{tr('Gegenwert', 'Value')}</th><th>{tr('Ergebnis', 'Result')}</th></tr></thead>

@@ -132,7 +132,7 @@ export function createDemoApi(): Api {
         addLog({ action: req.validate ? 'validate' : 'send', pair: req.pairName, side: req.side, count: chosen.length, amount, success: false, message: msg })
         throw new Error(msg)
       }
-      addLog({ action: req.validate ? 'validate' : 'send', pair: req.pairName, side: req.side, count: chosen.length, ok: chosen.length, failed: 0, amount, success: true, message: req.validate ? tr('Probelauf ohne Fehler', 'Test run without errors') : tr(`${chosen.length} Orders angelegt`, `${chosen.length} orders placed`) })
+      addLog({ action: req.validate ? 'validate' : 'send', pair: req.pairName, side: req.side, count: chosen.length, ok: chosen.length, failed: 0, amount, success: true, message: req.validate ? tr('Test ohne Fehler', 'Test run without errors') : tr(`${chosen.length} Orders angelegt`, `${chosen.length} orders placed`) })
       if (req.validate) return wait({ userref: 0, validate: true, orders: chosen.map((l) => ({ index: l.index, price: l.price, volume: l.volume })) }, 400)
       const plan: PlanDto = { userref: nextRef++, createdAt: new Date().toISOString(), pairId: req.pairId, pairName: req.pairName, side: req.side, input: req.input,
         sent: chosen.length, failed: 0, totalCost: chosen.reduce((a, l) => a + l.cost, 0), levels: req.levels, sentIndices: chosen.map((l) => l.index), postOnly: req.postOnly }

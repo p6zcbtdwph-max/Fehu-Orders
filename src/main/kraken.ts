@@ -223,7 +223,7 @@ export class Kraken implements Exchange {
 
   /**
    * Sendet die Stufen in Paketen zu höchstens 15 Orders. Mit validate=true prüft
-   * Kraken alles, legt aber nichts an (Probelauf). userref markiert alle Orders
+   * Kraken alles, legt aber nichts an (Test). userref markiert alle Orders
    * eines Plans, damit sie gemeinsam storniert werden können.
    */
   async placeLadder(pairId: string, side: Side, levels: LadderLevel[], opts: PlaceOptions): Promise<SentOrder[]> {

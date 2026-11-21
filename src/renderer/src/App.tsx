@@ -36,7 +36,7 @@ const NAV_IDS: { id: PageId; icon: typeof ListOrdered }[] = [
 
 const navLabel = (id: PageId): string => ({
   overview: tr('Übersicht', 'Overview'),
-  planner: tr('Planer', 'Planner'),
+  planner: tr('Neuer Plan', 'New plan'),
   plans: tr('Meine Pläne', 'My plans'),
   log: tr('Verlauf', 'History'),
   settings: tr('Einstellungen', 'Settings'),

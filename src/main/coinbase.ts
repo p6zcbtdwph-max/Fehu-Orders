@@ -1,7 +1,7 @@
 // Coinbase-Anbindung (Advanced Trade, REST v3). Läuft nur im Hauptprozess, der Schlüssel verlässt ihn nie.
 // Doku: https://docs.cdp.coinbase.com/coinbase-app/advanced-trade-apis/rest-api
 // Anmeldung per JWT (ES256), für jede Anfrage neu signiert und 2 Minuten gültig.
-// Probelauf über /orders/preview, Rechte über /key_permissions (inklusive „darf auszahlen?“).
+// Test über /orders/preview, Rechte über /key_permissions (inklusive „darf auszahlen?“).
 import type { OhlcRow } from '../shared/history'
 import { createPrivateKey, randomBytes, sign as cryptoSign } from 'node:crypto'
 import type { LadderLevel, Side } from '../shared/ladder'
@@ -220,7 +220,7 @@ export class Coinbase implements Exchange {
   /**
    * Legt die Stufen einzeln an. Jede Order trägt die Plan-Nummer in client_order_id (fehu-<userref>-<stufe>-…).
    * Coinbase legt bei gleicher client_order_id keine zweite Order an, deshalb darf nach einem Verbindungsabbruch
-   * gefahrlos einmal wiederholt werden. Probelauf: Coinbase-Vorschau je Order plus Guthaben-Prüfung für alle zusammen.
+   * gefahrlos einmal wiederholt werden. Test: Coinbase-Vorschau je Order plus Guthaben-Prüfung für alle zusammen.
    */
   async placeLadder(pairId: string, side: Side, levels: LadderLevel[], opts: PlaceOptions): Promise<SentOrder[]> {
     const SIDE = side === 'buy' ? 'BUY' : 'SELL'

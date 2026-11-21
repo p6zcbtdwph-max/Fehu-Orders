@@ -1,6 +1,6 @@
 // Bitvavo-Anbindung (Spot, REST v2). Läuft nur im Hauptprozess, der Schlüssel verlässt ihn nie.
 // Doku: https://docs.bitvavo.com/docs/rest-overview
-// Besonderheiten gegenüber Kraken: kein Probelauf bei der Börse (die App prüft selbst), keine Paket-Orders,
+// Besonderheiten gegenüber Kraken: kein Test bei der Börse (die App prüft selbst), keine Paket-Orders,
 // jede Order braucht eine operatorId, und die Plan-Nummer steckt in der eigenen Order-Kennung (clientOrderId).
 import type { OhlcRow } from '../shared/history'
 import { createHmac } from 'node:crypto'
@@ -190,7 +190,7 @@ export class Bitvavo implements Exchange {
   }
 
   /**
-   * Legt die Stufen einzeln an (Bitvavo kennt keine Paket-Orders). Probelauf: Bitvavo hat keinen,
+   * Legt die Stufen einzeln an (Bitvavo kennt keine Paket-Orders). Test: Bitvavo hat keinen,
    * deshalb prüft die App selbst Mindestmengen, Preisschritte und ob das freie Guthaben reicht.
    */
   async placeLadder(pairId: string, side: Side, levels: LadderLevel[], opts: PlaceOptions): Promise<SentOrder[]> {
