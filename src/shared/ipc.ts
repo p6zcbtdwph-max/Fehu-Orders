@@ -215,7 +215,7 @@ export interface Api {
   usdRate(): Promise<number>
   sendRest(userref: number, validate: boolean): Promise<SendResult>
   /**
-   * Eine entschärfte Zone eines gesendeten Plans scharf schalten: ihre Stufen gehen jetzt raus (gleiche Plan-Nummer).
+   * Eine entschärfte Zone eines gesendeten Plans aktivieren: ihre Stufen gehen jetzt raus (gleiche Plan-Nummer).
    * levels: geänderte Stufen der Zone (nach „Bearbeiten“), sonst die beim Planen berechneten.
    */
   armZone(userref: number, zone: number, validate: boolean, levels?: LadderLevel[]): Promise<SendResult>

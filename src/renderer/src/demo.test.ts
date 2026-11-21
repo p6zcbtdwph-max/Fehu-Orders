@@ -20,7 +20,7 @@ describe('Demo-Modus', () => {
     await expect(api.saveKey('a', 'b')).rejects.toThrow(/Demo/)
   })
 
-  it('Beispielplan mit Zonen: Zone 3 ist entschärft, die Bedingung erfüllt, scharf schalten sendet sie', async () => {
+  it('Beispielplan mit Zonen: Zone 3 ist entschärft, die Bedingung erfüllt, aktivieren sendet sie', async () => {
     const api = createDemoApi()
     const plan = (await api.plans()).find((p) => p.input.zones)!
     const st = (await api.planStatus()).find((s) => s.userref === plan.userref)!
@@ -30,7 +30,7 @@ describe('Demo-Modus', () => {
     await api.armZone(plan.userref, 2, false)
     expect((await api.openOrders()).filter((o) => o.userref === plan.userref)).toHaveLength(before + 3)
     expect((await api.plans()).find((p) => p.userref === plan.userref)!.input.zones![2].armed).toBe(true)
-    await expect(api.armZone(plan.userref, 2, false)).rejects.toThrow(/schon scharf/)
+    await expect(api.armZone(plan.userref, 2, false)).rejects.toThrow(/schon aktiv/)
   })
 
   it('Kursverlauf endet beim Beispielkurs', async () => {

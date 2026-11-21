@@ -44,8 +44,8 @@ export function NumberField({ label, value, onChange, hint, step = 'any', emptyV
         }} />
       {invalid
         ? <span className="mt-1 block text-xs text-danger-fg">{tr(
-          `Keine gültige Zahl. Gewählt ist das ${fmt === 'de' ? 'deutsche Format, z. B. 60.000,50' : 'amerikanische Format, z. B. 60,000.50'} (umstellen links unten bei „Zahlenformat“).`,
-          `Not a valid number. The ${fmt === 'de' ? 'German format is selected, e.g. 60.000,50' : 'US format is selected, e.g. 60,000.50'} (change it bottom left under “Number format”).`,
+          `Keine gültige Zahl. Gewählt ist das ${fmt === 'de' ? 'deutsche Format, z. B. 60.000,50' : 'amerikanische Format, z. B. 60,000.50'} (umstellen unter Einstellungen › Anzeige).`,
+          `Not a valid number. The ${fmt === 'de' ? 'German format is selected, e.g. 60.000,50' : 'US format is selected, e.g. 60,000.50'} (change it under Settings › Display).`,
         )}</span>
         : hint && <span className="mt-1 block text-xs text-ink-muted">{hint}</span>}
     </label>

@@ -39,7 +39,7 @@ export function createDemoApi(): Api {
   const addLog = (e: Omit<LogEntry, 'at'>) => log.unshift({ at: new Date().toISOString(), ...e })
   const now = new Date().toISOString()
   let drafts: DraftDto[] = [
-    { id: 'demo-d1', name: tr('BTC Crash-Kauf', 'BTC crash buy'), scenario: 'Crash', note: tr('Nur freigeben, wenn BTC deutlich fällt.', 'Only release if BTC falls sharply.'), createdAt: now, updatedAt: now,
+    { id: 'demo-d1', name: tr('BTC Crash-Kauf', 'BTC crash buy'), scenario: 'Crash', note: tr('Nur senden, wenn BTC deutlich fällt.', 'Only send if BTC falls sharply.'), createdAt: now, updatedAt: now,
       pairId: 'XXBTZEUR', pairName: 'BTC/EUR', side: 'buy', postOnly: true, priceAtSave: 80000, status: 'draft',
       input: { side: 'buy', priceStart: 70000, priceEnd: 55000, steps: 8, total: 400, spacing: 'geometric', curve: 'exp', ratio: 3 } },
     { id: 'demo-d2', name: tr('ETH Crash-Kauf', 'ETH crash buy'), scenario: 'Crash', createdAt: now, updatedAt: now,
@@ -123,7 +123,7 @@ export function createDemoApi(): Api {
     async send(req) {
       const held = heldZones(req.input ?? {})
       const valid = req.levels.filter((l) => !l.problem && !isHeld(l, held))
-      if (!valid.length) throw new Error(tr('Alle Zonen sind entschärft. Schalte mindestens eine Zone scharf, sonst wird nichts gesendet.', 'All zones are disarmed. Arm at least one zone, otherwise nothing is sent.'))
+      if (!valid.length) throw new Error(tr('Alle Zonen sind pausiert. Aktiviere mindestens eine Zone, sonst wird nichts gesendet.', 'All zones are disarmed. Arm at least one zone, otherwise nothing is sent.'))
       const chosen = valid.slice(0, req.sendCount ?? valid.length)
       const amount = chosen.reduce((a, l) => a + l.cost, 0)
       const last = priceOf(req.pairId)
@@ -155,7 +155,7 @@ export function createDemoApi(): Api {
     async armZone(userref, zone, validate, edited) {
       const plan = plans.find((p) => p.userref === userref)
       if (!plan?.levels || !plan.input.zones?.[zone]) throw new Error(tr('Plan nicht gefunden', 'Plan not found'))
-      if (plan.input.zones[zone].armed !== false) throw new Error(tr(`Zone ${zone + 1} ist schon scharf.`, `Zone ${zone + 1} is already armed.`))
+      if (plan.input.zones[zone].armed !== false) throw new Error(tr(`Zone ${zone + 1} ist schon aktiv.`, `Zone ${zone + 1} is already armed.`))
       const next = Math.max(...plan.levels.map((l) => l.index)) + 1
       const levels = edited
         ? edited.filter((l) => !l.problem).map((l, i) => ({ ...l, index: next + i, zone }))
@@ -167,7 +167,7 @@ export function createDemoApi(): Api {
       plan.sent += levels.length
       plan.totalCost += levels.reduce((a, l) => a + l.cost, 0)
       plan.input = { ...plan.input, zones: plan.input.zones.map((z, i) => (i === zone ? { ...z, armed: true } : z)) }
-      addLog({ action: 'zone', pair: plan.pairName, side: plan.side, count: levels.length, ok: levels.length, failed: 0, amount: levels.reduce((a, l) => a + l.cost, 0), success: true, userref, message: tr(`Zone ${zone + 1} scharf geschaltet`, `Zone ${zone + 1} armed`) })
+      addLog({ action: 'zone', pair: plan.pairName, side: plan.side, count: levels.length, ok: levels.length, failed: 0, amount: levels.reduce((a, l) => a + l.cost, 0), success: true, userref, message: tr(`Zone ${zone + 1} aktiviert`, `Zone ${zone + 1} armed`) })
       return wait({ userref, validate: false, orders: placed, check: { found: placed.length, placed: placed.length } }, 500)
     },
     async cancelPlan(userref) {

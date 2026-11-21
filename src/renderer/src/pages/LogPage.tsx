@@ -14,7 +14,7 @@ export const actionLabel = (a: string): string => ({
   send: tr('Gesendet', 'Sent'),
   validate: tr('Probelauf', 'Test run'),
   rest: tr('Rest gesendet', 'Rest sent'),
-  zone: tr('Zone scharf geschaltet', 'Zone armed'),
+  zone: tr('Zone aktiviert', 'Zone armed'),
   'cancel-plan': tr('Plan storniert', 'Plan cancelled'),
   'cancel-order': tr('Order storniert', 'Order cancelled'),
   'cancel-all': tr('Notbremse', 'Emergency stop'),
@@ -71,7 +71,7 @@ export default function LogPage(): JSX.Element {
     <div className="page">
       <header className="mb-5 page-header">
         <div className="min-w-0 flex-1 basis-64">
-          <h1 className="page-title">{tr('Protokoll', 'Log')}</h1>
+          <h1 className="page-title">{tr('Verlauf', 'History')}</h1>
           <p className="page-subtitle">{tr('Jedes Senden, Stornieren und jeder Fehler mit Uhrzeit. Bleibt nur auf diesem Mac.', 'Every send, cancel and error with its time. Stays on this Mac only.')}</p>
         </div>
         <div className="ml-auto flex flex-shrink-0 gap-2">

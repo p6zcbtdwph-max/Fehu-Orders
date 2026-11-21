@@ -27,7 +27,7 @@ function CheckList({ checks, exchange }: { checks: KeyCheck[]; exchange: string 
 }
 
 interface Props {
-  /** Börse, mit der die App gerade arbeitet (links unten gewählt) */
+  /** Börse, mit der die App gerade arbeitet (oben links gewählt) */
   active: ExchangeId
   /** Welche Börsen schon einen Schlüssel haben */
   keys: Partial<Record<ExchangeId, boolean>>
@@ -38,19 +38,15 @@ interface Props {
 
 /**
  * Schlüssel anlegen und verwalten ist getrennt vom Benutzen: Oben wählt man, für welche Börse
- * man einen Schlüssel einrichtet. Mit welcher Börse die App arbeitet, bleibt links unten.
+ * man einen Schlüssel einrichtet. Mit welcher Börse die App arbeitet, wählt man oben links in der Leiste.
+ * Steht in den Einstellungen unter „Börsen und Schlüssel“.
  */
 export default function KeyPage({ active, keys, onKeyChanged, onUse }: Props): JSX.Element {
   const [sel, setSel] = useState<ExchangeId>(active)
   const name = exchangeName(sel)
   return (
-    <div className="page page-narrow">
-      <header className="mb-5 page-header">
-        <div className="min-w-0 flex-1">
-          <h1 className="page-title">{tr('Schlüssel', 'API keys')}</h1>
-          <p className="page-subtitle">{tr('API-Schlüssel je Börse Schritt für Schritt anlegen und sicher hinterlegen. Hier wählst du nur, welchen Schlüssel du einrichtest. Mit welcher Börse die App arbeitet, wählst du links unten.', 'Create and store an API key per exchange step by step. Here you only choose which key you set up. Which exchange the app works with is chosen at the bottom left.')}</p>
-        </div>
-      </header>
+    <div>
+      <p className="mb-4 text-sm text-ink-muted">{tr('API-Schlüssel je Börse Schritt für Schritt anlegen und sicher hinterlegen. Hier wählst du nur, welchen Schlüssel du einrichtest. Mit welcher Börse die App arbeitet, wählst du oben links in der Leiste.', 'Create and store an API key per exchange step by step. Here you only choose which key you set up. Which exchange the app works with is chosen at the top left of the bar.')}</p>
       <div className="mb-4 space-y-2">
         <span className="label">{tr('Schlüssel einrichten für', 'Set up key for')}</span>
         <Segmented<ExchangeId> block size="md" value={sel} onChange={setSel} aria-label={tr('Schlüssel einrichten für', 'Set up key for')}

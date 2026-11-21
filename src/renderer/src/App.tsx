@@ -6,33 +6,35 @@ import { MoneyProvider, type Currency } from './money'
 import { num, setNumberFormat } from './format'
 import { NUMBER_FORMATS, type NumberFormat } from '@shared/number-format'
 import { LANGS, langFromLocale, setLang, tr, type Lang } from '@shared/i18n'
-import { EXCHANGE_IDS, exchangeName, exName, setActiveExchange, type ExchangeId } from '@shared/exchanges'
-import { AlertTriangle, ArrowLeftRight, ClipboardList, GraduationCap, KeyRound, Languages, ListOrdered, PlayCircle, ScrollText, Settings, SlidersHorizontal } from 'lucide-react'
+import { exName, setActiveExchange, type ExchangeId } from '@shared/exchanges'
+import { AlertTriangle, ClipboardList, GraduationCap, History, ListOrdered, PlayCircle, Settings, SlidersHorizontal } from 'lucide-react'
 import logoUrl from './assets/logo.png'
 import PlannerPage, { type Prefill } from './pages/PlannerPage'
 import OrdersPage from './pages/OrdersPage'
-import SettingsPage from './pages/SettingsPage'
+import SettingsPage, { type SettingsSection } from './pages/SettingsPage'
+import SectionCard from './components/ui/SectionCard'
+import TopBar from './components/TopBar'
 import KeyPage from './pages/KeyPage'
 import DraftsPage from './pages/DraftsPage'
 import LogPage from './pages/LogPage'
 
-type PageId = 'planner' | 'drafts' | 'orders' | 'log' | 'key' | 'settings'
+type PageId = 'planner' | 'drafts' | 'orders' | 'log' | 'settings'
+/** Seiten, die man von außen ansteuern kann. „key“ ist seit der neuen Navigation ein Teil der Einstellungen. */
+type PageTarget = PageId | 'key'
 
+/** Die Arbeitsbereiche oben in der Seitenleiste, in der Reihenfolge, in der man arbeitet */
 const NAV_IDS: { id: PageId; icon: typeof ListOrdered }[] = [
   { id: 'planner', icon: SlidersHorizontal },
   { id: 'drafts', icon: ClipboardList },
   { id: 'orders', icon: ListOrdered },
-  { id: 'log', icon: ScrollText },
-  { id: 'key', icon: KeyRound },
-  { id: 'settings', icon: Settings },
+  { id: 'log', icon: History },
 ]
 
 const navLabel = (id: PageId): string => ({
   planner: tr('Planer', 'Planner'),
   drafts: tr('Entwürfe', 'Drafts'),
   orders: tr('Offene Orders', 'Open orders'),
-  log: tr('Protokoll', 'Log'),
-  key: tr('Schlüssel', 'API key'),
+  log: tr('Verlauf', 'History'),
   settings: tr('Einstellungen', 'Settings'),
 })[id]
 
@@ -63,8 +65,27 @@ function startLang(): Lang {
 const drag = { WebkitAppRegion: 'drag' } as React.CSSProperties
 const noDrag = { WebkitAppRegion: 'no-drag' } as React.CSSProperties
 
+/** Eine Zeile in der Seitenleiste */
+function NavButton({ on, icon: Icon, label, onClick, tone }: { on: boolean; icon: typeof ListOrdered; label: string; onClick: () => void; tone?: 'warning' }) {
+  const active = tone === 'warning' ? 'bg-warning-soft font-medium text-warning-fg' : 'bg-accent-soft font-medium text-ink'
+  return (
+    <button type="button" onClick={onClick} aria-current={on && !tone ? 'page' : undefined} aria-pressed={tone ? on : undefined}
+      className={`group flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-sm transition-colors ${on ? active : 'text-ink-muted hover:bg-sunken-soft hover:text-ink'}`}>
+      <Icon size={16} className={on ? (tone ? '' : 'text-accent-fg') : 'text-ink-muted group-hover:text-ink'} />
+      <span className="truncate">{label}</span>
+    </button>
+  )
+}
+
 export default function App(): JSX.Element {
-  const [page, setPage] = useState<PageId>('planner')
+  const [page, setPageState] = useState<PageId>('planner')
+  const [section, setSection] = useState<SettingsSection>('exchanges')
+  /** Zählt hoch nach der Notbremse, damit „Offene Orders“ neu lädt */
+  const [reload, setReload] = useState(0)
+  /** Seite öffnen. „key“ führt zu Einstellungen › Börsen und Schlüssel. */
+  const setPage = (p: PageTarget) => {
+    if (p === 'key') { setSection('exchanges'); setPageState('settings') } else setPageState(p)
+  }
   const [hasKey, setHasKey] = useState<boolean | null>(null)
   const [prefill, setPrefill] = useState<Prefill | null>(null)
   const [currency, setCurrencyState] = useState<Currency>('EUR')
@@ -163,7 +184,7 @@ export default function App(): JSX.Element {
 
   // Klick auf einen Kursalarm öffnet die Entwürfe
   useEffect(() => api().onOpenPage((p) => {
-    if (NAV_IDS.some((n) => n.id === p)) setPage(p as PageId)
+    if (NAV_IDS.some((n) => n.id === p) || p === 'settings' || p === 'key') setPage(p as PageTarget)
   }), [demo])
 
   const refreshKey = () => api().keyStatus().then((s) => {
@@ -190,61 +211,18 @@ export default function App(): JSX.Element {
             </div>
           </div>
         </div>
-        <nav className="flex-1 space-y-0.5 px-3" style={noDrag}>
-          {NAV_IDS.map(({ id, icon: Icon }) => {
-            const on = page === id
-            const label = navLabel(id)
-            return (
-              <button key={id} type="button" onClick={() => setPage(id)} aria-current={on ? 'page' : undefined}
-                className={`group flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-sm transition-colors ${on ? 'bg-accent-soft font-medium text-ink' : 'text-ink-muted hover:bg-sunken-soft hover:text-ink'}`}>
-                <Icon size={16} className={on ? 'text-accent-fg' : 'text-ink-muted group-hover:text-ink'} />
-                <span className="truncate">{label}</span>
-              </button>
-            )
-          })}
+        <nav className="flex-1 space-y-0.5 px-3" style={noDrag} aria-label={tr('Bereiche', 'Sections')}>
+          {NAV_IDS.map(({ id, icon }) => <NavButton key={id} on={page === id} icon={icon} label={navLabel(id)} onClick={() => setPage(id)} />)}
         </nav>
-        <div className="space-y-0.5 px-3 pb-2" style={noDrag}>
-          <button type="button" onClick={() => setGuideStep(0)} className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-sm text-ink-muted transition-colors hover:bg-sunken-soft hover:text-ink">
-            <GraduationCap size={16} /> {tr('Einführung', 'Introduction')}
-          </button>
-          <button type="button" onClick={() => switchDemo(!demo)} aria-pressed={demo} className={`flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-sm transition-colors ${demo ? 'bg-warning-soft font-medium text-warning-fg' : 'text-ink-muted hover:bg-sunken-soft hover:text-ink'}`}>
-            <PlayCircle size={16} /> {demo ? tr('Demo beenden', 'End demo') : tr('Demo-Modus', 'Demo mode')}
-          </button>
-        </div>
-        <div className="space-y-2 border-t border-line px-4 py-3 text-xs text-ink-muted" style={noDrag}>
-          <div className="space-y-1">
-            <span className="flex items-center gap-1.5" title={tr('Mit welcher Börse die App gerade arbeitet. Schlüssel, Pläne und Entwürfe gelten je Börse.', 'Which exchange the app is working with. Keys, plans and drafts belong to one exchange each.')}>
-              <ArrowLeftRight size={13} /> {tr('Börse', 'Exchange')}
-            </span>
-            <Segmented<ExchangeId> block className="[&>.segmented-item]:min-w-0 [&>.segmented-item]:px-1" value={exchange} onChange={switchExchange} aria-label={tr('Börse', 'Exchange')}
-              options={EXCHANGE_IDS.map((id) => ({ id, label: exchangeName(id), title: keys[id] ? tr(`${exchangeName(id)}: Schlüssel hinterlegt`, `${exchangeName(id)}: key saved`) : tr(`${exchangeName(id)}: noch kein Schlüssel`, `${exchangeName(id)}: no key yet`) }))} />
-          </div>
-          <div className="flex items-center justify-between gap-2">
-            <span className="flex items-center gap-1.5"><Languages size={13} /> {tr('Sprache', 'Language')}</span>
-            <Segmented<Lang> value={lng} onChange={switchLang} aria-label={tr('Sprache', 'Language')}
-              options={LANGS.map((l) => ({ id: l.id, label: l.short, title: l.label }))} />
-          </div>
-          <div className="flex items-center justify-between gap-2">
-            <span>{tr('Anzeige', 'Display')}</span>
-            <Segmented<Currency> value={currency} onChange={setCurrency} aria-label={tr('Anzeigewährung', 'Display currency')} options={[{ id: 'EUR', label: '€ EUR' }, { id: 'USD', label: '$ USD' }]} />
-          </div>
-          {currency === 'USD' && <p>{rate ? `1 € = ${num(rate, 4)} $ · ${tr('Orders laufen in Euro', 'orders run in euro')}` : tr('Kurs EUR/USD wird geladen …', 'Loading EUR/USD rate …')}</p>}
-          <div className="space-y-1">
-            <span className="flex items-center justify-between gap-2" title={tr('So schreibst du Zahlen in die Felder, und so zeigt die App sie an', 'How you type numbers into fields and how the app shows them')}>
-              <span>{tr('Zahlenformat', 'Number format')}</span><span className="tabular-nums">{numFmt === 'de' ? '1.234,56' : '1,234.56'}</span>
-            </span>
-            <Segmented<NumberFormat> block value={numFmt} onChange={setNumFmt} aria-label={tr('Zahlenformat', 'Number format')}
-              options={NUMBER_FORMATS().map((f) => ({ id: f.id, label: f.label, title: `${f.label}: ${f.example}` }))} />
-          </div>
-          <span className="flex items-center gap-2">
-            {demo ? <><PlayCircle size={14} className="text-warning-fg" /> {tr(`Demo: nichts geht an ${exName()}`, `Demo: nothing goes to ${exName()}`)}</> : <>
-            <KeyRound size={14} className={hasKey ? 'text-success-fg' : 'text-warning-fg'} />
-            {hasKey === null ? '…' : hasKey ? tr(`${exName()} verbunden`, `${exName()} connected`) : tr('Kein API-Schlüssel', 'No API key')}</>}
-          </span>
+        <div className="space-y-0.5 border-t border-line px-3 py-2" style={noDrag}>
+          <NavButton on={page === 'settings'} icon={Settings} label={navLabel('settings')} onClick={() => setPage('settings')} />
+          <NavButton on={false} icon={GraduationCap} label={tr('Einführung', 'Introduction')} onClick={() => setGuideStep(0)} />
+          <NavButton on={demo} tone="warning" icon={PlayCircle} label={demo ? tr('Demo beenden', 'End demo') : tr('Demo-Modus', 'Demo mode')} onClick={() => switchDemo(!demo)} />
         </div>
       </aside>
       <main className="relative flex-1 overflow-y-auto">
-        <div className="h-8 w-full" style={drag} />
+        <TopBar exchange={exchange} keys={keys} hasKey={hasKey} demo={demo} onExchange={switchExchange}
+          onManageKeys={() => setPage('key')} onEndDemo={() => switchDemo(false)} onEmergencyDone={() => setReload((n) => n + 1)} />
         {systemText(system) && (
           <div className="page !pb-0">
             <p className={`notice ${system === 'unreachable' ? 'notice-warning' : 'notice-danger'} flex items-start gap-2`}>
@@ -252,28 +230,37 @@ export default function App(): JSX.Element {
             </p>
           </div>
         )}
-        {demo && (
-          <div className="page !pb-0">
-            <p className="notice notice-warning flex flex-wrap items-center gap-x-3 gap-y-1">
-              <PlayCircle size={16} className="flex-shrink-0" />
-              <span className="flex-1">{tr(<><strong>Demo-Modus.</strong> Beispielkurse und erfundenes Guthaben. Es wird nichts an {exName()} gesendet, probier ruhig alles aus.</>, <><strong>Demo mode.</strong> Sample prices and made-up balances. Nothing is sent to {exName()}, so feel free to try everything.</>)}</span>
-              <button type="button" className="btn-link" onClick={() => switchDemo(false)}>{tr('Demo beenden', 'End demo')}</button>
-            </p>
-          </div>
-        )}
         <div key={`${demo ? 'demo' : 'live'}-${exchange}`} className="contents">
         {/* Der Planer bleibt beim Reiterwechsel erhalten (nur versteckt), damit keine Eingaben verloren gehen */}
-        <div className={page === 'planner' ? 'contents' : 'hidden'}><PlannerPage hasKey={!!hasKey} active={page === 'planner'} onOpenSettings={() => setPage('settings')} onNeedKey={() => setPage('key')} prefill={prefill} onPrefillUsed={() => setPrefill(null)} onOpenDrafts={() => setPage('drafts')} onOpenOrders={() => setPage('orders')} /></div>
+        <div className={page === 'planner' ? 'contents' : 'hidden'}><PlannerPage hasKey={!!hasKey} active={page === 'planner'} onOpenSettings={() => { setSection('safety'); setPage('settings') }} onNeedKey={() => setPage('key')} prefill={prefill} onPrefillUsed={() => setPrefill(null)} onOpenDrafts={() => setPage('drafts')} onOpenOrders={() => setPage('orders')} /></div>
         {page === 'drafts' && <DraftsPage hasKey={!!hasKey} onNeedKey={() => setPage('key')}
           onEdit={(d) => { setPrefill({ pairId: d.pairId, input: d.input, postOnly: d.postOnly, sendCount: d.sendCount, draft: d }); setPage('planner') }} />}
-        {page === 'orders' && <OrdersPage hasKey={!!hasKey} onPlanSell={(p) => { setPrefill(p); setPage('planner') }} />}
+        {page === 'orders' && <OrdersPage hasKey={!!hasKey} reload={reload} onPlanSell={(p) => { setPrefill(p); setPage('planner') }} />}
         {page === 'log' && <LogPage />}
-        {page === 'key' && <KeyPage active={exchange} keys={keys} onKeyChanged={refreshKey} onUse={switchExchange} />}
-        {page === 'settings' && <SettingsPage hasKey={!!hasKey} onOpenKey={() => setPage('key')} />}
+        {page === 'settings' && <SettingsPage section={section} onSection={setSection}
+          keys={<KeyPage active={exchange} keys={keys} onKeyChanged={refreshKey} onUse={switchExchange} />}
+          display={<SectionCard title={tr('Anzeige', 'Display')}>
+            <div className="space-y-4 text-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span><span className="font-medium">{tr('Sprache', 'Language')}</span><span className="block text-xs text-ink-muted">{tr('Das Zahlenformat wechselt mit, lässt sich danach aber getrennt einstellen.', 'The number format switches along, but can be set separately afterwards.')}</span></span>
+                <Segmented<Lang> value={lng} onChange={switchLang} aria-label={tr('Sprache', 'Language')}
+                  options={LANGS.map((l) => ({ id: l.id, label: l.label, title: l.label }))} />
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span><span className="font-medium">{tr('Anzeigewährung', 'Display currency')}</span><span className="block text-xs text-ink-muted">{currency === 'USD' ? (rate ? `1 € = ${num(rate, 4)} $ · ${tr('Orders laufen weiter in Euro', 'orders still run in euro')}` : tr('Kurs EUR/USD wird geladen …', 'Loading EUR/USD rate …')) : tr('Beträge in Euro. Mit Dollar rechnet die App nur zur Anzeige um.', 'Amounts in euro. With dollar the app only converts for display.')}</span></span>
+                <Segmented<Currency> value={currency} onChange={setCurrency} aria-label={tr('Anzeigewährung', 'Display currency')} options={[{ id: 'EUR', label: '€ EUR' }, { id: 'USD', label: '$ USD' }]} />
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span><span className="font-medium">{tr('Zahlenformat', 'Number format')}</span><span className="block text-xs text-ink-muted">{tr('So schreibst du Zahlen in die Felder, und so zeigt die App sie an', 'How you type numbers into fields and how the app shows them')}: <span className="tabular-nums">{numFmt === 'de' ? '1.234,56' : '1,234.56'}</span></span></span>
+                <Segmented<NumberFormat> value={numFmt} onChange={setNumFmt} aria-label={tr('Zahlenformat', 'Number format')}
+                  options={NUMBER_FORMATS().map((f) => ({ id: f.id, label: f.label, title: `${f.label}: ${f.example}` }))} />
+              </div>
+            </div>
+          </SectionCard>} />}
         </div>
       </main>
       {guideStep !== null && (
-        <Guide step={Math.min(guideStep, guideSteps().length - 1)} onStep={setGuideStep} onClose={closeGuide} onPage={setPage}
+        <Guide step={Math.min(guideStep, guideSteps().length - 1)} onStep={setGuideStep} onClose={closeGuide} onPage={(p) => { if (p === 'settings') setSection('safety'); setPage(p) }}
           demo={demo} onStartDemo={() => { switchDemo(true); closeGuide() }} />
       )}
     </div>

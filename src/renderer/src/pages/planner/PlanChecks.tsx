@@ -68,7 +68,7 @@ export default function PlanChecks(p: PlanChecksProps): JSX.Element {
             const t = zoneTrigger(input.zones!, z)
             const cost = heldLevels.filter((l) => l.zone === z).reduce((a, l) => a + l.cost, 0)
             return <span key={z} className="block">{tr(
-              <><strong>Zone {z + 1} ist entschärft.</strong> {input.side === 'buy' ? eur(cost) : `≈ ${eur(cost)}`} gehen beim Senden noch nicht raus und sperren kein Guthaben. Unter „Offene Orders“ leuchtet „Zone {z + 1} scharf schalten“ auf, sobald Zone {t.zone + 1} zu {t.percent} % ausgeführt ist.</>,
+              <><strong>Zone {z + 1} ist pausiert.</strong> {input.side === 'buy' ? eur(cost) : `≈ ${eur(cost)}`} gehen beim Senden noch nicht raus und sperren kein Guthaben. Unter „Offene Orders“ leuchtet „Zone {z + 1} aktivieren“ auf, sobald Zone {t.zone + 1} zu {t.percent} % ausgeführt ist.</>,
               <><strong>Zone {z + 1} is disarmed.</strong> {input.side === 'buy' ? eur(cost) : `≈ ${eur(cost)}`} will not be sent yet and lock no funds. Under “Open orders”, “Arm zone {z + 1}” lights up once zone {t.zone + 1} is {t.percent} % filled.</>,
             )}</span>
           })}</span>

@@ -95,11 +95,11 @@ export default function ZoneEditor({ side, zones, ladder, last, daily, days, quo
             </div>
             {zones.length > 1 && (
               <div className="mt-2">
-                <Segmented<'armed' | 'held'> block value={disarmed ? 'held' : 'armed'} aria-label={tr(`Zone ${i + 1} scharf oder entschärft`, `Zone ${i + 1} armed or disarmed`)}
+                <Segmented<'armed' | 'held'> block value={disarmed ? 'held' : 'armed'} aria-label={tr(`Zone ${i + 1} aktiv oder pausiert`, `Zone ${i + 1} armed or disarmed`)}
                   onChange={(v) => update(i, v === 'held' ? { armed: false, trigger: zoneTrigger(zones, i) } : { armed: undefined, trigger: undefined })}
                   options={[
-                    { id: 'armed', label: tr('Scharf', 'Armed'), icon: Shield, title: tr('Geht beim Senden gleich mit raus', 'Goes out right away when sending') },
-                    { id: 'held', label: tr('Entschärft', 'Disarmed'), icon: ShieldOff, title: tr('Bleibt erst einmal zurück und sperrt kein Guthaben', 'Held back for now and locks no funds') },
+                    { id: 'armed', label: tr('Aktiv', 'Active'), icon: Shield, title: tr('Geht beim Senden gleich mit raus', 'Goes out right away when sending') },
+                    { id: 'held', label: tr('Pausiert', 'Paused'), icon: ShieldOff, title: tr('Bleibt erst einmal zurück und sperrt kein Guthaben', 'Held back for now and locks no funds') },
                   ]} />
                 {disarmed && (
                   <div className="mt-2 text-xs">

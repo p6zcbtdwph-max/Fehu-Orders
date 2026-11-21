@@ -75,7 +75,7 @@ export default function DraftsPage({ hasKey, onEdit, onNeedKey }: { hasKey: bool
       <header className="mb-5 page-header">
         <div className="min-w-0 flex-1 basis-64">
           <h1 className="page-title">{tr('Entwürfe', 'Drafts')}</h1>
-          <p className="page-subtitle">{tr(`Order-Gruppen zwischenspeichern, für Szenarien zurückhalten und erst nach deiner Freigabe an ${exName()} senden.`, `Save groups of orders, hold them back for scenarios and send them to ${exName()} only after you release them.`)}</p>
+          <p className="page-subtitle">{tr(`Order-Gruppen zwischenspeichern, für Szenarien zurückhalten und erst dann an ${exName()} senden, wenn du es willst.`, `Save groups of orders, hold them back for scenarios and send them to ${exName()} only after you release them.`)}</p>
         </div>
         <button type="button" className="btn btn-secondary ml-auto" onClick={load}><RefreshCw size={16} /> {tr('Kurse aktualisieren', 'Refresh prices')}</button>
       </header>
@@ -89,12 +89,12 @@ export default function DraftsPage({ hasKey, onEdit, onNeedKey }: { hasKey: bool
             <div className="space-y-2 text-sm text-ink-muted">
               {tr(
                 <>
-                  <p>Plane im <strong className="text-ink">Planer</strong> eine Staffel und klicke oben auf <strong className="text-ink">Als Entwurf</strong>. Sie wird dann hier gespeichert, ohne dass etwas an {exName()} geht. Ein Entwurf sperrt auch kein Guthaben. Erst beim Freigeben muss der volle Betrag auf deinem {exName()}-Konto bereitliegen.</p>
-                  <p>Mit einem <strong className="text-ink">Szenario</strong> wie „Crash“ oder „Bullrun“ hältst du passende Gruppen zusammen und gibst sie frei, wenn es so weit ist.</p>
+                  <p>Plane im <strong className="text-ink">Planer</strong> eine Staffel und klicke oben auf <strong className="text-ink">Als Entwurf</strong>. Sie wird dann hier gespeichert, ohne dass etwas an {exName()} geht. Ein Entwurf sperrt auch kein Guthaben. Erst beim Senden muss der volle Betrag auf deinem {exName()}-Konto bereitliegen.</p>
+                  <p>Mit einem <strong className="text-ink">Szenario</strong> wie „Crash“ oder „Bullrun“ hältst du passende Gruppen zusammen und sendest sie, wenn es so weit ist.</p>
                 </>,
                 <>
-                  <p>Plan a ladder in the <strong className="text-ink">Planner</strong> and click <strong className="text-ink">Save as draft</strong> at the top. It is then stored here without anything going to {exName()}. A draft locks no funds either. Only when you release it does the full amount have to be in your {exName()} account.</p>
-                  <p>With a <strong className="text-ink">scenario</strong> such as “Crash” or “Bull run” you keep matching groups together and release them when the time comes.</p>
+                  <p>Plan a ladder in the <strong className="text-ink">Planner</strong> and click <strong className="text-ink">Save as draft</strong> at the top. It is then stored here without anything going to {exName()}. A draft locks no funds either. Only when you send it does the full amount have to be in your {exName()} account.</p>
+                  <p>With a <strong className="text-ink">scenario</strong> such as “Crash” or “Bull run” you keep matching groups together and send them when the time comes.</p>
                 </>,
               )}
             </div>
@@ -136,7 +136,7 @@ export default function DraftsPage({ hasKey, onEdit, onNeedKey }: { hasKey: bool
                         {/* Knöpfe bleiben rechts sichtbar, auch wenn die Tabelle im schmalen Fenster seitlich scrollt */}
                         <td className="sticky right-0 bg-surface text-right shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.15)]">
                           <span className="inline-flex gap-1.5">
-                            <button type="button" className="btn btn-primary btn-sm whitespace-nowrap" onClick={() => { setNotice(null); setRelease(d) }}><Rocket size={14} /> {tr('Freigeben', 'Release')}</button>
+                            <button type="button" className="btn btn-primary btn-sm whitespace-nowrap" onClick={() => { setNotice(null); setRelease(d) }}><Rocket size={14} /> {tr('Senden', 'Send')}</button>
                             <button type="button" className="btn btn-ghost btn-icon" aria-label={tr('Im Planer bearbeiten', 'Edit in planner')} title={tr('Im Planer bearbeiten', 'Edit in planner')} onClick={() => onEdit(d)}><Pencil size={15} /></button>
                             <button type="button" className="btn btn-ghost btn-icon" aria-label={tr('Entwurf löschen', 'Delete draft')} title={tr('Entwurf löschen', 'Delete draft')} onClick={() => setRemove(d)}><Trash2 size={15} /></button>
                           </span>
@@ -151,10 +151,10 @@ export default function DraftsPage({ hasKey, onEdit, onNeedKey }: { hasKey: bool
         ))}
 
         {released.length > 0 && (
-          <SectionCard title={tr('Freigegeben', 'Released')}>
+          <SectionCard title={tr('Schon gesendet', 'Already sent')}>
             <div className="overflow-x-auto">
               <table className="data-table">
-                <thead><tr><th>{tr('Entwurf', 'Draft')}</th><th>{tr('Szenario', 'Scenario')}</th><th>{tr('Paar', 'Pair')}</th><th>{tr('Freigegeben', 'Released')}</th><th className="num">{tr('Plan-Nummer', 'Plan number')}</th><th /></tr></thead>
+                <thead><tr><th>{tr('Entwurf', 'Draft')}</th><th>{tr('Szenario', 'Scenario')}</th><th>{tr('Paar', 'Pair')}</th><th>{tr('Gesendet am', 'Sent on')}</th><th className="num">{tr('Plan-Nummer', 'Plan number')}</th><th /></tr></thead>
                 <tbody>
                   {released.map((d) => (
                     <tr key={d.id}>
@@ -169,7 +169,7 @@ export default function DraftsPage({ hasKey, onEdit, onNeedKey }: { hasKey: bool
                 </tbody>
               </table>
             </div>
-            <p className="mt-2 text-xs text-ink-muted">{tr('Freigegebene Pläne verfolgst du unter „Offene Orders“.', 'Track released plans under “Open orders”.')}</p>
+            <p className="mt-2 text-xs text-ink-muted">{tr('Gesendete Pläne verfolgst du unter „Offene Orders“.', 'Track sent plans under “Open orders”.')}</p>
           </SectionCard>
         )}
       </div>
@@ -179,7 +179,7 @@ export default function DraftsPage({ hasKey, onEdit, onNeedKey }: { hasKey: bool
           onClose={(sent) => {
             setRelease(null)
             if (sent) {
-              setNotice(tr(`„${release.name}“ wurde freigegeben und an ${exName()} gesendet (Plan-Nummer ${sent.userref}).`, `“${release.name}” was released and sent to ${exName()} (plan number ${sent.userref}).`))
+              setNotice(tr(`„${release.name}“ wurde an ${exName()} gesendet (Plan-Nummer ${sent.userref}).`, `“${release.name}” was released and sent to ${exName()} (plan number ${sent.userref}).`))
               load()
             }
           }} />
@@ -250,13 +250,13 @@ function ReleaseModal({ draft, pair, last, minOrder, hasKey, onNeedKey, onClose 
   const blocked = !hasKey || !ev || !ev.ladder.valid || shortfall || !!busy
 
   return (
-    <Modal title={tr('Entwurf freigeben?', 'Release draft?')} size="md" onClose={() => !busy && onClose(sentOk ? result : null)}
+    <Modal title={tr('Entwurf senden?', 'Send draft?')} size="md" onClose={() => !busy && onClose(sentOk ? result : null)}
       footer={sentOk ? (
         <button type="button" className="btn btn-primary" onClick={() => onClose(result)}>{tr('Fertig', 'Done')}</button>
       ) : <>
         <button type="button" className="btn btn-secondary" disabled={!!busy} onClick={() => onClose(null)}>{tr('Abbrechen', 'Cancel')}</button>
         <button type="button" className="btn btn-secondary" disabled={blocked} onClick={() => run(true)}><FlaskConical size={16} /> {busy === 'validate' ? tr('Prüfe …', 'Checking …') : tr('Probelauf', 'Test run')}</button>
-        <button type="button" className="btn btn-primary" disabled={blocked} onClick={() => run(false)}><Rocket size={16} /> {busy === 'send' ? tr('Sende …', 'Sending …') : tr(`Freigeben und ${ev?.count ?? 0} Orders senden`, `Release and send ${ev?.count ?? 0} orders`)}</button>
+        <button type="button" className="btn btn-primary" disabled={blocked} onClick={() => run(false)}><Rocket size={16} /> {busy === 'send' ? tr('Sende …', 'Sending …') : tr(`${ev?.count ?? 0} Orders senden`, `Send ${ev?.count ?? 0} orders`)}</button>
       </>}>
       {sentOk && result ? <SendSummary result={result} pairName={draft.pairName} side={draft.side} priceDecimals={dec} /> : (
       <div className="space-y-2 text-sm">
@@ -285,7 +285,7 @@ function ReleaseModal({ draft, pair, last, minOrder, hasKey, onNeedKey, onClose 
             {shortfall && <p className="notice notice-danger">{tr('Nicht genug verfügbares Guthaben: nötig', 'Not enough available balance: needed')} {draft.side === 'buy' ? eur(need) : `${num(need, pair?.volumeDecimals)} ${draft.pairName.split('/')[0]}`}, {tr('verfügbar', 'available')} {draft.side === 'buy' ? eur(have ?? 0) : num(have ?? 0, pair?.volumeDecimals)}.</p>}
           </>
         )}
-        {!hasKey && <p className="notice notice-info">{tr(`Zum Freigeben brauchst du einen ${exName()}-API-Schlüssel.`, `To release you need a ${exName()} API key.`)} <button type="button" className="btn-link" onClick={onNeedKey}>{tr('Schlüssel anlegen', 'Create key')}</button></p>}
+        {!hasKey && <p className="notice notice-info">{tr(`Zum Senden brauchst du einen ${exName()}-API-Schlüssel.`, `To release you need a ${exName()} API key.`)} <button type="button" className="btn-link" onClick={onNeedKey}>{tr('Schlüssel anlegen', 'Create key')}</button></p>}
         {err && <p className="notice notice-danger">{err}</p>}
         {result && (
           <div className={`notice ${failed.length ? 'notice-warning' : 'notice-success'}`}>
@@ -295,7 +295,7 @@ function ReleaseModal({ draft, pair, last, minOrder, hasKey, onNeedKey, onClose 
             {result.orders.some((o) => o.uncertain) && <p className="mt-1 text-xs font-medium">{tr('Die Verbindung brach ab. Schau unter „Offene Orders“ nach, was wirklich angelegt wurde.', 'The connection dropped. Check under “Open orders” what was really placed.')}</p>}
           </div>
         )}
-        {!result && !err && <p className="text-xs text-ink-muted">{tr(`Erst der Knopf „Freigeben und senden“ legt die Orders echt bei ${exName()} an. Ab dann sperrt ${exName()} den vollen Betrag auf deinem Konto, bis die Orders ausgeführt oder storniert sind. Der Probelauf prüft nur.`, `Only the “Release and send” button really places the orders at ${exName()}. From then on ${exName()} locks the full amount in your account until the orders are filled or cancelled. The test run only checks.`)}</p>}
+        {!result && !err && <p className="text-xs text-ink-muted">{tr(`Erst der Knopf „Orders senden“ legt die Orders echt bei ${exName()} an. Ab dann sperrt ${exName()} den vollen Betrag auf deinem Konto, bis die Orders ausgeführt oder storniert sind. Der Probelauf prüft nur.`, `Only the “Send orders” button really places the orders at ${exName()}. From then on ${exName()} locks the full amount in your account until the orders are filled or cancelled. The test run only checks.`)}</p>}
       </div>
       )}
     </Modal>

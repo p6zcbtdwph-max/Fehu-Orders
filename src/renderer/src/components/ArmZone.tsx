@@ -28,7 +28,7 @@ export function triggerText(p: PlanDto, zone: number, progress: ZoneProgress[] |
     text: now === null
       ? tr(`Zone ${t.zone + 1} soll zu ${t.percent} % ausgeführt sein (Stand noch unbekannt).`, `Zone ${t.zone + 1} should be ${t.percent} % filled (status not known yet).`)
       : met
-        ? tr(`Zone ${t.zone + 1} ist zu ${now} % ausgeführt (Ziel ${t.percent} %). Jetzt ist die Zeit, Zone ${zone + 1} scharf zu schalten.`, `Zone ${t.zone + 1} is ${now} % filled (target ${t.percent} %). Now is the time to arm zone ${zone + 1}.`)
+        ? tr(`Zone ${t.zone + 1} ist zu ${now} % ausgeführt (Ziel ${t.percent} %). Jetzt ist die Zeit, Zone ${zone + 1} zu aktivieren.`, `Zone ${t.zone + 1} is ${now} % filled (target ${t.percent} %). Now is the time to arm zone ${zone + 1}.`)
         : tr(`Zone ${t.zone + 1} ist zu ${now} % ausgeführt, Ziel ${t.percent} %.`, `Zone ${t.zone + 1} is ${now} % filled, target ${t.percent} %.`),
   }
 }
@@ -85,7 +85,7 @@ export default function ArmZoneModal({ plan, zone, progress, pair, onClose, onSe
   }
 
   return (
-    <Modal title={tr(`Zone ${zone + 1} scharf schalten?`, `Arm zone ${zone + 1}?`)} size="sm" onClose={() => !busy && onClose()}
+    <Modal title={tr(`Zone ${zone + 1} aktivieren?`, `Arm zone ${zone + 1}?`)} size="sm" onClose={() => !busy && onClose()}
       footer={<>
         <button type="button" className="btn btn-secondary" disabled={!!busy || blocked || !levels.length} onClick={() => go(true)}>{busy === 'validate' ? tr('Prüfe …', 'Checking …') : tr('Probelauf', 'Test run')}</button>
         <button type="button" className="btn btn-primary" disabled={!!busy || blocked || !levels.length} onClick={() => go(false)}>

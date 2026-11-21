@@ -65,11 +65,11 @@ describe('Entschärfte Zonen', () => {
     const allHeld = { ...zoned, zones: zoned.zones.map((z) => ({ ...z, armed: false })) }
     const r = await call('send', { pairId: 'BTC-EUR', pairName: 'BTC/EUR', side: 'buy', input: allHeld, levels, validate: false, postOnly: true })
     expect(r.ok).toBe(false)
-    expect(r.error).toMatch(/Alle Zonen sind entschärft/)
+    expect(r.error).toMatch(/Alle Zonen sind pausiert/)
     expect(posted).toHaveLength(0)
   })
 
-  it('Zone scharf schalten: Probelauf ändert nichts, echtes Senden schickt die Zone mit derselben Plan-Nummer', async () => {
+  it('Zone aktivieren: Probelauf ändert nichts, echtes Senden schickt die Zone mit derselben Plan-Nummer', async () => {
     const ref = store.getPlans()[0].userref
     posted.length = 0
     const probe = await call('plan:zone', ref, 1, true)

@@ -1,6 +1,6 @@
 import { api } from '../api'
 import { Fragment, useEffect, useState } from 'react'
-import { OctagonX, RefreshCw, Send, Shield, TrendingUp } from 'lucide-react'
+import { RefreshCw, Send, Shield, TrendingUp } from 'lucide-react'
 import OpenOrdersCard from '../components/OpenOrdersCard'
 import { heldZones, isHeld } from '@shared/ladder'
 import ArmZoneModal, { triggerText, zoneLevels } from '../components/ArmZone'
@@ -19,13 +19,13 @@ import { tr } from '@shared/i18n'
 import { useMoney } from '../money'
 import { activeExchange, exName, probeOk } from '@shared/exchanges'
 
-export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; onPlanSell: (p: Prefill) => void }): JSX.Element {
+export default function OrdersPage({ hasKey, onPlanSell, reload = 0 }: { hasKey: boolean; onPlanSell: (p: Prefill) => void; /** Zählt hoch, wenn neu geladen werden soll (z. B. nach der Notbremse) */ reload?: number }): JSX.Element {
   const [orders, setOrders] = useState<OpenOrderDto[] | null>(null)
   const [plans, setPlans] = useState<PlanDto[]>([])
   /** Nachkommastellen je Paar, damit günstige Coins (DOGE 0,1234567) nicht auf 0,12 gekürzt werden */
   const [decimals, setDecimals] = useState<Record<string, number>>({})
   const [pairs, setPairs] = useState<PairDto[]>([])
-  /** Fenster „Zone scharf schalten“ */
+  /** Fenster „Zone aktivieren“ */
   const [arm, setArm] = useState<{ plan: PlanDto; zone: number } | null>(null)
   const dec = (pairId: string) => decimals[pairId] ?? 2
   const [balances, setBalances] = useState<Record<string, number>>({})
@@ -37,22 +37,6 @@ export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; on
   const { eur, fmtPrice, sym } = useMoney()
   const [restPlan, setRestPlan] = useState<PlanDto | null>(null)
   const [restMsg, setRestMsg] = useState<{ ok: boolean; text: string } | null>(null)
-  const [brake, setBrake] = useState(false)
-  const [brakeMsg, setBrakeMsg] = useState<string | null>(null)
-
-  async function emergencyStop() {
-    setBusy(true)
-    try {
-      const n = await api().cancelAll()
-      setBrakeMsg(tr(`Notbremse ausgeführt: ${n} ${n === 1 ? 'Order' : 'Orders'} storniert.`, `Emergency stop done: ${n} ${n === 1 ? 'order' : 'orders'} cancelled.`))
-    } catch (e) {
-      setError((e as Error).message)
-    }
-    setBusy(false)
-    setBrake(false)
-    load()
-  }
-
   // Guthaben nach Coin zusammenfassen: normal handelbar und in Earn getrennt
   const balanceRows = Object.entries(balances).reduce<Record<string, { spot: number; earn: number; earnLabel?: string }>>((acc, [code, v]) => {
     // Nur Kraken hat Kürzel wie XXBT oder BTC.F, die anderen Börsen nennen Coins schon lesbar
@@ -81,7 +65,7 @@ export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; on
     load()
     // neue Ausführungen (Meldung aus dem Hauptprozess) sofort anzeigen
     return api().onFills(() => load())
-  }, [hasKey])
+  }, [hasKey, reload])
 
   function sellLadder(p: PlanDto, st: PlanStatusDto) {
     const s = profitLadderSuggestion(st.averagePrice, st.filledVolume)
@@ -157,13 +141,11 @@ export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; on
           <p className="page-subtitle">{tr(`Was gerade bei ${exName()} liegt, nach Plänen gruppiert.`, `What is currently at ${exName()}, grouped by plan.`)}</p>
         </div>
         <div className="ml-auto flex flex-shrink-0 gap-2">
-          {hasKey && <button type="button" className="btn btn-outline text-danger-fg" onClick={() => { setBrakeMsg(null); setBrake(true) }} title={tr('Alle offenen Orders auf allen verbundenen Börsen auf einmal stornieren', 'Cancel all open orders on all connected exchanges at once')}><OctagonX size={16} /> {tr('Notbremse', 'Emergency stop')}</button>}
           <button type="button" className="btn btn-secondary" onClick={load}><RefreshCw size={16} /> {tr('Aktualisieren', 'Refresh')}</button>
         </div>
       </header>
-      {!hasKey && <p className="notice notice-info mb-4">{tr(`Hinterlege zuerst im Reiter „Schlüssel“ einen ${exName()}-API-Schlüssel.`, `First add a ${exName()} API key in the “API key” tab.`)}</p>}
+      {!hasKey && <p className="notice notice-info mb-4">{tr(`Hinterlege zuerst unter Einstellungen › Börsen und Schlüssel einen ${exName()}-API-Schlüssel.`, `First add a ${exName()} API key under Settings › Exchanges and keys.`)}</p>}
       {error && <p className="notice notice-danger mb-4">{error}</p>}
-      {brakeMsg && <p className="notice notice-success mb-4">{brakeMsg}</p>}
       {restMsg && !restPlan && <p className={`notice mb-4 ${restMsg.ok ? 'notice-success' : 'notice-danger'}`}>{restMsg.text}</p>}
 
       <div className="space-y-4">
@@ -221,7 +203,7 @@ export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; on
                               <p className="mb-2 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-ink-muted tabular-nums">
                                 {p.input.zones.map((z, i) => {
                                   const zp = st.zones!.find((x) => x.zone === i)
-                                  return <span key={i}>{tr(`Zone ${i + 1}`, `Zone ${i + 1}`)}: {z.armed === false ? tr('entschärft', 'disarmed') : zp && zp.sentVolume > 0 ? tr(`${Math.round(zp.filledShare * 100)} % ausgeführt`, `${Math.round(zp.filledShare * 100)} % filled`) : '–'}</span>
+                                  return <span key={i}>{tr(`Zone ${i + 1}`, `Zone ${i + 1}`)}: {z.armed === false ? tr('pausiert', 'paused') : zp && zp.sentVolume > 0 ? tr(`${Math.round(zp.filledShare * 100)} % ausgeführt`, `${Math.round(zp.filledShare * 100)} % filled`) : '–'}</span>
                                 })}
                               </p>
                             )}
@@ -234,7 +216,7 @@ export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; on
                                 return (
                                   <button key={`z${z}`} type="button" className={`btn btn-sm whitespace-nowrap ${c.met ? 'btn-primary animate-pulse ring-2 ring-accent-400 ring-offset-1' : 'btn-outline'}`}
                                     onClick={() => { setRestMsg(null); setArm({ plan: p, zone: z }) }} title={c.text}>
-                                    <Shield size={14} /> {c.met ? tr(`Jetzt Zone ${z + 1} scharf schalten`, `Arm zone ${z + 1} now`) : tr(`Zone ${z + 1} scharf schalten`, `Arm zone ${z + 1}`)}
+                                    <Shield size={14} /> {c.met ? tr(`Jetzt Zone ${z + 1} aktivieren`, `Arm zone ${z + 1} now`) : tr(`Zone ${z + 1} aktivieren`, `Arm zone ${z + 1}`)}
                                   </button>
                                 )
                               })}
@@ -244,7 +226,7 @@ export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; on
                                 </button>
                               )}
                               {p.side === 'buy' && st && st.filledVolume > 0 && (
-                                <button type="button" className="btn btn-secondary btn-sm whitespace-nowrap" onClick={() => sellLadder(p, st)} title={tr('Verkaufsstaffel 10–50 % über deinem Kaufpreis vorschlagen', 'Suggest a sell ladder 10–50 % above your buy price')}><TrendingUp size={14} /> {tr('Gewinnstaffel', 'Profit ladder')}</button>
+                                <button type="button" className="btn btn-secondary btn-sm whitespace-nowrap" onClick={() => sellLadder(p, st)} title={tr('Verkaufsstaffel 10–50 % über deinem Kaufpreis vorschlagen', 'Suggest a sell ladder 10–50 % above your buy price')}><TrendingUp size={14} /> {tr('Verkaufsplan', 'Sell plan')}</button>
                               )}
                               {open > 0 && <button type="button" className="btn btn-outline btn-sm whitespace-nowrap" onClick={() => setCancelPlan(p)}>{tr('Stornieren', 'Cancel')}</button>}
                             </span>
@@ -284,22 +266,6 @@ export default function OrdersPage({ hasKey, onPlanSell }: { hasKey: boolean; on
             <p>{tr('Gegenwert', 'Value')}: <strong>{eur(restLevels(restPlan).reduce((a, l) => a + l.cost, 0))}</strong></p>
             <p className="text-ink-muted">{tr('Die Stufen wurden beim Planen berechnet. Liegt der Kurs inzwischen woanders, prüfe sie vorher mit dem Probelauf.', 'The levels were calculated when planning. If the price has moved since, check them first with a test run.')}</p>
             {restMsg && <p className={`notice ${restMsg.ok ? 'notice-success' : 'notice-danger'}`}>{restMsg.text}</p>}
-          </div>
-        </Modal>
-      )}
-
-      {brake && (
-        <Modal title={tr('Notbremse: alle Orders stornieren?', 'Emergency stop: cancel all orders?')} size="sm" onClose={() => !busy && setBrake(false)}
-          footer={<>
-            <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => setBrake(false)}>{tr('Abbrechen', 'Cancel')}</button>
-            <button type="button" className="btn btn-danger" disabled={busy} onClick={emergencyStop}>{busy ? tr('Storniere …', 'Cancelling …') : tr('Alle stornieren', 'Cancel all')}</button>
-          </>}>
-          <div className="space-y-2 text-sm">
-            <p>{tr(
-              <>Storniert <strong>alle offenen Orders</strong> auf <strong>allen Börsen</strong>, für die ein Schlüssel hinterlegt ist, auf einmal{orders ? ` (bei ${exName()} gerade ${orders.length})` : ''}, auch solche, die du nicht mit dieser App angelegt hast.</>,
-              <>Cancels <strong>all open orders</strong> on <strong>all exchanges</strong> with a saved key at once{orders ? ` (currently ${orders.length} at ${exName()})` : ''}, including ones you did not place with this app.</>,
-            )}</p>
-            <p className="text-ink-muted">{tr('Bereits ausgeführte Käufe und Verkäufe bleiben bestehen. Noch nicht gesendete Stufen deiner Pläne bleiben in der App und gehen nicht raus.', 'Buys and sells already filled stay as they are. Levels of your plans that were not sent yet stay in the app and do not go out.')}</p>
           </div>
         </Modal>
       )}
