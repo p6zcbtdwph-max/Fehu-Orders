@@ -104,7 +104,7 @@ describe('Bitvavo Orders', () => {
     expect(r2[0].uncertain).toBe(true)
   })
 
-  it('Probelauf ohne Börse: prüft Regeln und das freie Guthaben für alle Stufen zusammen, sendet nichts', async () => {
+  it('Test ohne Börse: prüft Regeln und das freie Guthaben für alle Stufen zusammen, sendet nichts', async () => {
     const { http, calls } = fakeHttp(() => ({ body: [{ symbol: 'EUR', available: '25', inOrder: '0' }] }))
     const rules = { id: 'BTC-EUR', name: 'BTC/EUR', base: 'BTC', quote: 'EUR', priceDecimals: 0, volumeDecimals: 8, orderMin: 0.0001, costMin: 5, tickSize: 1 }
     const res = await new Bitvavo(creds, http, noPause).placeLadder('BTC-EUR', 'buy', levels(3), { validate: true, userref: 1, rules })

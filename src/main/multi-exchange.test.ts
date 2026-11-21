@@ -63,7 +63,7 @@ describe('Mehrere Börsen', () => {
     expect(later.ok).toBe(true)
   })
 
-  it('Probelauf auf Bitvavo prüft nur in der App und legt nichts an', async () => {
+  it('Test auf Bitvavo prüft nur in der App und legt nichts an', async () => {
     hits.length = 0
     const r = await send(lv(2, 49000, 0.0004), true)
     expect(r.ok).toBe(true)

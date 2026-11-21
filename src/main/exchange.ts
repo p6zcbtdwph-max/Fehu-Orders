@@ -68,7 +68,7 @@ export interface PlaceOptions {
   userref: number
   postOnly?: boolean
   onProgress?: (done: number) => void
-  /** Regeln des Paars, für Börsen ohne eigenen Probelauf */
+  /** Regeln des Paars, für Börsen ohne eigenen Test */
   rules?: PairInfo
 }
 
@@ -160,7 +160,7 @@ export function onStep(value: number, step: number | undefined): boolean {
 }
 
 /**
- * Prüft Orders ohne Börse (für Börsen ohne eigenen Probelauf): Mindestmenge, Mindestbetrag, Preisschritt,
+ * Prüft Orders ohne Börse (für Börsen ohne eigenen Test): Mindestmenge, Mindestbetrag, Preisschritt,
  * Nachkommastellen und ob das freie Guthaben für alle Stufen zusammen reicht.
  */
 export function localCheck(levels: LadderLevel[], side: Side, rules: PairInfo | undefined, free: Record<string, number> | null): SentOrder[] {

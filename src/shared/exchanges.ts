@@ -27,7 +27,7 @@ export interface ExchangeMeta {
   origin: string
   /** Seite, auf der man den API-Schlüssel anlegt */
   apiUrl: string
-  /** Prüft die Börse beim Probelauf selbst (true) oder nur die App (false)? */
+  /** Prüft die Börse beim Test selbst (true) oder nur die App (false)? */
   serverValidate: boolean
   /** Kann die App selbst feststellen, dass der Schlüssel kein Geld abheben darf? */
   withdrawAutoCheck: boolean
@@ -83,7 +83,7 @@ export function exchangeMeta(id: ExchangeId): ExchangeMeta {
         secretMultiline: true, withdrawLabel: 'Transfer', permissionsStep: 1,
         permissions: [
           { exchange: 'View', de: tr('Ansehen (Guthaben und Orders)', 'View (balances and orders)'), on: true, why: tr('Guthaben, offene Orders und Ausführungen anzeigen', 'Show balances, open orders and fills') },
-          { exchange: 'Trade', de: tr('Handeln (Orders anlegen und stornieren)', 'Trade (place and cancel orders)'), on: true, why: tr('Orders anlegen, Probelauf und stornieren', 'Place orders, test run and cancel') },
+          { exchange: 'Trade', de: tr('Handeln (Orders anlegen und stornieren)', 'Trade (place and cancel orders)'), on: true, why: tr('Orders anlegen, Test und stornieren', 'Place orders, test run and cancel') },
           { exchange: 'Transfer', de: tr('Überweisen (Ein- und Auszahlungen)', 'Transfer (deposits and withdrawals)'), on: false, why: never, danger: true },
         ],
         steps: [
@@ -108,7 +108,7 @@ export function exchangeMeta(id: ExchangeId): ExchangeMeta {
           { exchange: 'Withdraw Funds', de: tr('Geld abheben', 'Withdraw'), on: false, why: never, danger: true },
           { exchange: 'Query Open Orders & Trades', de: tr('Offene Orders abfragen', 'Query open orders'), on: true, why: tr('Offene Orders anzeigen', 'Show open orders') },
           { exchange: 'Query Closed Orders & Trades', de: tr('Geschlossene Orders abfragen', 'Query closed orders'), on: true, why: tr('Ausführungen und Durchschnittspreis anzeigen', 'Show fills and average price') },
-          { exchange: 'Create & Modify Orders', de: tr('Orders erstellen und ändern', 'Create and modify orders'), on: true, why: tr('Orders anlegen und Probelauf', 'Place orders and test run') },
+          { exchange: 'Create & Modify Orders', de: tr('Orders erstellen und ändern', 'Create and modify orders'), on: true, why: tr('Orders anlegen und Test', 'Place orders and test run') },
           { exchange: 'Cancel & Close Orders', de: tr('Orders stornieren', 'Cancel orders'), on: true, why: tr('Pläne und Orders stornieren', 'Cancel plans and orders') },
           { exchange: tr('Alle übrigen (Ledger, Export, WebSocket, Earn …)', 'All others (Ledger, Export, WebSocket, Earn …)'), de: tr('alles andere', 'everything else'), on: false, why: notNeeded },
         ],
@@ -147,12 +147,12 @@ export const activeExchange = (): ExchangeId => active
 /** Name der aktiven Börse für Texte wie „An Kraken senden“ */
 export const exName = (): string => exchangeName(active)
 
-/** Wer prüft beim Probelauf? Kraken und Coinbase prüfen selbst, bei Bitvavo prüft die App. */
+/** Wer prüft beim Test? Kraken und Coinbase prüfen selbst, bei Bitvavo prüft die App. */
 export const probeHint = (): string => exchangeMeta(active).serverValidate
   ? tr(`${exName()} prüft alle Orders, legt aber nichts an`, `${exName()} checks all orders but places nothing`)
-  : tr(`Die App prüft alle Orders und dein Guthaben (${exName()} hat keinen eigenen Probelauf). Es wird nichts angelegt`, `The app checks all orders and your balance (${exName()} has no test mode of its own). Nothing is placed`)
+  : tr(`Die App prüft alle Orders und dein Guthaben (${exName()} hat keinen eigenen Test). Es wird nichts angelegt`, `The app checks all orders and your balance (${exName()} has no test mode of its own). Nothing is placed`)
 
-/** Erfolgsmeldung nach dem Probelauf */
+/** Erfolgsmeldung nach dem Test */
 export const probeOk = (n: number): string => exchangeMeta(active).serverValidate
-  ? tr(`Probelauf erfolgreich: ${exName()} würde alle ${n} Orders annehmen. Es wurde nichts angelegt.`, `Test run passed: ${exName()} would accept all ${n} orders. Nothing was placed.`)
-  : tr(`Probelauf erfolgreich: Alle ${n} Orders passen zu den Regeln von ${exName()} und dein Guthaben reicht. Es wurde nichts angelegt.`, `Test run passed: all ${n} orders match ${exName()}’s rules and your balance is enough. Nothing was placed.`)
+  ? tr(`Test erfolgreich: ${exName()} würde alle ${n} Orders annehmen. Es wurde nichts angelegt.`, `Test run passed: ${exName()} would accept all ${n} orders. Nothing was placed.`)
+  : tr(`Test erfolgreich: Alle ${n} Orders passen zu den Regeln von ${exName()} und dein Guthaben reicht. Es wurde nichts angelegt.`, `Test run passed: all ${n} orders match ${exName()}’s rules and your balance is enough. Nothing was placed.`)

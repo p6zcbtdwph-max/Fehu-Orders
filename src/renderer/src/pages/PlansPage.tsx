@@ -225,7 +225,7 @@ function DraftDetail({ d, entry, data, hasKey, onEdit, onNeedKey, onNotice }: {
       </div>
       <SectionCard title={tr('Details', 'Details')}>
         <div className="space-y-2 text-sm">
-          {d.scenario && <p><span className="text-ink-muted">{tr('Szenario', 'Scenario')}:</span> {d.scenario}</p>}
+          {d.scenario && <p><span className="text-ink-muted">{tr('Gruppe', 'Group')}:</span> {d.scenario}</p>}
           {d.note && <p className="text-ink-muted">{d.note}</p>}
           <p>{tr('Kurs jetzt', 'Price now')}: {last ? <>{fmtPrice(last, dec)} {sym} <span className="text-ink-muted">({tr('erste Stufe', 'first level')} {pct(first / last - 1)})</span></> : '–'}</p>
           {d.alarm && !d.alarmFiredAt && <p className="flex items-center gap-1 text-ink-muted"><Bell size={14} /> {tr('Kursalarm bei', 'Price alert at')} {fmtPrice(first, dec)} {sym}</p>}
@@ -301,7 +301,7 @@ function SentDetail({ p, st, data, onPlanSell, onCancelOrder }: {
       const ok = r.orders.length - failed.length
       if (r.orders.some((o) => o.uncertain)) setMsg({ ok: false, text: tr('Die Verbindung brach beim Senden ab. Klicke auf „Aktualisieren“ und prüfe, was wirklich angelegt wurde, bevor du noch einmal sendest.', 'The connection dropped while sending. Click “Refresh” and check what was really placed before you send again.') })
       else setMsg(failed.length
-        ? { ok: false, text: tr(`${validate ? 'Probelauf' : 'Senden'}: ${failed.length} von ${r.orders.length} Orders abgelehnt. Grund: ${failed[0].error}`, `${validate ? 'Test run' : 'Send'}: ${failed.length} of ${r.orders.length} orders rejected. Reason: ${failed[0].error}`) }
+        ? { ok: false, text: tr(`${validate ? 'Test' : 'Senden'}: ${failed.length} von ${r.orders.length} Orders abgelehnt. Grund: ${failed[0].error}`, `${validate ? 'Test run' : 'Send'}: ${failed.length} of ${r.orders.length} orders rejected. Reason: ${failed[0].error}`) }
         : { ok: true, text: validate ? probeOk(ok) : tr(`${ok} weitere Orders angelegt.`, `${ok} more orders placed.`) })
       if (!validate) { setRest(false); setMsg(null); setSent(r); data.load() }
     } catch (e) {
@@ -366,13 +366,13 @@ function SentDetail({ p, st, data, onPlanSell, onCancelOrder }: {
       {rest && left.length > 0 && (
         <Modal title={tr('Restliche Stufen senden?', 'Send the remaining levels?')} size="sm" onClose={() => !busy && setRest(false)}
           footer={<>
-            <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => sendRest(true)}>{tr('Probelauf', 'Test run')}</button>
+            <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => sendRest(true)}>{tr('Testen', 'Test')}</button>
             <button type="button" className="btn btn-primary" disabled={busy} onClick={() => sendRest(false)}>{busy ? tr('Sende …', 'Sending …') : tr(`${left.length} Orders senden`, `Send ${left.length} orders`)}</button>
           </>}>
           <div className="space-y-2 text-sm">
             <p>{p.side === 'buy' ? tr('Kaufen', 'Buy') : tr('Verkaufen', 'Sell')} {p.pairName}: {left.length} {tr('Stufen von', 'levels from')} {fmtPrice(left[0].price, dec)} {tr('bis', 'to')} {fmtPrice(left[left.length - 1].price, dec)} {sym}.</p>
             <p>{tr('Gegenwert', 'Value')}: <strong>{eur(left.reduce((a, l) => a + l.cost, 0))}</strong></p>
-            <p className="text-ink-muted">{tr('Die Stufen wurden beim Planen berechnet. Liegt der Kurs inzwischen woanders, prüfe sie vorher mit dem Probelauf.', 'The levels were calculated when planning. If the price has moved since, check them first with a test run.')}</p>
+            <p className="text-ink-muted">{tr('Die Stufen wurden beim Planen berechnet. Liegt der Kurs inzwischen woanders, prüfe sie vorher mit dem Test.', 'The levels were calculated when planning. If the price has moved since, check them first with a test run.')}</p>
             {msg && <p className={`notice ${msg.ok ? 'notice-success' : 'notice-danger'}`}>{msg.text}</p>}
           </div>
         </Modal>

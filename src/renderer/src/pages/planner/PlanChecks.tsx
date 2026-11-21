@@ -133,7 +133,7 @@ export default function PlanChecks(p: PlanChecksProps): JSX.Element {
       {result && (
         <div className={`notice ${failed.length ? 'notice-warning' : 'notice-success'}`}>
           {result.validate
-            ? failed.length ? tr(`Probelauf: ${failed.length} Orders würden abgelehnt.`, `Test run: ${failed.length} orders would be rejected.`) : probeOk(ok)
+            ? failed.length ? tr(`Test: ${failed.length} Orders würden abgelehnt.`, `Test run: ${failed.length} orders would be rejected.`) : probeOk(ok)
             : tr(`${ok} Orders angelegt${failed.length ? `, ${failed.length} fehlgeschlagen` : ''}. Plan-Nummer ${result.userref}.`, `${ok} orders placed${failed.length ? `, ${failed.length} failed` : ''}. Plan number ${result.userref}.`)}
           {result.orders.some((o) => o.uncertain) && <p className="mt-1 text-xs font-medium">{tr('Die Verbindung brach ab. Schau unter „Meine Pläne“ nach, was wirklich angelegt wurde, bevor du noch einmal sendest.', 'The connection dropped. Check under “My plans” what was really placed before you send again.')}</p>}
           {failed.length > 0 && <p className="mt-1 text-xs">{tr('Grund', 'Reason')}: {failed[0].error}</p>}

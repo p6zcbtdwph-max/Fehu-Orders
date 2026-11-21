@@ -171,7 +171,7 @@ describe('Strenge Börsen-Attrappen nehmen jede Order aus dem Planer an', () => 
     }
   })
 
-  it('der Probelauf ohne Börse (Bitvavo) findet einen Preis, der nicht auf die gültigen Ziffern passt', async () => {
+  it('der Test ohne Börse (Bitvavo) findet einen Preis, der nicht auf die gültigen Ziffern passt', async () => {
     const old = PAIRS.bitvavo[2]
     const http = async (url: string) => ({ status: 200, text: async () => JSON.stringify(url.includes('/balance') ? [{ symbol: 'EUR', available: '100000' }] : {}) })
     const bv = new Bitvavo({ key: 'k'.repeat(64), secret: 's'.repeat(128) }, http, async () => {})

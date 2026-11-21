@@ -35,7 +35,7 @@ export function triggerText(p: PlanDto, zone: number, progress: ZoneProgress[] |
 
 /**
  * Fenster zum Scharfschalten einer entschärften Zone. Wahlweise vorher bearbeiten (Preisbereich, Stufenzahl),
- * dann Probelauf oder echt senden. Senden ist immer ein bewusster Klick (plus Touch ID im Hauptprozess).
+ * dann Test oder echt senden. Senden ist immer ein bewusster Klick (plus Touch ID im Hauptprozess).
  */
 export default function ArmZoneModal({ plan, zone, progress, pair, onClose, onSent }: {
   plan: PlanDto
@@ -76,7 +76,7 @@ export default function ArmZoneModal({ plan, zone, progress, pair, onClose, onSe
     try {
       const r = await api().armZone(plan.userref, zone, validate, edited ? edited.levels.filter((l) => !l.problem) : undefined)
       const failed = r.orders.filter((o) => o.error)
-      if (validate) setMsg(failed.length ? { ok: false, text: tr(`Probelauf: ${failed.length} Orders würden abgelehnt. Grund: ${failed[0].error}`, `Test run: ${failed.length} orders would be rejected. Reason: ${failed[0].error}`) } : { ok: true, text: probeOk(r.orders.length) })
+      if (validate) setMsg(failed.length ? { ok: false, text: tr(`Test: ${failed.length} Orders würden abgelehnt. Grund: ${failed[0].error}`, `Test run: ${failed.length} orders would be rejected. Reason: ${failed[0].error}`) } : { ok: true, text: probeOk(r.orders.length) })
       else onSent(r)
     } catch (e) {
       setMsg({ ok: false, text: (e as Error).message })
@@ -87,7 +87,7 @@ export default function ArmZoneModal({ plan, zone, progress, pair, onClose, onSe
   return (
     <Modal title={tr(`Zone ${zone + 1} aktivieren?`, `Arm zone ${zone + 1}?`)} size="sm" onClose={() => !busy && onClose()}
       footer={<>
-        <button type="button" className="btn btn-secondary" disabled={!!busy || blocked || !levels.length} onClick={() => go(true)}>{busy === 'validate' ? tr('Prüfe …', 'Checking …') : tr('Probelauf', 'Test run')}</button>
+        <button type="button" className="btn btn-secondary" disabled={!!busy || blocked || !levels.length} onClick={() => go(true)}>{busy === 'validate' ? tr('Prüfe …', 'Checking …') : tr('Testen', 'Test')}</button>
         <button type="button" className="btn btn-primary" disabled={!!busy || blocked || !levels.length} onClick={() => go(false)}>
           <Shield size={16} /> {busy === 'send' ? tr('Sende …', 'Sending …') : tr(`${levels.length} Orders senden`, `Send ${levels.length} orders`)}
         </button>
@@ -121,7 +121,7 @@ export default function ArmZoneModal({ plan, zone, progress, pair, onClose, onSe
             <button type="button" className="btn-link mt-2 text-xs" onClick={() => setEditing(false)}>{tr('Wie geplant senden', 'Send as planned')}</button>
           </div>
         )}
-        <p className="text-ink-muted">{tr(`Die Orders werden echt bei ${exName()} angelegt, mit derselben Plan-Nummer. Liegt der Kurs inzwischen woanders, prüfe sie vorher mit dem Probelauf.`, `The orders are really placed at ${exName()}, with the same plan number. If the price has moved since, check them first with a test run.`)}</p>
+        <p className="text-ink-muted">{tr(`Die Orders werden echt bei ${exName()} angelegt, mit derselben Plan-Nummer. Liegt der Kurs inzwischen woanders, prüfe sie vorher mit dem Test.`, `The orders are really placed at ${exName()}, with the same plan number. If the price has moved since, check them first with a test run.`)}</p>
         {msg && <p className={`notice ${msg.ok ? 'notice-success' : 'notice-danger'}`}>{msg.text}</p>}
       </div>
     </Modal>
