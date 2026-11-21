@@ -200,7 +200,7 @@ export function unreadable(name: string, status: number): ExchangeError {
 
 export const noKey = (): ExchangeError => new ExchangeError(tr('Kein API-Schlüssel hinterlegt.', 'No API key saved.'))
 
-export const uncertainText = (msg: string): string => tr(`${msg} Unklar, ob diese Order angelegt wurde. Bitte unter „Offene Orders“ nachsehen.`, `${msg} Unclear whether this order was placed. Please check under “Open orders”.`)
+export const uncertainText = (msg: string): string => tr(`${msg} Unklar, ob diese Order angelegt wurde. Bitte unter „Meine Pläne“ nachsehen.`, `${msg} Unclear whether this order was placed. Please check under “My plans”.`)
 export const notPlacedText = (msg: string): string => tr(`${msg} Diese Order wurde nicht angelegt.`, `${msg} This order was not placed.`)
 export const skippedText = (): string => tr('Nicht gesendet, weil eine vorherige Order fehlschlug.', 'Not sent because a previous order failed.')
 
