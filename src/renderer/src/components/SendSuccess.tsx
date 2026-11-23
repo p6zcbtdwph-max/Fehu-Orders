@@ -91,6 +91,10 @@ export function SendSummary({ result, pairName, side, priceDecimals }: Props): J
         `${s.failed.length} Orders wurden nicht angelegt. Grund: ${s.failed[0].error}`,
         `${s.failed.length} orders were not placed. Reason: ${s.failed[0].error}`,
       )}</p>}
+      {result.tradeKeyForgotten && <p className="notice notice-info">{tr(
+        `Wie eingestellt hat die App den Handels-Schlüssel für ${ex} jetzt vergessen. Ansehen geht weiter, für die nächste Sendung fügst du ihn wieder ein.`,
+        `As set, the app has now forgotten the trading key for ${ex}. Viewing keeps working, for the next send you paste it again.`,
+      )}</p>}
     </div>
   )
 }

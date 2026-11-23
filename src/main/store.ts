@@ -5,7 +5,8 @@ import { app, safeStorage } from 'electron'
 import { copyFileSync, existsSync, readFileSync, renameSync, writeFileSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import type { ClosedOrder, Credentials } from './exchange'
-import { exchangeOf, isExchangeId, type ExchangeId } from '../shared/exchanges'
+import { EXCHANGE_IDS, exchangeOf, isExchangeId, type ExchangeId } from '../shared/exchanges'
+import { isTradeKeyMode, KEY_ROLES, type KeyRole, type TradeKeyMode } from '../shared/key-roles'
 import { DEFAULT_MIN_ORDER_EUR, MAX_MIN_ORDER_EUR, type LadderInput, type LadderLevel, type Side } from '../shared/ladder'
 import type { DraftDto, LogEntry } from '../shared/ipc'
 import { makeBackup, type BackupData } from '../shared/backup'
@@ -15,18 +16,37 @@ import { cleanCashPots, cleanTargets, type CashPot, type PortfolioTargets } from
 
 const file = (name: string) => join(app.getPath('userData'), name)
 
-/** Je Börse eine eigene verschlüsselte Datei. Kraken behält den alten Namen, damit vorhandene Schlüssel bleiben. */
-const keyFile = (ex: ExchangeId) => file(ex === 'kraken' ? 'kraken-key.bin' : `${ex}-key.bin`)
+/**
+ * Je Börse und Rolle eine eigene verschlüsselte Datei. Der Handels-Schlüssel behält den alten Namen
+ * (Kraken: kraken-key.bin), damit schon gespeicherte Schlüssel bleiben. Sie hatten immer Handelsrechte.
+ */
+const keyFile = (ex: ExchangeId, role: KeyRole = 'trade') =>
+  role === 'read' ? file(`${ex}-read-key.bin`) : file(ex === 'kraken' ? 'kraken-key.bin' : `${ex}-key.bin`)
 
-export function saveCredentials(c: Credentials, ex: ExchangeId = 'kraken'): void {
+/** Handels-Schlüssel, die nur im Arbeitsspeicher liegen (nie auf der Festplatte), je Börse */
+const memoryKeys = new Map<ExchangeId, Credentials>()
+
+/**
+ * Speichert einen Schlüssel. memoryOnly: nur im Arbeitsspeicher bis die App schließt (nur Handels-Schlüssel).
+ * Dabei wird ein älterer Handels-Schlüssel auf der Festplatte gelöscht, damit keiner zurückbleibt.
+ */
+export function saveCredentials(c: Credentials, ex: ExchangeId = 'kraken', role: KeyRole = 'trade', opts: { memoryOnly?: boolean } = {}): void {
+  if (role === 'trade' && opts.memoryOnly) {
+    memoryKeys.set(ex, { key: c.key, secret: c.secret })
+    const f = keyFile(ex, 'trade')
+    if (existsSync(f)) unlinkSync(f)
+    return
+  }
   if (!safeStorage.isEncryptionAvailable()) throw new Error(tr('Der Schlüsselbund ist nicht verfügbar. Der Schlüssel wird nicht unverschlüsselt gespeichert.', 'The macOS keychain is not available. The key is never stored unencrypted.'))
-  const f = keyFile(ex)
+  const f = keyFile(ex, role)
   writeFileSync(`${f}.tmp`, safeStorage.encryptString(JSON.stringify(c)), { mode: 0o600 })
   renameSync(`${f}.tmp`, f)
+  if (role === 'trade') memoryKeys.delete(ex)
 }
 
-export function loadCredentials(ex: ExchangeId = 'kraken'): Credentials | null {
-  const f = keyFile(ex)
+export function loadCredentials(ex: ExchangeId = 'kraken', role: KeyRole = 'trade'): Credentials | null {
+  if (role === 'trade' && memoryKeys.has(ex)) return memoryKeys.get(ex) ?? null
+  const f = keyFile(ex, role)
   if (!existsSync(f)) return null
   try {
     return JSON.parse(safeStorage.decryptString(readFileSync(f)))
@@ -35,9 +55,39 @@ export function loadCredentials(ex: ExchangeId = 'kraken'): Credentials | null {
   }
 }
 
-export function clearCredentials(ex: ExchangeId = 'kraken'): void {
-  const f = keyFile(ex)
-  if (existsSync(f)) unlinkSync(f)
+/** Liegt der Handels-Schlüssel nur im Arbeitsspeicher? */
+export const tradeKeyInMemory = (ex: ExchangeId): boolean => memoryKeys.has(ex)
+
+/** Handels-Schlüssel von der Festplatte in den Arbeitsspeicher holen und die Datei löschen (Modus ohne Festplatte) */
+export function moveTradeKeyToMemory(ex: ExchangeId): boolean {
+  if (memoryKeys.has(ex)) return false
+  const c = loadCredentials(ex, 'trade')
+  if (!c) return false
+  saveCredentials(c, ex, 'trade', { memoryOnly: true })
+  return true
+}
+
+/** Löscht einen Schlüssel (Datei und Arbeitsspeicher). Gibt zurück, ob einer da war. */
+export function clearCredentials(ex: ExchangeId = 'kraken', role: KeyRole = 'trade'): boolean {
+  let had = false
+  if (role === 'trade' && memoryKeys.delete(ex)) had = true
+  for (const f of [keyFile(ex, role), `${keyFile(ex, role)}.tmp`]) {
+    if (existsSync(f)) {
+      unlinkSync(f)
+      had = true
+    }
+  }
+  return had
+}
+
+/** Notfall-Knopf: alle Schlüssel aller Börsen löschen. Gibt zurück, welche da waren. */
+export function clearAllCredentials(): { exchange: ExchangeId; roles: KeyRole[] }[] {
+  const out: { exchange: ExchangeId; roles: KeyRole[] }[] = []
+  for (const ex of EXCHANGE_IDS) {
+    const roles = KEY_ROLES.filter((role) => clearCredentials(ex, role))
+    if (roles.length) out.push({ exchange: ex, roles })
+  }
+  return out
 }
 
 /** Eigene IP-Adressen (für die IP-Sperre der Schlüssel), verschlüsselt wie die Schlüssel. Kommen nicht in die Datensicherung. */
@@ -85,9 +135,11 @@ export interface Settings {
   portfolioDrafts: boolean
   /** Portfolio: Wunsch-Aufteilung in Prozent je Coin und 'cash' */
   portfolioTargets: PortfolioTargets
+  /** Wie lange der Handels-Schlüssel bleibt: dauerhaft, bis die App schließt, oder nur für eine Sendung */
+  tradeKeyMode: TradeKeyMode
 }
 
-export const DEFAULT_SETTINGS: Settings = { minOrderEur: DEFAULT_MIN_ORDER_EUR, maxPlanEur: 50, watchlist: ['BTC/EUR', 'ETH/EUR'], currency: 'EUR', numberFormat: 'de', exchange: 'kraken', cashPots: [], portfolioDrafts: true, portfolioTargets: {} }
+export const DEFAULT_SETTINGS: Settings = { tradeKeyMode: 'keep', minOrderEur: DEFAULT_MIN_ORDER_EUR, maxPlanEur: 50, watchlist: ['BTC/EUR', 'ETH/EUR'], currency: 'EUR', numberFormat: 'de', exchange: 'kraken', cashPots: [], portfolioDrafts: true, portfolioTargets: {} }
 
 export interface PlanRecord {
   /** Fehlt bei Plänen aus der Zeit, als es nur Kraken gab */
@@ -167,6 +219,7 @@ export function cleanSettings(raw: Record<string, unknown>): Settings {
   s.cashPots = cleanCashPots(raw.cashPots)
   s.portfolioTargets = cleanTargets(raw.portfolioTargets)
   if (typeof raw.portfolioDrafts === 'boolean') s.portfolioDrafts = raw.portfolioDrafts
+  if (isTradeKeyMode(raw.tradeKeyMode)) s.tradeKeyMode = raw.tradeKeyMode
   const min = Number(raw.minOrderEur)
   if (raw.minOrderEur !== undefined && raw.minOrderEur !== null && Number.isFinite(min) && min >= 1 && min <= MAX_MIN_ORDER_EUR) s.minOrderEur = min
   return s
