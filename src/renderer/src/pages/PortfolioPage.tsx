@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
 import { ChevronDown, ChevronRight, Eye, EyeOff, Plus, Target, Trash2 } from 'lucide-react'
-import { api } from '../api'
+import { api, isDemo } from '../api'
 import SectionCard from '../components/ui/SectionCard'
 import Segmented from '../components/ui/Segmented'
 import { tr } from '@shared/i18n'
 import { activeExchange, exchangeName } from '@shared/exchanges'
-import { buildPortfolio, cleanTargets, MAX_CASH_POTS, MAX_TARGETS, shares, TARGET_HINT_POINTS, targetGaps, targetSum, type CashPot, type CoinRow, type PortfolioSlice, type PortfolioSource, type PortfolioTargets, type TargetGap } from '@shared/portfolio'
+import { buildPortfolio, buildWhole, cleanManual, MAX_MANUAL, type ManualHolding, type WholePortfolio, type WholeSource, cleanTargets, MAX_CASH_POTS, MAX_TARGETS, shares, TARGET_HINT_POINTS, targetGaps, targetSum, type CashPot, type CoinRow, type PortfolioSlice, type PortfolioSource, type PortfolioTargets, type TargetGap } from '@shared/portfolio'
 import { parseNumber, toInputText } from '@shared/number-format'
 import { num, numberFormat, pct } from '../format'
 import { useMoney } from '../money'
@@ -15,6 +15,26 @@ import { Kpi } from './PlansPage'
 import type { Prefill } from './PlannerPage'
 
 const HIDE_KEY = 'fehu-orders-portfolio-hidden'
+const MODE_KEY = 'fehu-orders-portfolio-mode'
+/** Letzter vollständiger Stand je Börse, damit ohne Netz nicht alles leer ist (nur auf diesem Mac) */
+const lastKey = () => (isDemo() ? 'fehu-orders-portfolio-last-demo' : 'fehu-orders-portfolio-last')
+type Mode = 'plans' | 'whole'
+
+function readLast(): Record<string, WholeSource> {
+  try { return JSON.parse(localStorage.getItem(lastKey()) ?? '{}') ?? {} } catch { return {} }
+}
+/** Frische Bestände merken; fehlen sie (Fehler, kein Netz), den letzten Stand nehmen und als alt markieren */
+function withLast(src: PortfolioSource[]): PortfolioSource[] {
+  const last = readLast()
+  const next = { ...last }
+  const out = src.map((s) => {
+    if (s.whole?.holdings) { next[s.exchange] = s.whole; return s }
+    const old = last[s.exchange]
+    return old && s.hasKey ? { ...s, whole: { ...old, stale: true } } : s
+  })
+  try { localStorage.setItem(lastKey(), JSON.stringify(next)) } catch { /* egal */ }
+  return out
+}
 const MASK = '•••'
 
 interface Props {
@@ -37,13 +57,17 @@ export default function PortfolioPage({ reload, onOpenPlan, onNewPlan }: Props):
   const [view, setView] = useState<'ist' | 'after' | 'target'>('after')
   const [targets, setTargets] = useState<PortfolioTargets>({})
   const [open, setOpen] = useState<string | null>(null)
+  const [manual, setManual] = useState<ManualHolding[]>([])
+  const [mode, setModeState] = useState<Mode>(() => { try { return localStorage.getItem(MODE_KEY) === 'whole' ? 'whole' : 'plans' } catch { return 'plans' } })
+  const setMode = (m: Mode) => { setModeState(m); setOpen(null); try { localStorage.setItem(MODE_KEY, m) } catch { /* egal */ } }
   const [hidden, setHidden] = useState(() => { try { return localStorage.getItem(HIDE_KEY) === '1' } catch { return false } })
 
   async function load() {
     setError(null)
     try {
       const [src, s] = await Promise.all([api().portfolio(), api().settings()])
-      setSources(src)
+      setSources(withLast(src))
+      setManual(s.manualHoldings ?? [])
       setPots(s.cashPots ?? [])
       setIncludeDrafts(s.portfolioDrafts !== false)
       setTargets(s.portfolioTargets ?? {})
@@ -51,6 +75,9 @@ export default function PortfolioPage({ reload, onOpenPlan, onNewPlan }: Props):
       if (src.some((x) => [...x.plans, ...x.drafts].some((p) => /\/(USD|USDC|USDT)$/.test(p.pairName)))) api().usdRate().then(setUsdRate).catch(() => setUsdRate(null))
     } catch (e) {
       setError((e as Error).message)
+      // Ganz ohne Verbindung: letzten Stand der Bestände zeigen, damit die Seite nicht leer ist
+      const last = Object.values(readLast())
+      if (last.length) setSources((cur) => cur ?? last.map((w) => ({ exchange: w.exchange, hasKey: true, plans: [], drafts: [], status: [], openOrders: [], eurTotal: w.eurTotal, eurFree: null, prices: {}, whole: { ...w, stale: true } })))
     }
   }
   useEffect(() => {
@@ -59,6 +86,13 @@ export default function PortfolioPage({ reload, onOpenPlan, onNewPlan }: Props):
   }, [reload])
 
   const p = useMemo(() => (sources ? buildPortfolio(sources, pots, { includeDrafts, usdRate }) : null), [sources, pots, includeDrafts, usdRate])
+  const w = useMemo(() => (sources && p ? buildWhole(sources.flatMap((x) => (x.whole ? [x.whole] : [])), manual, p) : null), [sources, manual, p])
+  const whole = mode === 'whole' && w !== null
+  const saveManual = (next: ManualHolding[]) => {
+    const clean = cleanManual(next)
+    setManual(next)
+    api().saveSettings({ manualHoldings: clean }).catch((e) => setError((e as Error).message))
+  }
 
   const toggleHidden = () => {
     setHidden((h) => {
@@ -101,9 +135,11 @@ export default function PortfolioPage({ reload, onOpenPlan, onNewPlan }: Props):
 
   const errors = (sources ?? []).filter((s) => s.error)
   const colorOf = (key: string, i: number) => (key === 'cash' ? cssColor('chart-neutral') : key === 'reserve' ? cssColor('chart-grid-strong') : categoryColor(i))
-  const order = p ? p.rows.map((r) => r.coin) : []
+  const order = whole ? w.rows.map((r) => r.coin) : p ? p.rows.map((r) => r.coin) : []
   const color = (key: string) => colorOf(key, order.indexOf(key) >= 0 ? order.indexOf(key) : order.length + Object.keys(targets).indexOf(key))
-  const gaps = p ? targetGaps(p.after, targets) : []
+  const istSlices = whole ? w.ist : p?.ist ?? []
+  const afterSlices = whole ? w.after : p?.after ?? []
+  const gaps = p ? targetGaps(afterSlices, targets) : []
   // Hinweis zum Coin mit der größten Abweichung (Cash folgt daraus von selbst)
   const hint = gaps.find((g) => g.key !== 'cash' && Math.abs(g.points) >= TARGET_HINT_POINTS)
 
@@ -112,9 +148,13 @@ export default function PortfolioPage({ reload, onOpenPlan, onNewPlan }: Props):
       <header className="mb-5 page-header">
         <div className="min-w-0 flex-1 basis-64">
           <h1 className="page-title">Portfolio</h1>
-          <p className="page-subtitle">{tr('Was deine Pläne schon gekauft haben (Ist) und was sie noch kaufen sollen (Soll), je Coin zusammengefasst, über alle Börsen.', 'What your plans have already bought (actual) and what they are still meant to buy (planned), grouped by coin across all exchanges.')}</p>
+          <p className="page-subtitle">{mode === 'whole'
+            ? tr('Alles, was du besitzt: Bestände aller Börsen mit Schlüssel und deine eigenen Einträge, dazu Cash und was deine Pläne noch kaufen sollen.', 'Everything you own: holdings at all exchanges with a key and your own entries, plus cash and what your plans are still meant to buy.')
+            : tr('Was deine Pläne schon gekauft haben (Ist) und was sie noch kaufen sollen (Soll), je Coin zusammengefasst, über alle Börsen.', 'What your plans have already bought (actual) and what they are still meant to buy (planned), grouped by coin across all exchanges.')}</p>
         </div>
-        <button type="button" className="btn btn-secondary ml-auto" onClick={toggleHidden} aria-pressed={hidden}>
+        <Segmented<Mode> className="ml-auto" size="md" value={mode} onChange={setMode} aria-label={tr('Ansicht', 'View')}
+          options={[{ id: 'plans', label: tr('Nur App-Pläne', 'App plans only') }, { id: 'whole', label: tr('Gesamtes Portfolio', 'Whole portfolio') }]} />
+        <button type="button" className="btn btn-secondary" onClick={toggleHidden} aria-pressed={hidden}>
           {hidden ? <Eye size={16} /> : <EyeOff size={16} />} {hidden ? tr('Beträge zeigen', 'Show amounts') : tr('Beträge verbergen', 'Hide amounts')}
         </button>
       </header>
@@ -123,6 +163,15 @@ export default function PortfolioPage({ reload, onOpenPlan, onNewPlan }: Props):
 
       {!p ? <p className="text-sm text-ink-muted">{tr('Wird geladen …', 'Loading …')}</p> : (
         <div className="space-y-4">
+          {whole && <SourceChips sources={sources ?? []} manual={manual} />}
+          {whole ? (
+            <div className="grid grid-cols-2 gap-3 @lg:grid-cols-4">
+              <Kpi label={tr('Gesamtwert', 'Total value')} value={money(w.total)} sub={tr('Coins, Cash und Reserve', 'coins, cash and reserve')} />
+              <Kpi label={tr('Coins (Ist)', 'Coins (actual)')} value={money(w.coins)} sub={tr(`${w.rows.length} Coins zum heutigen Kurs`, `${w.rows.length} coins at today’s price`)} />
+              <Kpi label="Cash" value={money(w.cash + w.cashReserve)} sub={hidden ? undefined : tr(`davon Reserve ${eur(w.cashReserve)}`, `reserve ${eur(w.cashReserve)}`)} />
+              <Kpi label={tr('Noch geplant (Soll)', 'Still planned')} value={money(w.soll)} sub={tr('aus deinen Plänen', 'from your plans')} />
+            </div>
+          ) : (
           <div className="grid grid-cols-2 gap-3 @lg:grid-cols-4">
             <Kpi label={tr('Investiert (Ist)', 'Invested (actual)')} value={money(p.invested)}
               sub={p.invested > 0 ? (hidden ? tr('heute wert •••', 'worth ••• today') : tr(`heute wert ${eur(p.value)} (${pctSigned(p.pnl / p.invested)})`, `worth ${eur(p.value)} today (${pctSigned(p.pnl / p.invested)})`)) : tr('noch nichts ausgeführt', 'nothing filled yet')} />
@@ -132,6 +181,7 @@ export default function PortfolioPage({ reload, onOpenPlan, onNewPlan }: Props):
               sub={hidden ? undefined : tr(`${eur(p.cashExchange)} Börse, ${eur(p.cashPots + p.cashReserve)} Töpfe`, `${eur(p.cashExchange)} exchange, ${eur(p.cashPots + p.cashReserve)} pots`)} />
             <Coverage p={p} money={money} />
           </div>
+          )}
 
           {!hidden && p.unsentBuy > p.cashExchangeFree + 0.005 && p.cashUnknown.length === 0 && (
             <p className="notice notice-info">{tr(
@@ -156,13 +206,14 @@ export default function PortfolioPage({ reload, onOpenPlan, onNewPlan }: Props):
                 options={[{ id: 'ist', label: tr('Ist', 'Now'), title: tr('So ist es heute', 'As it is today') }, { id: 'after', label: tr('Soll', 'Planned'), title: tr('Nachdem alle Pläne gelaufen sind', 'After all plans have run') }, { id: 'target', label: tr('Ziel', 'Target'), title: tr('Deine Wunsch-Aufteilung', 'Your desired allocation') }]} />}>
               {view === 'target'
                 ? <TargetEditor gaps={gaps} targets={targets} coins={order} onChange={saveTargets} color={color} hidden={hidden} eur={eur} onPlan={planFor} />
-                : <Donut slices={view === 'ist' ? p.ist : p.after} color={color} hidden={hidden} center={view === 'ist' ? tr('heute', 'today') : tr('nach allen Plänen', 'after all plans')} money={money} targets={targets} />}
+                : <Donut slices={view === 'ist' ? istSlices : afterSlices} color={color} hidden={hidden} center={view === 'ist' ? tr('heute', 'today') : tr('nach allen Plänen', 'after all plans')} money={money} targets={targets} />}
               <p className="mt-3 text-xs text-ink-muted">{view === 'ist'
                 ? tr('Coins zum heutigen Kurs, Cash mit den Euro in offenen Kauforders.', 'Coins at today’s price, cash including euro in open buy orders.')
                 : view === 'after' ? tr('Als wären alle offenen und geplanten Orders ausgeführt: Euro wandern vom Cash zum Coin. Reserve bleibt unberührt.', 'As if all open and planned orders were filled: euro moves from cash to the coin. The reserve stays untouched.')
                 : tr('Verglichen wird mit der Aufteilung nach allen Plänen, ohne Reserve. Die Knöpfe öffnen den Planer mit einem Vorschlag, gesendet wird erst, wenn du es dort tust.', 'Compared with the allocation after all plans, without the reserve. The buttons open the planner with a suggestion, nothing is sent until you do it there.')}</p>
             </SectionCard>
 
+            {whole ? <WholeTable w={w} color={color} money={money} signed={signed} hidden={hidden} fmtPrice={(n, d) => `${fmtPrice(n, d)} ${sym}`} targets={targets} afterShares={shares(afterSlices.filter((x) => x.key !== 'reserve'))} /> : (
             <SectionCard title={tr('Je Coin', 'By coin')} action={
               <label className="flex items-center gap-2 text-xs text-ink-muted">
                 <input type="checkbox" className="checkbox" checked={includeDrafts} onChange={(e) => saveDrafts(e.target.checked)} />
@@ -190,8 +241,10 @@ export default function PortfolioPage({ reload, onOpenPlan, onNewPlan }: Props):
               )}
               <p className="mt-2 text-xs text-ink-muted">{tr('Ist zählt nur, was deine Pläne in dieser App gekauft haben, inklusive Gebühren. Verkaufspläne ziehen die verkaufte Menge ab. Klick auf eine Zeile zeigt die einzelnen Pläne.', 'Actual only counts what your plans in this app have bought, including fees. Sell plans subtract the sold amount. Click a row to see the single plans.')}</p>
             </SectionCard>
+            )}
           </div>
 
+          {whole && <ManualCard manual={manual} onChange={saveManual} />}
           <CashCard sources={sources ?? []} pots={pots} onChange={savePots} money={money} />
         </div>
       )}
@@ -495,5 +548,116 @@ function PercentField({ value, onChange, label }: { value: number; onChange: (n:
         onChange={(e) => setText(e.target.value)} onBlur={commit} onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }} />
       <span className="text-ink-muted">%</span>
     </span>
+  )
+}
+
+const timeText = (iso: string) => {
+  const d = new Date(iso)
+  const today = new Date().toDateString() === d.toDateString()
+  return d.toLocaleString(tr('de-DE', 'en-GB'), today ? { hour: '2-digit', minute: '2-digit' } : { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+}
+
+/** Woher die Zahlen kommen und wie frisch sie sind */
+function SourceChips({ sources, manual }: { sources: PortfolioSource[]; manual: ManualHolding[] }) {
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-xs">
+      {sources.map((s) => {
+        const wh = s.whole
+        const ok = !!wh?.holdings && !wh.stale
+        const text = !s.hasKey ? tr('ohne Schlüssel, Bestand unbekannt', 'no key, holdings unknown')
+          : wh?.holdings ? (wh.stale ? tr(`letzter Stand ${timeText(wh.at)}`, `last known ${timeText(wh.at)}`) : tr(`Stand ${timeText(wh.at)}`, `as of ${timeText(wh.at)}`))
+          : tr('nicht geladen', 'not loaded')
+        return (
+          <span key={s.exchange} className={`rounded-full border px-2.5 py-1 ${ok ? 'border-success-200 text-success-fg' : 'border-warning-200 text-warning-fg'}`}>
+            ● {exchangeName(s.exchange)} · {text}
+          </span>
+        )
+      })}
+      {manual.length > 0 && <span className="rounded-full border border-line px-2.5 py-1 text-ink-muted">● {tr(`${manual.length} eigene ${manual.length === 1 ? 'Eintrag' : 'Einträge'}`, `${manual.length} own ${manual.length === 1 ? 'entry' : 'entries'}`)}</span>}
+    </div>
+  )
+}
+
+function WholeTable({ w, color, money, signed, hidden, fmtPrice, targets, afterShares }: {
+  w: WholePortfolio; color: (k: string) => string; money: (n: number) => string; signed: (n: number) => string; hidden: boolean
+  fmtPrice: (n: number, d: number) => string; targets: PortfolioTargets; afterShares: Record<string, number>
+}) {
+  const placeName = (pl: string) => (['kraken', 'bitvavo', 'coinbase'].includes(pl) ? exchangeName(pl as 'kraken') : pl)
+  const amount = (n: number | undefined) => (n ? (hidden ? MASK : num(n, n >= 100 ? 2 : 8)) : '–')
+  return (
+    <SectionCard title={tr('Je Coin, alle Orte', 'By coin, all places')}>
+      {w.rows.length === 0 ? <p className="text-sm text-ink-muted">{tr('Noch keine Bestände. Lege bei einer Börse einen Schlüssel an oder trag unten einen eigenen Eintrag ein.', 'No holdings yet. Add a key for an exchange or enter your own entry below.')}</p> : (
+        <div className="overflow-x-auto">
+          <table className="data-table">
+            <thead><tr>
+              <th>Coin</th>
+              {w.places.map((pl) => <th key={pl} className="num">{placeName(pl)}</th>)}
+              <th className="num">{tr('Gesamt', 'Total')}</th>
+              <th className="num">{tr('Wert heute', 'Value today')}</th>
+              <th className="num">{tr('Soll', 'Planned')}</th>
+              <th className="num">{tr('Anteil / Ziel', 'Share / target')}</th>
+            </tr></thead>
+            <tbody>
+              {w.rows.map((r) => (
+                <tr key={r.coin} className="align-top">
+                  <td className="font-semibold"><span className="mr-2 inline-block h-2.5 w-2.5 rounded-full" style={{ background: color(r.coin) }} />{r.coin}
+                    {r.earn > 0 && <span className="block pl-[18px] text-xs font-normal text-ink-muted">{hidden ? tr('davon Earn', 'incl. Earn') : tr(`davon ${num(r.earn, 8)} in Earn`, `${num(r.earn, 8)} in Earn`)}</span>}
+                  </td>
+                  {w.places.map((pl) => <td key={pl} className="num">{amount(r.places[pl])}</td>)}
+                  <td className="num font-medium">{hidden ? MASK : num(r.amount, r.amount >= 100 ? 2 : 8)}</td>
+                  <td className="num">{r.value !== null ? money(r.value) : <span className="text-warning-fg" title={tr('Für diesen Coin kennt keine deiner Börsen einen Euro-Kurs.', 'None of your exchanges has a euro price for this coin.')}>{tr('kein Kurs', 'no price')}</span>}
+                    {r.price !== null && <span className="block text-xs text-ink-muted">{fmtPrice(r.price, r.price < 10 ? 4 : 2)}</span>}</td>
+                  <td className="num">{r.soll !== 0 ? signed(r.soll) : '–'}</td>
+                  <td className="num">{num(afterShares[r.coin] ?? 0, 1)} %{targets[r.coin] !== undefined && <span className="block text-xs text-ink-muted">{tr(`Ziel ${num(targets[r.coin], 1)} %`, `target ${num(targets[r.coin], 1)} %`)}</span>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="mt-2 text-xs text-ink-muted">
+        {tr('Anteil nach allen Plänen, ohne Reserve. ', 'Share after all plans, without the reserve. ')}
+        {w.dust > 0 && tr(`${w.dust} ${w.dust === 1 ? 'Kleinstbestand' : 'Kleinstbestände'} unter 1 € ausgeblendet. `, `${w.dust} tiny ${w.dust === 1 ? 'holding' : 'holdings'} under 1 € hidden. `)}
+        {w.unpriced.length > 0 && tr(`Ohne Euro-Kurs, nicht im Gesamtwert: ${w.unpriced.join(', ')}.`, `No euro price, not in the total: ${w.unpriced.join(', ')}.`)}
+      </p>
+    </SectionCard>
+  )
+}
+
+/** Eigene Einträge für Orte ohne Schnittstelle: Ort, Coin, Menge. Der Kurs kommt von der gewählten Börse. */
+function ManualCard({ manual, onChange }: { manual: ManualHolding[]; onChange: (m: ManualHolding[]) => void }) {
+  const add = () => onChange([...manual, { id: `m-${Date.now().toString(36)}`, place: tr('Wallet', 'Wallet'), coin: 'BTC', amount: 0, at: new Date().toISOString() }])
+  const update = (id: string, patch: Partial<ManualHolding>) => onChange(manual.map((m) => (m.id === id ? { ...m, ...patch, at: new Date().toISOString() } : m)))
+  return (
+    <SectionCard title={tr('Eigene Einträge', 'Own entries')} action={manual.length < MAX_MANUAL && <button type="button" className="btn btn-secondary btn-sm" onClick={add}><Plus size={14} /> {tr('Eintrag hinzufügen', 'Add entry')}</button>}>
+      <p className="mb-3 text-xs text-ink-muted">{tr('Für Coins an Orten ohne Schnittstelle, zum Beispiel eine Hardware-Wallet oder ein Broker. Du trägst die Menge ein, den Euro-Kurs holt die App von der oben gewählten Börse. Alles bleibt nur auf deinem Mac.', 'For coins in places without an interface, for example a hardware wallet or a broker. You enter the amount, the app takes the euro price from the exchange selected at the top. Everything stays on your Mac.')}</p>
+      {manual.length === 0 ? <p className="text-xs text-ink-muted">{tr('Noch kein eigener Eintrag.', 'No own entry yet.')}</p> : (
+        <ul className="divide-y divide-line text-sm">
+          {manual.map((m) => (
+            <li key={m.id} className="flex flex-wrap items-center gap-3 py-2">
+              <input className="input input-sm min-w-0 flex-1 basis-40" value={m.place} maxLength={40} aria-label={tr('Ort', 'Place')} placeholder={tr('Ort, z. B. Ledger', 'Place, e.g. Ledger')} onChange={(e) => update(m.id, { place: e.target.value })} />
+              <input className="input input-sm w-24 uppercase" value={m.coin} maxLength={12} aria-label="Coin" placeholder="BTC" onChange={(e) => update(m.id, { coin: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '') })} />
+              <QtyField value={m.amount} onChange={(amount) => update(m.id, { amount })} />
+              {m.at && <span className="text-xs text-ink-faint" title={tr('Zuletzt geändert', 'Last changed')}>{new Date(m.at).toLocaleDateString(tr('de-DE', 'en-GB'))}</span>}
+              <button type="button" className="btn-mini" aria-label={tr('Eintrag löschen', 'Delete entry')} title={tr('Löschen', 'Delete')} onClick={() => onChange(manual.filter((x) => x.id !== m.id))}><Trash2 size={14} /></button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </SectionCard>
+  )
+}
+
+/** Menge (Stück) im gewählten Zahlenformat, übernimmt beim Verlassen */
+function QtyField({ value, onChange }: { value: number; onChange: (n: number) => void }) {
+  const fmt = numberFormat()
+  const [text, setText] = useState(value ? toInputText(value, fmt) : '')
+  useEffect(() => setText(value ? toInputText(value, fmt) : ''), [value, fmt])
+  const parsed = parseNumber(text, fmt)
+  const invalid = text.trim() !== '' && (Number.isNaN(parsed) || parsed < 0)
+  return (
+    <input className={`input input-sm w-36 text-right tabular-nums ${invalid ? 'border-danger-500' : ''}`} inputMode="decimal" value={text} placeholder="0" aria-label={tr('Menge', 'Amount')} aria-invalid={invalid}
+      onChange={(e) => setText(e.target.value)} onBlur={() => { const n = text.trim() === '' ? 0 : parsed; if (!invalid && n !== value) onChange(n) }}
+      onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }} />
   )
 }

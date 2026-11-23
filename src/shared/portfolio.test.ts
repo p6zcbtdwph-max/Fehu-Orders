@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildPortfolio, cleanCashPots, cleanTargets, draftValue, shares, targetGaps, targetSum, toEur, type PortfolioSource } from './portfolio'
+import { buildPortfolio, buildWhole, cleanCashPots, cleanManual, cleanTargets, normalizeHoldings, draftValue, shares, targetGaps, targetSum, toEur, type PortfolioSource } from './portfolio'
 import type { DraftDto, PlanDto } from './ipc'
 
 const input = { side: 'buy' as const, priceStart: 60000, priceEnd: 50000, steps: 4, total: 400, spacing: 'linear' as const, curve: 'flat' as const, ratio: 1 }
@@ -154,5 +154,41 @@ describe('Zielaufteilung', () => {
     expect(cleanTargets({ btc: 40, cash: 30, 'x y': 5, ETH: 0, SOL: 120, ADA: '10' })).toEqual({ BTC: 40, cash: 30, ADA: 10 })
     expect(cleanTargets([1])).toEqual({})
     expect(targetSum({ BTC: 40, cash: 30 })).toBe(70)
+  })
+})
+
+describe('Gesamtes Portfolio', () => {
+  it('vereinheitlicht Kraken-Codes und Earn, Euro fällt heraus', () => {
+    const label = (c: string) => (c === 'XXBT' ? { name: 'BTC' } : c === 'SOL.S' ? { name: 'SOL', earn: 'Staking' } : { name: c.replace(/^Z/, '') })
+    const h = normalizeHoldings({ XXBT: 0.1, ZEUR: 500, SOL: 2, 'SOL.S': 3, DOT: 0 }, [{ name: 'BTC/EUR', base: 'XXBT' }, { name: 'SOL/EUR', base: 'SOL' }], label)
+    expect(h).toEqual([{ coin: 'BTC', amount: 0.1, earn: 0 }, { coin: 'SOL', amount: 5, earn: 3 }])
+  })
+
+  it('fasst Börsen und eigene Einträge zusammen, blendet Staub aus, nimmt das Soll aus den Plänen', () => {
+    const plan = buildPortfolio([source({
+      plans: [btcPlan()], prices: { XXBTZEUR: 50000 }, eurTotal: 1000,
+      status: [{ userref: 1, open: 1, filled: 1, partial: 0, canceled: 0, filledVolume: 0.002, filledCost: 100, fees: 0, averagePrice: 50000 }],
+      openOrders: [{ txid: 'a', pair: 'XBTEUR', side: 'buy', price: 50000, volume: 0.004, filled: 0, cost: 0, fee: 0, userref: 1 }],
+    })], [{ id: 'p', name: 'Tagesgeld', amount: 500 }], { includeDrafts: true, usdRate: null })
+    const w = buildWhole([
+      { exchange: 'kraken', holdings: [{ coin: 'BTC', amount: 0.01, earn: 0 }, { coin: 'DOGE', amount: 1, earn: 0 }], coinPrices: { BTC: 50000, DOGE: 0.1 }, eurTotal: 1000, at: '' },
+      { exchange: 'bitvavo', holdings: [{ coin: 'ETH', amount: 1, earn: 0 }], coinPrices: { ETH: 3000 }, eurTotal: 0, at: '' },
+    ], [{ id: 'm', place: 'Ledger', coin: 'BTC', amount: 0.02 }], plan)
+    expect(w.places).toEqual(['kraken', 'bitvavo', 'Ledger'])
+    const btc = w.rows.find((r) => r.coin === 'BTC')!
+    expect(btc.amount).toBeCloseTo(0.03)
+    expect(btc.places).toEqual({ kraken: 0.01, Ledger: 0.02 })
+    expect(btc.value).toBeCloseTo(1500)
+    expect(btc.soll).toBeCloseTo(200)
+    expect(w.dust).toBe(1)
+    expect(w.cash).toBe(1500)
+    expect(w.total).toBeCloseTo(1500 + 3000 + 1500)
+    const total = (xs: { value: number }[]) => xs.reduce((a, x) => a + x.value, 0)
+    expect(total(w.after)).toBeCloseTo(total(w.ist))
+  })
+
+  it('übernimmt nur gültige eigene Einträge', () => {
+    expect(cleanManual([{ id: 'a', place: ' Ledger ', coin: 'btc', amount: 0.5 }, { id: 'b', place: 'x', coin: 'B T C', amount: 1 }, { id: 'c', place: 'y', coin: 'ETH', amount: -1 }]))
+      .toEqual([{ id: 'a', place: 'Ledger', coin: 'BTC', amount: 0.5 }])
   })
 })
