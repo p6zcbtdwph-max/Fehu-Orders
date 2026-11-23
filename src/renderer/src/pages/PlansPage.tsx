@@ -16,7 +16,8 @@ import { SendSuccessModal } from '../components/SendSuccess'
 import { dateLocale, num, pct } from '../format'
 import { tr } from '@shared/i18n'
 import { useMoney } from '../money'
-import { exName, probeOk } from '@shared/exchanges'
+import { exchangeOf, exName, probeOk } from '@shared/exchanges'
+import TradeKeyGate, { canTest, useTradeKey } from '../components/TradeKeyGate'
 import type { PlanData } from '../plan-data'
 
 export type PlanFilter = 'all' | 'drafts' | 'running' | 'done' | 'orders'
@@ -273,6 +274,7 @@ function SentDetail({ p, st, data, onPlanSell, onCancelOrder }: {
   const dec = pair?.priceDecimals ?? 2
   const [arm, setArm] = useState<number | null>(null)
   const [rest, setRest] = useState(false)
+  const tk = useTradeKey(exchangeOf(p))
   const [cancel, setCancel] = useState(false)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
@@ -366,10 +368,11 @@ function SentDetail({ p, st, data, onPlanSell, onCancelOrder }: {
       {rest && left.length > 0 && (
         <Modal title={tr('Restliche Stufen senden?', 'Send the remaining levels?')} size="sm" onClose={() => !busy && setRest(false)}
           footer={<>
-            <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => sendRest(true)}>{tr('Testen', 'Test')}</button>
-            <button type="button" className="btn btn-primary" disabled={busy} onClick={() => sendRest(false)}>{busy ? tr('Sende …', 'Sending …') : tr(`${left.length} Orders senden`, `Send ${left.length} orders`)}</button>
+            <button type="button" className="btn btn-secondary" disabled={busy || !canTest(tk, exchangeOf(p))} onClick={() => sendRest(true)}>{tr('Testen', 'Test')}</button>
+            <button type="button" className="btn btn-primary" disabled={busy || tk.has === false} onClick={() => sendRest(false)}>{busy ? tr('Sende …', 'Sending …') : tr(`${left.length} Orders senden`, `Send ${left.length} orders`)}</button>
           </>}>
           <div className="space-y-2 text-sm">
+            <TradeKeyGate exchange={exchangeOf(p)} state={tk} />
             <p>{p.side === 'buy' ? tr('Kaufen', 'Buy') : tr('Verkaufen', 'Sell')} {p.pairName}: {left.length} {tr('Stufen von', 'levels from')} {fmtPrice(left[0].price, dec)} {tr('bis', 'to')} {fmtPrice(left[left.length - 1].price, dec)} {sym}.</p>
             <p>{tr('Gegenwert', 'Value')}: <strong>{eur(left.reduce((a, l) => a + l.cost, 0))}</strong></p>
             <p className="text-ink-muted">{tr('Die Stufen wurden beim Planen berechnet. Liegt der Kurs inzwischen woanders, prüfe sie vorher mit dem Test.', 'The levels were calculated when planning. If the price has moved since, check them first with a test run.')}</p>

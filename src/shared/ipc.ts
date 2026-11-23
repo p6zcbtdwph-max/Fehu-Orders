@@ -3,6 +3,7 @@ import type { OhlcRow } from './history'
 import type { ZoneProgress } from './plan-status'
 import type { LadderInput, LadderLevel, Side } from './ladder'
 import type { BackupSummary } from './backup'
+import type { LotEvent, ManualLot } from './holding-period'
 import type { KeyRole, KeyRoles, TradeKeyMode } from './key-roles'
 import type { ExchangeId } from './exchanges'
 import type { HomeIpView } from './ip'
@@ -56,6 +57,8 @@ export interface SettingsDto {
   portfolioTargets?: PortfolioTargets
   /** Wie lange der Handels-Schlüssel bleibt (Standard: dauerhaft) */
   tradeKeyMode?: TradeKeyMode
+  /** Haltefrist: selbst eingetragene ältere Käufe */
+  manualLots?: ManualLot[]
   /** Portfolio: eigene Einträge (Wallet, Broker) */
   manualHoldings?: ManualHolding[]
 }
@@ -227,6 +230,8 @@ export interface Api {
    * bis man sie dort widerruft. cancelOrders: vorher noch die Notbremse ziehen.
    */
   clearAllKeys(opts?: { cancelOrders?: boolean }): Promise<ClearAllResult>
+  /** Haltefrist: bekannte Käufe und Verkäufe der aktiven Börse (über die App ausgeführt und selbst eingetragen) */
+  lotEvents(): Promise<LotEvent[]>
   pairs(): Promise<PairDto[]>
   price(pairId: string): Promise<number>
   /** Letzte Kurse mehrerer Paare auf einmal */

@@ -13,6 +13,7 @@ const api: Api = {
   verifyKey: (exchange, role) => call('key:verify', exchange, role),
   clearKey: (exchange, role) => call('key:clear', exchange, role),
   clearAllKeys: (opts) => call('key:clearAll', opts),
+  lotEvents: () => call('tax:events'),
   pairs: () => call('pairs'),
   price: (pairId) => call('price', pairId),
   prices: (pairIds) => call('prices', pairIds),
