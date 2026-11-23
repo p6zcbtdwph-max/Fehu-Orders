@@ -28,7 +28,7 @@ const round = (v: number, d: number) => Math.round(v * 10 ** d) / 10 ** d
 
 export function createDemoApi(): Api {
   let homeIps: { ip: string; label?: string }[] = [{ ip: '203.0.113.42', label: tr('Zuhause', 'Home') }]
-  let settings: SettingsDto = { minOrderEur: 10, maxPlanEur: 5000, watchlist: ['BTC/EUR', 'ETH/EUR', 'SOL/EUR'], currency: 'EUR', numberFormat: 'de', exchange: 'kraken' }
+  let settings: SettingsDto = { minOrderEur: 10, maxPlanEur: 5000, watchlist: ['BTC/EUR', 'ETH/EUR', 'SOL/EUR'], currency: 'EUR', numberFormat: 'de', exchange: 'kraken', portfolioDrafts: true, cashPots: [{ id: 'demo-pot', name: tr('Tagesgeld', 'Savings account'), amount: 5000 }] }
   const balances: Record<string, number> = { ZEUR: 2500, XXBT: 0.02, XETH: 0.5, SOL: 4 }
   let templates: TemplateDto[] = [
     { id: 'demo-1', name: 'Dip-Kauf 10 Stufen', pairName: 'BTC/EUR', postOnly: true,
@@ -231,6 +231,14 @@ export function createDemoApi(): Api {
       }))
     },
     drafts: () => wait(drafts.map((d) => ({ ...d }))),
+    // Demo kennt nur Kraken: eine Börse mit allen Beispielplänen und -entwürfen
+    async portfolio() {
+      const [status, free] = await Promise.all([this.planStatus(), this.available()])
+      const open = drafts.filter((d) => d.status === 'draft')
+      const ids = [...new Set([...plans, ...open].map((x) => x.pairId))]
+      return wait([{ exchange: 'kraken' as const, hasKey: true, plans: plans.map((p) => ({ ...p, exchange: 'kraken' as const })), drafts: open.map((d) => ({ ...d })), status,
+        openOrders: orders.map((o) => ({ ...o })), eurTotal: balances.ZEUR, eurFree: free.ZEUR, prices: Object.fromEntries(ids.map((id) => [id, priceOf(id)])) }])
+    },
     async saveDraft(d) { drafts = drafts.some((x) => x.id === d.id) ? drafts.map((x) => (x.id === d.id ? d : x)) : [d, ...drafts] },
     async deleteDraft(id) { drafts = drafts.filter((d) => d.id !== id) },
     // Beispiel-Adressen aus dem Dokumentationsbereich (keine echten)

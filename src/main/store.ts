@@ -11,6 +11,7 @@ import type { DraftDto, LogEntry } from '../shared/ipc'
 import { makeBackup, type BackupData } from '../shared/backup'
 import { cleanIps, type HomeIp } from '../shared/ip'
 import { langFromLocale, tr, type Lang } from '../shared/i18n'
+import { cleanCashPots, type CashPot } from '../shared/portfolio'
 
 const file = (name: string) => join(app.getPath('userData'), name)
 
@@ -78,9 +79,13 @@ export interface Settings {
   exchange: ExchangeId
   /** Mindest-Orderwert in EUR: keine einzelne Order liegt darunter (zu kleine Stufen hebt der Planer an) */
   minOrderEur: number
+  /** Portfolio: eigene Cash-Töpfe (Tagesgeld, Girokonto …) */
+  cashPots: CashPot[]
+  /** Portfolio: offene Entwürfe im Soll mitzählen */
+  portfolioDrafts: boolean
 }
 
-export const DEFAULT_SETTINGS: Settings = { minOrderEur: DEFAULT_MIN_ORDER_EUR, maxPlanEur: 50, watchlist: ['BTC/EUR', 'ETH/EUR'], currency: 'EUR', numberFormat: 'de', exchange: 'kraken' }
+export const DEFAULT_SETTINGS: Settings = { minOrderEur: DEFAULT_MIN_ORDER_EUR, maxPlanEur: 50, watchlist: ['BTC/EUR', 'ETH/EUR'], currency: 'EUR', numberFormat: 'de', exchange: 'kraken', cashPots: [], portfolioDrafts: true }
 
 export interface PlanRecord {
   /** Fehlt bei Plänen aus der Zeit, als es nur Kraken gab */
@@ -157,6 +162,8 @@ export function cleanSettings(raw: Record<string, unknown>): Settings {
   if (raw.numberFormat === 'de' || raw.numberFormat === 'en') s.numberFormat = raw.numberFormat
   if (raw.language === 'de' || raw.language === 'en') s.language = raw.language
   if (isExchangeId(raw.exchange)) s.exchange = raw.exchange
+  s.cashPots = cleanCashPots(raw.cashPots)
+  if (typeof raw.portfolioDrafts === 'boolean') s.portfolioDrafts = raw.portfolioDrafts
   const min = Number(raw.minOrderEur)
   if (raw.minOrderEur !== undefined && raw.minOrderEur !== null && Number.isFinite(min) && min >= 1 && min <= MAX_MIN_ORDER_EUR) s.minOrderEur = min
   return s
