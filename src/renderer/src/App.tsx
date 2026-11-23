@@ -265,7 +265,7 @@ export default function App(): JSX.Element {
           onPlanSell={(p) => { setPrefill(p); setPage('planner') }} />}
         {page === 'portfolio' && <PortfolioPage reload={`${reload}|${demo}|${exchange}`} onOpenPlan={(id) => openPlans('all', id)} onNewPlan={(pf) => { setPrefill(pf); setPage('planner') }} />}
         {page === 'log' && <LogPage />}
-        {page === 'settings' && <SettingsPage section={section} onSection={setSection}
+        {page === 'settings' && <SettingsPage section={section} onSection={setSection} onKeysChanged={refreshKey}
           keys={<KeyPage active={exchange} keys={keys} onKeyChanged={refreshKey} onUse={switchExchange} />}
           display={<SectionCard title={tr('Anzeige', 'Display')}>
             <div className="space-y-4 text-sm">

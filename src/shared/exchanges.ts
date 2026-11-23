@@ -124,6 +124,33 @@ export function exchangeMeta(id: ExchangeId): ExchangeMeta {
   }
 }
 
+/**
+ * Häkchen für den Nur-Lese-Schlüssel: nur ansehen. Bei Kraken zusätzlich Stornieren,
+ * damit die Notbremse auch ohne Handels-Schlüssel funktioniert (Stornieren kostet nie Geld).
+ */
+export function readPermissionRows(id: ExchangeId): PermissionRow[] {
+  const never = tr('Niemals! Damit könnte man Geld von deinem Konto abheben.', 'Never! It would allow money to be withdrawn from your account.')
+  const noTrade = tr('Aus! Genau das macht ihn zum Nur-Lese-Schlüssel.', 'Off! That is exactly what makes it read-only.')
+  const notNeeded = tr('Nicht nötig', 'Not needed')
+  if (id === 'kraken') {
+    return [
+      { exchange: 'Query Funds', de: tr('Guthaben abfragen', 'Query funds'), on: true, why: tr('Guthaben und Portfolio anzeigen', 'Show balances and portfolio') },
+      { exchange: 'Query Open Orders & Trades', de: tr('Offene Orders abfragen', 'Query open orders'), on: true, why: tr('Offene Orders anzeigen', 'Show open orders') },
+      { exchange: 'Query Closed Orders & Trades', de: tr('Geschlossene Orders abfragen', 'Query closed orders'), on: true, why: tr('Ausführungen und Durchschnittspreis anzeigen', 'Show fills and average price') },
+      { exchange: 'Cancel & Close Orders', de: tr('Orders stornieren', 'Cancel orders'), on: true, why: tr('Empfohlen: Notbremse geht dann auch ohne Handels-Schlüssel. Stornieren kostet nie Geld.', 'Recommended: the emergency stop then works without the trading key. Cancelling never costs money.') },
+      { exchange: 'Create & Modify Orders', de: tr('Orders erstellen und ändern', 'Create and modify orders'), on: false, why: noTrade, danger: true },
+      { exchange: 'Withdraw Funds', de: tr('Geld abheben', 'Withdraw'), on: false, why: never, danger: true },
+      { exchange: tr('Alle übrigen (Deposit, Ledger, Export, WebSocket, Earn …)', 'All others (Deposit, Ledger, Export, WebSocket, Earn …)'), de: tr('alles andere', 'everything else'), on: false, why: notNeeded },
+    ]
+  }
+  const m = exchangeMeta(id)
+  return [
+    { exchange: 'View', de: tr('Ansehen (Guthaben und Orders)', 'View (balances and orders)'), on: true, why: tr('Guthaben, Portfolio, offene Orders und Ausführungen anzeigen', 'Show balances, portfolio, open orders and fills') },
+    { exchange: 'Trade', de: tr('Handeln (Orders anlegen und stornieren)', 'Trade (place and cancel orders)'), on: false, why: noTrade, danger: true },
+    { exchange: m.withdrawLabel, de: id === 'coinbase' ? tr('Überweisen (Ein- und Auszahlungen)', 'Transfer (deposits and withdrawals)') : tr('Auszahlen', 'Withdraw'), on: false, why: never, danger: true },
+  ]
+}
+
 export const exchangeName = (id: ExchangeId | undefined): string => exchangeMeta(id ?? 'kraken').name
 
 /** Pläne und Entwürfe ohne Börse stammen aus der Zeit, als es nur Kraken gab */

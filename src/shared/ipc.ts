@@ -3,6 +3,7 @@ import type { OhlcRow } from './history'
 import type { ZoneProgress } from './plan-status'
 import type { LadderInput, LadderLevel, Side } from './ladder'
 import type { BackupSummary } from './backup'
+import type { KeyRole, KeyRoles, TradeKeyMode } from './key-roles'
 import type { ExchangeId } from './exchanges'
 import type { HomeIpView } from './ip'
 import type { CashPot, ManualHolding, PortfolioSource, PortfolioTargets } from './portfolio'
@@ -53,6 +54,8 @@ export interface SettingsDto {
   portfolioDrafts?: boolean
   /** Portfolio: Wunsch-Aufteilung in Prozent je Coin und 'cash' */
   portfolioTargets?: PortfolioTargets
+  /** Wie lange der Handels-Schlüssel bleibt (Standard: dauerhaft) */
+  tradeKeyMode?: TradeKeyMode
   /** Portfolio: eigene Einträge (Wallet, Broker) */
   manualHoldings?: ManualHolding[]
 }
@@ -66,6 +69,8 @@ export interface SendResult {
    * Fehlt, wenn die Abfrage nicht klappte (dann bleibt nur die Antwort der Börse beim Anlegen).
    */
   check?: { found: number; placed: number }
+  /** Einstellung „Nur für eine Sendung“: Die App hat den Handels-Schlüssel nach dem Senden vergessen */
+  tradeKeyForgotten?: boolean
 }
 
 export interface OpenOrderDto {
@@ -115,6 +120,24 @@ export interface KeyCheck {
   required: boolean
   ok: boolean
   detail?: string
+}
+
+export interface KeyStatusDto {
+  hasKey: boolean
+  encryption: boolean
+  touchId: boolean
+  exchange: ExchangeId
+  keys: Record<ExchangeId, boolean>
+  roles: Record<ExchangeId, KeyRoles>
+  tradeKeyMode: TradeKeyMode
+}
+
+export interface ClearAllResult {
+  /** Welche Schlüssel gelöscht wurden */
+  deleted: { exchange: ExchangeId; roles: KeyRole[] }[]
+  /** Notbremse vorher: Anzahl stornierter Orders, oder Fehlermeldung */
+  cancelled?: number
+  cancelError?: string
 }
 
 export interface SaveKeyResult {
@@ -191,13 +214,19 @@ export interface PlanStatusDto {
 export interface Api {
   /** touchId: Mac kann Touch ID abfragen, dann ist es vor jedem echten Senden Pflicht */
   /** hasKey gilt für die aktive Börse, keys zeigt alle Börsen */
-  keyStatus(): Promise<{ hasKey: boolean; encryption: boolean; touchId: boolean; exchange: ExchangeId; keys: Record<ExchangeId, boolean> }>
+  /** keys: Börse hat irgendeinen Schlüssel. roles: welcher genau (Nur-Lese, Handel). */
+  keyStatus(): Promise<KeyStatusDto>
   /** Für die aktive Börse. noWithdrawConfirmed: Nutzer bestätigt, dass Auszahlungen aus sind (Bitvavo) */
-  /** exchange: für welche Börse (Standard: die aktive) */
-  saveKey(key: string, secret: string, opts?: { noWithdrawConfirmed?: boolean; exchange?: ExchangeId }): Promise<SaveKeyResult>
+  /** exchange: für welche Börse (Standard: die aktive). role: Nur-Lese- oder Handels-Schlüssel (Standard: Handel) */
+  saveKey(key: string, secret: string, opts?: { noWithdrawConfirmed?: boolean; exchange?: ExchangeId; role?: KeyRole }): Promise<SaveKeyResult>
   /** Rechte des gespeicherten Schlüssels erneut prüfen */
-  verifyKey(exchange?: ExchangeId): Promise<KeyCheck[]>
-  clearKey(exchange?: ExchangeId): Promise<void>
+  verifyKey(exchange?: ExchangeId, role?: KeyRole): Promise<KeyCheck[]>
+  clearKey(exchange?: ExchangeId, role?: KeyRole): Promise<void>
+  /**
+   * Notfall-Knopf: alle Schlüssel aller Börsen sofort aus der App löschen. Bei den Börsen bleiben sie gültig,
+   * bis man sie dort widerruft. cancelOrders: vorher noch die Notbremse ziehen.
+   */
+  clearAllKeys(opts?: { cancelOrders?: boolean }): Promise<ClearAllResult>
   pairs(): Promise<PairDto[]>
   price(pairId: string): Promise<number>
   /** Letzte Kurse mehrerer Paare auf einmal */

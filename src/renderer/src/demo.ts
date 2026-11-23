@@ -4,6 +4,8 @@ import type { OhlcRow } from '@shared/history'
 import { heldZones, isHeld } from '@shared/ladder'
 import { tr } from '@shared/i18n'
 import { ipKind, ipProblem, maskIp } from '@shared/ip'
+import { EXCHANGE_IDS, exchangeName, type ExchangeId } from '@shared/exchanges'
+import { KEY_ROLES, needTradeKeyText, readChecks, type KeyRoles } from '@shared/key-roles'
 import { normalizeHoldings } from '@shared/portfolio'
 import { assetLabel } from '@shared/safety'
 import type { Api, DraftDto, KeyCheck, LogEntry, OpenOrderDto, PairDto, PlanDto, PlanStatusDto, SendResult, SettingsDto, TemplateDto } from '@shared/ipc'
@@ -51,6 +53,12 @@ export function createDemoApi(): Api {
       pairId: 'SOLEUR', pairName: 'SOL/EUR', side: 'sell', postOnly: true, priceAtSave: 150, status: 'draft',
       input: { side: 'sell', priceStart: 180, priceEnd: 260, steps: 5, total: 3, spacing: 'linear', curve: 'flat', ratio: 1 } },
   ]
+  // Beispiel: Kraken mit beiden Schlüsseln, Bitvavo nur Handel (wie vor der Trennung), Coinbase nur zum Ansehen
+  const demoRoles: Record<ExchangeId, KeyRoles> = {
+    kraken: { read: true, trade: true, tradeTemporary: false },
+    bitvavo: { read: false, trade: true, tradeTemporary: false },
+    coinbase: { read: true, trade: false, tradeTemporary: false },
+  }
   const demoChecks = (): KeyCheck[] => [
     { id: 'funds', label: tr('Guthaben abfragen', 'Query funds'), exchangeLabel: 'Query Funds', required: true, ok: true },
     { id: 'open', label: tr('Offene Orders abfragen', 'Query open orders'), exchangeLabel: 'Query Open Orders & Trades', required: true, ok: true },
@@ -113,16 +121,27 @@ export function createDemoApi(): Api {
   const wait = <T,>(v: T, ms = 150) => new Promise<T>((r) => setTimeout(() => r(v), ms))
 
   return {
-    keyStatus: () => wait({ hasKey: true, encryption: true, touchId: true, exchange: settings.exchange, keys: { kraken: true, bitvavo: true, coinbase: true } }, 0),
+    keyStatus: () => {
+      const keys = Object.fromEntries(EXCHANGE_IDS.map((id) => [id, demoRoles[id].read || demoRoles[id].trade])) as Record<ExchangeId, boolean>
+      return wait({ hasKey: keys[settings.exchange], encryption: true, touchId: true, exchange: settings.exchange, keys, roles: structuredClone(demoRoles), tradeKeyMode: settings.tradeKeyMode ?? 'keep' }, 0)
+    },
     saveKey: async () => { throw new Error(tr('Im Demo-Modus brauchst du keinen Schlüssel. Beende zuerst die Demo.', 'You need no key in demo mode. End the demo first.')) },
-    verifyKey: () => wait(demoChecks().map((c) => ({ ...c })), 600),
-    clearKey: async () => {},
+    verifyKey: (ex, role) => wait(role === 'read' ? readChecks(demoChecks(), ex ?? 'kraken').map((c) => (c.id === 'no-trade' ? { ...c, ok: true, detail: undefined } : c)) : demoChecks().map((c) => ({ ...c })), 600),
+    clearKey: async (ex, role) => { demoRoles[ex ?? settings.exchange][role ?? 'trade'] = false },
+    clearAllKeys: async (opts) => {
+      const deleted = EXCHANGE_IDS.map((exchange) => ({ exchange, roles: KEY_ROLES.filter((r) => demoRoles[exchange][r]) })).filter((d) => d.roles.length)
+      const cancelled = opts?.cancelOrders ? orders.splice(0).length : undefined
+      for (const id of EXCHANGE_IDS) demoRoles[id] = { read: false, trade: false, tradeTemporary: false }
+      return wait({ deleted, ...(cancelled !== undefined ? { cancelled } : {}) }, 500)
+    },
     pairs: () => wait(MARKET.map((m) => m.pair)),
     price: (pairId) => wait(round(priceOf(pairId) * (1 + (Math.random() - 0.5) * 0.004), pairOf(pairId)?.priceDecimals ?? 2)),
     prices: (ids) => wait(Object.fromEntries(ids.map((id) => [id, priceOf(id)]))),
     balances: () => wait({ ...balances }),
     openOrders: () => wait(orders.map((o) => ({ ...o }))),
     async send(req) {
+      // Wie in der echten App: echtes Senden nur mit Handels-Schlüssel
+      if (!req.validate && !demoRoles[settings.exchange].trade) throw new Error(needTradeKeyText(exchangeName(settings.exchange)))
       const held = heldZones(req.input ?? {})
       const valid = req.levels.filter((l) => !l.problem && !isHeld(l, held))
       if (!valid.length) throw new Error(tr('Alle Zonen sind pausiert. Aktiviere mindestens eine Zone, sonst wird nichts gesendet.', 'All zones are disarmed. Arm at least one zone, otherwise nothing is sent.'))

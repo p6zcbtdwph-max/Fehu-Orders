@@ -10,8 +10,9 @@ async function call(channel: string, ...args: unknown[]): Promise<any> {
 const api: Api = {
   keyStatus: () => call('key:status'),
   saveKey: (key, secret, opts) => call('key:save', key, secret, opts),
-  verifyKey: (exchange) => call('key:verify', exchange),
-  clearKey: (exchange) => call('key:clear', exchange),
+  verifyKey: (exchange, role) => call('key:verify', exchange, role),
+  clearKey: (exchange, role) => call('key:clear', exchange, role),
+  clearAllKeys: (opts) => call('key:clearAll', opts),
   pairs: () => call('pairs'),
   price: (pairId) => call('price', pairId),
   prices: (pairIds) => call('prices', pairIds),

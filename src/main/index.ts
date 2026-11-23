@@ -8,11 +8,12 @@ import { Kraken } from './kraken'
 import { Bitvavo } from './bitvavo'
 import { Coinbase } from './coinbase'
 import type { ClosedOrder, Credentials, Exchange, PairInfo } from './exchange'
-import { EXCHANGE_IDS, exchangeName, exchangeOf, isExchangeId, sendLimit, type ExchangeId } from '../shared/exchanges'
+import { EXCHANGE_IDS, exchangeMeta, exchangeName, exchangeOf, isExchangeId, sendLimit, type ExchangeId } from '../shared/exchanges'
 import {
-  addLog, addPlan, loadHomeIps, saveHomeIps, systemLocale, clearCredentials, exportAll, importAll, getLog, markAlarmFired, deleteDraft, deleteTemplate, getDrafts, getFillBook, saveFillBook, markDraftReleased, saveDraft, getNotified, getPlans, getSettings, getTemplates, hasRealPlan, loadCredentials, newUserref, saveCredentials, saveSettings, saveTemplate, setNotified, updatePlan, type PlanRecord, type Settings,
+  addLog, addPlan, clearAllCredentials, moveTradeKeyToMemory, tradeKeyInMemory, loadHomeIps, saveHomeIps, systemLocale, clearCredentials, exportAll, importAll, getLog, markAlarmFired, deleteDraft, deleteTemplate, getDrafts, getFillBook, saveFillBook, markDraftReleased, saveDraft, getNotified, getPlans, getSettings, getTemplates, hasRealPlan, loadCredentials, newUserref, saveCredentials, saveSettings, saveTemplate, setNotified, updatePlan, type PlanRecord, type Settings,
 } from './store'
-import type { DraftDto, LogEntry, PlanStatusDto, SaveKeyResult, SendRequest, SendResult, TemplateDto } from '../shared/ipc'
+import type { ClearAllResult, DraftDto, KeyStatusDto, LogEntry, PlanStatusDto, SaveKeyResult, SendRequest, SendResult, TemplateDto } from '../shared/ipc'
+import { checksPass, isKeyRole, isTradeKeyMode, needTradeKeyText, readChecks, roleName, type KeyRole } from '../shared/key-roles'
 import { alarmHit, assetLabel, checkKeyFormat, normalizeCoinbase, priceGuard } from '../shared/safety'
 import { planStatus, zoneProgress, type OrderSnapshot } from '../shared/plan-status'
 import { hasZones, heldZones, isHeld, MAX_MIN_ORDER_EUR, MAX_STEPS, prepareForSend, type LadderLevel, type Side } from '../shared/ladder'
@@ -39,13 +40,37 @@ const activeEx = (): ExchangeId => getSettings().exchange
 /** Zahlen in Meldungen im gewählten Zahlenformat, wie in der Oberfläche */
 const numberFormat = (): NumberFormat => getSettings().numberFormat ?? (getSettings().language === 'en' ? 'en' : 'de')
 const money = (n: number): string => moneyText(n, numberFormat())
-// Je Börse eine gemeinsame Verbindung, damit alle privaten Anfragen nacheinander laufen
-// (Kraken lehnt Zeitstempel ab, die nicht in steigender Reihenfolge ankommen)
-const clients = new Map<ExchangeId, Exchange>()
-const clientFor = (ex: ExchangeId): Exchange => {
-  let c = clients.get(ex)
-  if (!c) clients.set(ex, (c = createExchange(ex, loadCredentials(ex))))
+// Je Börse und Schlüssel eine gemeinsame Verbindung, damit alle privaten Anfragen nacheinander laufen
+// (Kraken lehnt Zeitstempel ab, die nicht in steigender Reihenfolge ankommen). Zwei verschiedene Schlüssel
+// haben bei der Börse getrennte Zähler, deshalb dürfen Lese- und Handels-Verbindung nebeneinander laufen.
+const clients = new Map<string, Exchange>()
+const connection = (ex: ExchangeId, role: KeyRole): Exchange => {
+  const id = `${ex}:${role}`
+  let c = clients.get(id)
+  if (!c) clients.set(id, (c = createExchange(ex, loadCredentials(ex, role))))
   return c
+}
+const hasRole = (ex: ExchangeId, role: KeyRole): boolean => loadCredentials(ex, role) !== null
+/**
+ * Verbindung zum Lesen (Guthaben, Orders, Ausführungen, Kurse): mit dem Nur-Lese-Schlüssel, wenn einer da ist,
+ * sonst mit dem Handels-Schlüssel. Ohne Schlüssel gehen nur öffentliche Abfragen.
+ */
+const clientFor = (ex: ExchangeId): Exchange => connection(ex, hasRole(ex, 'read') ? 'read' : 'trade')
+/** Verbindung zum Orders-Anlegen. Nur mit Handels-Schlüssel, sonst wird nichts gesendet. */
+const traderFor = (ex: ExchangeId): Exchange => {
+  if (!hasRole(ex, 'trade')) throw new Error(needTradeKeyText(exchangeName(ex)))
+  return connection(ex, 'trade')
+}
+/**
+ * Verbindung zum Stornieren: Handels-Schlüssel, wenn da. Sonst der Nur-Lese-Schlüssel, der bei Kraken
+ * das Recht „Cancel & Close Orders“ haben darf (Stornieren kostet nie Geld).
+ */
+const cancellerFor = (ex: ExchangeId): Exchange => (hasRole(ex, 'trade') ? connection(ex, 'trade') : clientFor(ex))
+/** Hinweis, wenn Stornieren ohne Handels-Schlüssel scheitert */
+const cancelHint = (ex: ExchangeId, e: unknown): Error => {
+  const msg = (e as Error)?.message ?? String(e)
+  if (hasRole(ex, 'trade')) return e instanceof Error ? e : new Error(msg)
+  return new Error(`${msg} ${tr(`Für ${exchangeName(ex)} ist nur ein Nur-Lese-Schlüssel da. Füge den Handels-Schlüssel ein oder storniere direkt auf der Webseite von ${exchangeName(ex)}.`, `Only a read-only key is saved for ${exchangeName(ex)}. Paste the trading key or cancel directly on the ${exchangeName(ex)} website.`)}`)
 }
 const client = () => clientFor(activeEx())
 /** Für den Dollar-Kurs, ohne Schlüssel */
@@ -74,7 +99,8 @@ const SEND_RULES_MAX_AGE_MS = 10 * 60_000
  * (könnte ein anderes Konto sein). Die schon bekannten Ausführungen im Buch bleiben, sie gehören zu deinen Plänen.
  */
 const resetClient = (ex: ExchangeId) => {
-  clients.delete(ex)
+  clients.delete(`${ex}:read`)
+  clients.delete(`${ex}:trade`)
   closedCaches.delete(ex)
   statusCache.delete(ex)
   const book = getFillBook(ex)
@@ -140,38 +166,77 @@ function handle(channel: string, fn: (...args: any[]) => any): void {
   })
 }
 
-/** Börsen, für die ein Schlüssel hinterlegt ist */
-const connected = (): ExchangeId[] => EXCHANGE_IDS.filter((ex) => loadCredentials(ex) !== null)
+/** Börsen, für die irgendein Schlüssel hinterlegt ist (Nur-Lese oder Handel) */
+const connected = (): ExchangeId[] => EXCHANGE_IDS.filter((ex) => hasRole(ex, 'read') || hasRole(ex, 'trade'))
 
-handle('key:status', () => {
+handle('key:status', (): KeyStatusDto => {
   const ex = activeEx()
-  const keys = Object.fromEntries(EXCHANGE_IDS.map((id) => [id, loadCredentials(id) !== null])) as Record<ExchangeId, boolean>
-  return { hasKey: keys[ex], encryption: safeStorage.isEncryptionAvailable(), touchId: touchIdAvailable(), exchange: ex, keys }
+  const roles = Object.fromEntries(EXCHANGE_IDS.map((id) => [id, { read: hasRole(id, 'read'), trade: hasRole(id, 'trade'), tradeTemporary: tradeKeyInMemory(id) }])) as KeyStatusDto['roles']
+  const keys = Object.fromEntries(EXCHANGE_IDS.map((id) => [id, roles[id].read || roles[id].trade])) as Record<ExchangeId, boolean>
+  return { hasKey: keys[ex], encryption: safeStorage.isEncryptionAvailable(), touchId: touchIdAvailable(), exchange: ex, keys, roles, tradeKeyMode: getSettings().tradeKeyMode }
 })
 /** Der Schlüssel-Reiter verwaltet Schlüssel jeder Börse, auch wenn gerade eine andere benutzt wird */
 const keyEx = (ex: unknown): ExchangeId => (isExchangeId(ex) ? ex : activeEx())
-handle('key:save', async (key: string, secret: string, opts?: { noWithdrawConfirmed?: boolean; exchange?: ExchangeId }): Promise<SaveKeyResult> => {
+/** Ältere Aufrufe ohne Rolle meinen den Handels-Schlüssel (so war es vor der Trennung) */
+const keyRole = (role: unknown): KeyRole => (isKeyRole(role) ? role : 'trade')
+handle('key:save', async (key: string, secret: string, opts?: { noWithdrawConfirmed?: boolean; exchange?: ExchangeId; role?: KeyRole }): Promise<SaveKeyResult> => {
   const ex = keyEx(opts?.exchange)
+  const role = keyRole(opts?.role)
   const creds = ex === 'coinbase' ? normalizeCoinbase(String(key), String(secret)) : { key: String(key).trim(), secret: String(secret).trim() }
   const format = checkKeyFormat(creds.key, creds.secret, ex)
   if (format.length) throw new Error(format.join(' '))
-  // erst alle Rechte prüfen, dann speichern. Ein Schlüssel mit Auszahlungsrecht wird nicht gespeichert.
-  const checks = await createExchange(ex, creds).checkPermissions({ noWithdrawConfirmed: opts?.noWithdrawConfirmed === true })
-  const saved = checks.every((c) => c.ok)
+  const other = loadCredentials(ex, role === 'read' ? 'trade' : 'read')
+  if (other && other.key === creds.key) throw new Error(role === 'read'
+    ? tr('Das ist derselbe Schlüssel wie dein Handels-Schlüssel. Lege bei der Börse einen zweiten Schlüssel nur zum Ansehen an.', 'This is the same key as your trading key. Create a second, view-only key at the exchange.')
+    : tr('Das ist derselbe Schlüssel wie dein Nur-Lese-Schlüssel. Für den Handels-Schlüssel brauchst du einen eigenen Schlüssel mit Handelsrecht.', 'This is the same key as your read-only key. The trading key needs its own key with trading permission.'))
+  // erst alle Rechte prüfen, dann speichern. Ein Schlüssel mit Auszahlungsrecht wird nie gespeichert,
+  // ein Nur-Lese-Schlüssel mit Handelsrecht auch nicht.
+  const raw = await createExchange(ex, creds).checkPermissions({ noWithdrawConfirmed: opts?.noWithdrawConfirmed === true })
+  const checks = role === 'read' ? readChecks(raw, ex) : raw
+  const saved = checksPass(checks)
+  const temporary = role === 'trade' && getSettings().tradeKeyMode !== 'keep'
   if (saved) {
-    saveCredentials(creds, ex)
+    saveCredentials(creds, ex, role, { memoryOnly: temporary })
     resetClient(ex)
   }
-  addLog({ action: 'key-save', success: saved, message: `${exchangeName(ex)}: ${saved ? tr('Schlüssel gespeichert', 'Key saved') : `${tr('Nicht gespeichert', 'Not saved')}: ${checks.filter((c) => !c.ok).map((c) => c.label).join(', ')}`}` })
+  const what = `${exchangeName(ex)}, ${roleName(role)}`
+  addLog({ action: 'key-save', success: saved, message: `${what}: ${saved ? (temporary ? tr('nur im Arbeitsspeicher abgelegt', 'kept in memory only') : tr('Schlüssel gespeichert', 'Key saved')) : `${tr('Nicht gespeichert', 'Not saved')}: ${checks.filter((c) => !c.ok && c.required).map((c) => c.label).join(', ')}`}` })
   return { saved, checks }
 })
 // Ein gespeicherter Schlüssel wurde beim Speichern schon ohne Auszahlungsrecht bestätigt
-handle('key:verify', (ex?: ExchangeId) => clientFor(keyEx(ex)).checkPermissions({ noWithdrawConfirmed: true }))
-handle('key:clear', (exArg?: ExchangeId) => {
+handle('key:verify', async (exArg?: ExchangeId, roleArg?: KeyRole) => {
   const ex = keyEx(exArg)
-  clearCredentials(ex)
+  const role = keyRole(roleArg)
+  if (!hasRole(ex, role)) throw new Error(tr(`Für ${exchangeName(ex)} ist kein ${roleName(role)} da.`, `There is no ${roleName(role)} for ${exchangeName(ex)}.`))
+  const raw = await connection(ex, role).checkPermissions({ noWithdrawConfirmed: true })
+  return role === 'read' ? readChecks(raw, ex) : raw
+})
+handle('key:clear', (exArg?: ExchangeId, roleArg?: KeyRole) => {
+  const ex = keyEx(exArg)
+  const role = keyRole(roleArg)
+  clearCredentials(ex, role)
   resetClient(ex)
-  addLog({ action: 'key-clear', success: true, message: `${exchangeName(ex)}: ${tr('Schlüssel gelöscht', 'Key deleted')}` })
+  addLog({ action: 'key-clear', success: true, message: `${exchangeName(ex)}, ${roleName(role)}: ${tr('Schlüssel gelöscht', 'Key deleted')}` })
+})
+/**
+ * Notfall-Knopf: alle Schlüssel aller Börsen sofort aus der App löschen (Dateien und Arbeitsspeicher).
+ * Bei den Börsen selbst bleiben sie gültig, bis man sie dort widerruft. Das sagt die Oberfläche deutlich.
+ * Mit cancelOrders wird vorher die Notbremse gezogen, solange die Schlüssel noch da sind.
+ */
+handle('key:clearAll', async (opts?: { cancelOrders?: boolean }): Promise<ClearAllResult> => {
+  const out: ClearAllResult = { deleted: [] }
+  if (opts?.cancelOrders === true && connected().length) {
+    try {
+      out.cancelled = await emergencyStop()
+    } catch (e) {
+      out.cancelError = (e as Error).message
+    }
+  }
+  out.deleted = clearAllCredentials()
+  for (const ex of EXCHANGE_IDS) resetClient(ex)
+  const list = out.deleted.map((d) => `${exchangeName(d.exchange)} (${d.roles.map(roleName).join(', ')})`).join('; ')
+  addLog({ action: 'key-clear-all', success: true, message: out.deleted.length ? tr(`Notfall: alle Schlüssel aus der App gelöscht: ${list}`, `Emergency: all keys deleted from the app: ${list}`) : tr('Notfall: Es waren keine Schlüssel gespeichert.', 'Emergency: no keys were saved.') })
+  return out
 })
 // Eigene IP-Adressen für die IP-Sperre. Das Fenster bekommt sie nur verdeckt, den Klartext erst auf Klick.
 const ipViews = (): HomeIpView[] => loadHomeIps().map((x) => ({ masked: maskIp(x.ip), label: x.label, kind: ipKind(x.ip) ?? 'IPv4' }))
@@ -225,6 +290,7 @@ handle('settings:save', (s: Partial<Settings>) => {
   if (s.numberFormat === 'de' || s.numberFormat === 'en') patch.numberFormat = s.numberFormat
   if (s.language === 'de' || s.language === 'en') patch.language = s.language
   if (isExchangeId(s.exchange)) patch.exchange = s.exchange
+  if (isTradeKeyMode(s.tradeKeyMode)) patch.tradeKeyMode = s.tradeKeyMode
   if (s.cashPots !== undefined) patch.cashPots = cleanCashPots(s.cashPots)
   if (typeof s.portfolioDrafts === 'boolean') patch.portfolioDrafts = s.portfolioDrafts
   if (s.portfolioTargets !== undefined) patch.portfolioTargets = cleanTargets(s.portfolioTargets)
@@ -235,6 +301,10 @@ handle('settings:save', (s: Partial<Settings>) => {
     patch.minOrderEur = min
   }
   const saved = saveSettings(patch)
+  // Ab jetzt keinen Handels-Schlüssel mehr auf der Festplatte: vorhandene in den Arbeitsspeicher holen und die Datei löschen
+  if (patch.tradeKeyMode && patch.tradeKeyMode !== 'keep') {
+    for (const ex of EXCHANGE_IDS) if (moveTradeKeyToMemory(ex)) addLog({ action: 'key-save', success: true, message: `${exchangeName(ex)}, ${roleName('trade')}: ${tr('von der Festplatte gelöscht, bleibt nur bis zum Schließen der App', 'removed from disk, kept only until the app closes')}` })
+  }
   applyLanguage()
   return saved
 })
@@ -261,22 +331,24 @@ async function logged<T>(base: Omit<LogEntry, 'at' | 'success'>, fn: () => Promi
 handle('plan:cancel', (userref: number) => {
   const plan = getPlans().find((p) => p.userref === userref)
   // Ein Plan wird immer bei der Börse storniert, auf der er angelegt wurde
-  return logged({ action: 'cancel-plan', userref, pair: plan?.pairName, side: plan?.side }, () => clientFor(exchangeOf(plan)).cancelPlan(userref), (n) => ({ count: n, message: tr(`${n} Orders storniert`, `${n} orders cancelled`) }))
+  const ex = exchangeOf(plan)
+  return logged({ action: 'cancel-plan', userref, pair: plan?.pairName, side: plan?.side }, () => cancellerFor(ex).cancelPlan(userref).catch((e) => { throw cancelHint(ex, e) }), (n) => ({ count: n, message: tr(`${n} Orders storniert`, `${n} orders cancelled`) }))
 })
-handle('order:cancel', (txid: string) => logged({ action: 'cancel-order', message: txid }, () => client().cancelOrder(txid)))
+handle('order:cancel', (txid: string) => logged({ action: 'cancel-order', message: txid }, () => cancellerFor(activeEx()).cancelOrder(txid).catch((e) => { throw cancelHint(activeEx(), e) })))
 /**
  * Notbremse: storniert alle offenen Orders auf ALLEN Börsen mit hinterlegtem Schlüssel, nicht nur auf der gerade gewählten.
  * Schlägt eine Börse fehl, laufen die anderen trotzdem, und der Fehler wird gemeldet.
  */
-handle('orders:cancelAll', () => logged({ action: 'cancel-all' }, async () => {
+async function emergencyStop(): Promise<number> {
   const targets = connected()
   if (!targets.length) throw new Error(tr('Kein API-Schlüssel hinterlegt.', 'No API key saved.'))
-  const results = await Promise.allSettled(targets.map((ex) => clientFor(ex).cancelAll()))
+  const results = await Promise.allSettled(targets.map((ex) => cancellerFor(ex).cancelAll().catch((e) => { throw cancelHint(ex, e) })))
   const failed = results.map((r, i) => (r.status === 'rejected' ? `${exchangeName(targets[i])}: ${(r.reason as Error)?.message}` : '')).filter(Boolean)
   const n = results.reduce((a, r) => a + (r.status === 'fulfilled' ? r.value : 0), 0)
   if (failed.length) throw new Error(tr(`Notbremse: ${n} Orders storniert, aber nicht überall: ${failed.join(' ')}`, `Emergency stop: ${n} orders cancelled, but not everywhere: ${failed.join(' ')}`))
   return n
-}, (n) => ({ count: n, message: tr(`Notbremse: ${n} Orders storniert`, `Emergency stop: ${n} orders cancelled`) })))
+}
+handle('orders:cancelAll', () => logged({ action: 'cancel-all' }, emergencyStop, (n) => ({ count: n, message: tr(`Notbremse: ${n} Orders storniert`, `Emergency stop: ${n} orders cancelled`) })))
 handle('system:status', () => client().systemStatus())
 handle('log', () => getLog())
 
@@ -641,6 +713,10 @@ interface SendJob<T extends LadderLevel> {
  */
 async function runSend<T extends LadderLevel>(job: SendJob<T>): Promise<SendResult> {
   const { ex, validate } = job
+  // Gleich am Anfang, damit niemand erst Touch ID bestätigt und dann erfährt, dass der Schlüssel fehlt.
+  // Testen geht bei Bitvavo auch mit dem Nur-Lese-Schlüssel (die App prüft selbst), bei Kraken und Coinbase prüft die Börse
+  // mit einem Testauftrag, dafür braucht es das Handelsrecht.
+  const trader = validate && !exchangeMeta(ex).serverValidate && !hasRole(ex, 'trade') ? clientFor(ex) : traderFor(ex)
   const rules = (await pairsFor(ex, SEND_RULES_MAX_AGE_MS)).find((p) => p.id === job.pairId)
   const base0: LogBase = { action: validate ? 'validate' : job.action, pair: job.pairName, side: job.side, count: 0, amount: 0, ...(job.userref ? { userref: job.userref } : {}) }
   const valid = conformToRules(job.candidates, rules, job.side, ex, base0)
@@ -653,7 +729,7 @@ async function runSend<T extends LadderLevel>(job: SendJob<T>): Promise<SendResu
   const userref = job.userref ?? newUserref()
   let orders: Orders
   try {
-    orders = await clientFor(ex).placeLadder(job.pairId, job.side, levels, { validate, userref, postOnly: job.postOnly, rules })
+    orders = await trader.placeLadder(job.pairId, job.side, levels, { validate, userref, postOnly: job.postOnly, rules })
   } catch (e) {
     addLog({ ...base, success: false, message: (e as Error).message })
     throw e
@@ -661,7 +737,15 @@ async function runSend<T extends LadderLevel>(job: SendJob<T>): Promise<SendResu
   logResult(validate || base.userref ? base : { ...base, userref }, orders)
   if (validate) return { userref, validate, orders }
   job.record({ userref, valid, levels, orders })
-  return { userref, validate, orders, check: await checkPlaced(ex, orders) }
+  const check = await checkPlaced(ex, orders)
+  // Einstellung „Nur für eine Sendung“: Handels-Schlüssel jetzt vergessen. Der Nur-Lese-Schlüssel bleibt für die Anzeige.
+  const forget = getSettings().tradeKeyMode === 'once' && hasRole(ex, 'trade') && sentPart(orders).any
+  if (forget) {
+    clearCredentials(ex, 'trade')
+    resetClient(ex)
+    addLog({ action: 'key-clear', success: true, message: `${exchangeName(ex)}, ${roleName('trade')}: ${tr('nach dem Senden vergessen', 'forgotten after sending')}` })
+  }
+  return { userref, validate, orders, ...(check ? { check } : {}), ...(forget ? { tradeKeyForgotten: true } : {}) }
 }
 
 /** Angelegte und unklare Orders. Unklare (Verbindung abgebrochen) gelten als gesendet, damit nichts doppelt rausgeht. */

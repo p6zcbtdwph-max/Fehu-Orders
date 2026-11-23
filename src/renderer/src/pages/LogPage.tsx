@@ -20,6 +20,7 @@ export const actionLabel = (a: string): string => ({
   'cancel-all': tr('Notbremse', 'Emergency stop'),
   'key-save': tr('Schlüssel gespeichert', 'Key saved'),
   'key-clear': tr('Schlüssel gelöscht', 'Key deleted'),
+  'key-clear-all': tr('Alle Schlüssel gelöscht (Notfall)', 'All keys deleted (emergency)'),
   'ip-save': tr('IP-Adresse gespeichert', 'IP address saved'),
   'ip-delete': tr('IP-Adresse gelöscht', 'IP address deleted'),
   alarm: tr('Kursalarm', 'Price alert'),

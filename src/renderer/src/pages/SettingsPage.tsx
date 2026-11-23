@@ -1,3 +1,4 @@
+import KillSwitch from '../components/KillSwitch'
 import { api } from '../api'
 import { useEffect, useState, type ReactNode } from 'react'
 import { DatabaseBackup, Download, Upload } from 'lucide-react'
@@ -69,13 +70,15 @@ const SECTIONS = (): { id: SettingsSection; label: string }[] => [
  * Alle Einstellungen an einem Ort, in Gruppen. Schlüssel und Anzeige kommen fertig aus App.tsx,
  * weil dort der Zustand liegt (aktive Börse, Sprache, Währung, Zahlenformat).
  */
-export default function SettingsPage({ section, onSection, keys, display }: {
+export default function SettingsPage({ section, onSection, keys, display, onKeysChanged }: {
   section: SettingsSection
   onSection: (s: SettingsSection) => void
   /** Inhalt von „Börsen und Schlüssel“ */
   keys: ReactNode
   /** Inhalt von „Anzeige“ */
   display: ReactNode
+  /** Nach dem Notfall-Knopf (alle Schlüssel gelöscht) */
+  onKeysChanged?: () => void
 }): JSX.Element {
   const [maxPlan, setMaxPlan] = useState(500)
   const [savedMax, setSavedMax] = useState(false)
@@ -186,6 +189,7 @@ export default function SettingsPage({ section, onSection, keys, display }: {
           </div>
         </SectionCard>
 
+        <KillSwitch onDone={onKeysChanged} />
       </div>}
 
       {section === 'data' && <div className="space-y-4">
