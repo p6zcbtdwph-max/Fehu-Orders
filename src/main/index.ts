@@ -20,7 +20,7 @@ import { langFromLocale, setLang, tr } from '../shared/i18n'
 import { moneyText, toInputText, type NumberFormat } from '../shared/number-format'
 import { splitSend } from '../shared/send-split'
 import { ipKind, ipProblem, maskIp, MAX_IPS, type HomeIpView } from '../shared/ip'
-import { cleanCashPots, type PortfolioSource } from '../shared/portfolio'
+import { cleanCashPots, cleanTargets, type PortfolioSource } from '../shared/portfolio'
 
 /** Sprache aus den Einstellungen, sonst die Systemsprache des Macs */
 const applyLanguage = () => setLang(getSettings().language ?? langFromLocale(systemLocale()))
@@ -227,6 +227,7 @@ handle('settings:save', (s: Partial<Settings>) => {
   if (isExchangeId(s.exchange)) patch.exchange = s.exchange
   if (s.cashPots !== undefined) patch.cashPots = cleanCashPots(s.cashPots)
   if (typeof s.portfolioDrafts === 'boolean') patch.portfolioDrafts = s.portfolioDrafts
+  if (s.portfolioTargets !== undefined) patch.portfolioTargets = cleanTargets(s.portfolioTargets)
   if (s.minOrderEur !== undefined) {
     const min = Number(s.minOrderEur)
     if (!Number.isFinite(min) || min < 1 || min > MAX_MIN_ORDER_EUR) throw new Error(tr(`Der Mindest-Orderwert muss zwischen 1 € und ${MAX_MIN_ORDER_EUR} € liegen.`, `The minimum order value must be between 1 € and ${MAX_MIN_ORDER_EUR} €.`))
