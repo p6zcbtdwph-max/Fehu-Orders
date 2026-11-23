@@ -20,6 +20,7 @@ import { langFromLocale, setLang, tr } from '../shared/i18n'
 import { moneyText, toInputText, type NumberFormat } from '../shared/number-format'
 import { splitSend } from '../shared/send-split'
 import { ipKind, ipProblem, maskIp, MAX_IPS, type HomeIpView } from '../shared/ip'
+import { cleanCashPots, type PortfolioSource } from '../shared/portfolio'
 
 /** Sprache aus den Einstellungen, sonst die Systemsprache des Macs */
 const applyLanguage = () => setLang(getSettings().language ?? langFromLocale(systemLocale()))
@@ -224,6 +225,8 @@ handle('settings:save', (s: Partial<Settings>) => {
   if (s.numberFormat === 'de' || s.numberFormat === 'en') patch.numberFormat = s.numberFormat
   if (s.language === 'de' || s.language === 'en') patch.language = s.language
   if (isExchangeId(s.exchange)) patch.exchange = s.exchange
+  if (s.cashPots !== undefined) patch.cashPots = cleanCashPots(s.cashPots)
+  if (typeof s.portfolioDrafts === 'boolean') patch.portfolioDrafts = s.portfolioDrafts
   if (s.minOrderEur !== undefined) {
     const min = Number(s.minOrderEur)
     if (!Number.isFinite(min) || min < 1 || min > MAX_MIN_ORDER_EUR) throw new Error(tr(`Der Mindest-Orderwert muss zwischen 1 € und ${MAX_MIN_ORDER_EUR} € liegen.`, `The minimum order value must be between 1 € and ${MAX_MIN_ORDER_EUR} €.`))
@@ -309,6 +312,47 @@ handle('templates', () => getTemplates())
 handle('template:save', (t: TemplateDto) => saveTemplate(t))
 handle('template:delete', (id: string) => deleteTemplate(id))
 handle('plans:status', () => computeStatuses())
+/**
+ * Portfolio: alle Börsen, auf denen es Pläne, Entwürfe oder einen Schlüssel gibt, nicht nur die gewählte.
+ * Fällt eine Börse aus, kommen die anderen trotzdem, die ausgefallene meldet ihren Fehler.
+ */
+handle('portfolio', async (): Promise<PortfolioSource[]> => {
+  const keys = connected()
+  const allPlans = getPlans()
+  const allDrafts = getDrafts().filter((d) => d.status === 'draft')
+  const exs = EXCHANGE_IDS.filter((ex) => keys.includes(ex) || allPlans.some((p) => exchangeOf(p) === ex) || allDrafts.some((d) => exchangeOf(d) === ex))
+  return Promise.all(exs.map(async (ex): Promise<PortfolioSource> => {
+    const plans = allPlans.filter((p) => exchangeOf(p) === ex)
+    const drafts = allDrafts.filter((d) => exchangeOf(d) === ex)
+    const hasKey = keys.includes(ex)
+    const out: PortfolioSource = { exchange: ex, hasKey, plans, drafts, status: [], openOrders: [], eurTotal: null, eurFree: null, prices: {} }
+    const errors: string[] = []
+    const ids = [...new Set([...plans, ...drafts].map((x) => x.pairId))].slice(0, 50)
+    if (ids.length) {
+      try { out.prices = await clientFor(ex).lastPrices(ids) } catch (e) { errors.push((e as Error).message) }
+    }
+    if (hasKey) {
+      try {
+        const k = clientFor(ex)
+        const [status, open, bal, free] = await Promise.all([
+          plans.length ? computeStatuses(ex) : Promise.resolve([]),
+          plans.length ? k.openOrders() : Promise.resolve([]),
+          k.balances(),
+          k.available().catch(() => null),
+        ])
+        const refs = new Set(plans.map((p) => p.userref))
+        out.status = status
+        out.openOrders = open.filter((o) => refs.has(o.userref))
+        out.eurTotal = bal.ZEUR ?? bal.EUR ?? 0
+        out.eurFree = free ? free.ZEUR ?? free.EUR ?? 0 : null
+      } catch (e) {
+        errors.push((e as Error).message)
+      }
+    }
+    if (errors.length) out.error = `${exchangeName(ex)}: ${errors[0]}`
+    return out
+  }))
+})
 handle('drafts', () => getDrafts().filter((d) => exchangeOf(d) === activeEx()))
 // Beim Speichern wird ein ausgelöster Kursalarm wieder scharf
 handle('draft:save', (d: DraftDto) => saveDraft({ ...d, exchange: isExchangeId(d.exchange) ? d.exchange : activeEx(), alarmFiredAt: undefined }))

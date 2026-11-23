@@ -7,7 +7,7 @@ import { num, setNumberFormat } from './format'
 import { NUMBER_FORMATS, type NumberFormat } from '@shared/number-format'
 import { LANGS, langFromLocale, setLang, tr, type Lang } from '@shared/i18n'
 import { exName, setActiveExchange, type ExchangeId } from '@shared/exchanges'
-import { AlertTriangle, ClipboardList, GraduationCap, History, LayoutDashboard, ListOrdered, PlayCircle, Settings, SlidersHorizontal } from 'lucide-react'
+import { AlertTriangle, ClipboardList, GraduationCap, History, LayoutDashboard, ListOrdered, PieChart, PlayCircle, Settings, SlidersHorizontal } from 'lucide-react'
 import logoUrl from './assets/logo.png'
 import PlannerPage, { type Prefill, type SideStart } from './pages/PlannerPage'
 import PlansPage, { type PlansView, type PlanFilter } from './pages/PlansPage'
@@ -18,8 +18,9 @@ import SectionCard from './components/ui/SectionCard'
 import TopBar from './components/TopBar'
 import KeyPage from './pages/KeyPage'
 import LogPage from './pages/LogPage'
+import PortfolioPage from './pages/PortfolioPage'
 
-type PageId = 'overview' | 'planner' | 'plans' | 'log' | 'settings'
+type PageId = 'overview' | 'planner' | 'plans' | 'portfolio' | 'log' | 'settings'
 /**
  * Seiten, die man von außen ansteuern kann. Seit der neuen Navigation sind „key“ ein Teil der Einstellungen
  * und „drafts“/„orders“ Filter von „Meine Pläne“ (Kursalarm aus dem Hauptprozess, Einführung).
@@ -31,6 +32,7 @@ const NAV_IDS: { id: PageId; icon: typeof ListOrdered }[] = [
   { id: 'overview', icon: LayoutDashboard },
   { id: 'planner', icon: SlidersHorizontal },
   { id: 'plans', icon: ClipboardList },
+  { id: 'portfolio', icon: PieChart },
   { id: 'log', icon: History },
 ]
 
@@ -38,6 +40,7 @@ const navLabel = (id: PageId): string => ({
   overview: tr('Übersicht', 'Overview'),
   planner: tr('Neuer Plan', 'New plan'),
   plans: tr('Meine Pläne', 'My plans'),
+  portfolio: 'Portfolio',
   log: tr('Verlauf', 'History'),
   settings: tr('Einstellungen', 'Settings'),
 })[id]
@@ -260,6 +263,7 @@ export default function App(): JSX.Element {
         {page === 'plans' && <PlansPage hasKey={!!hasKey} data={planData} view={plansView} onView={setPlansView} onNeedKey={() => setPage('key')}
           onEditDraft={(d) => { setPrefill({ pairId: d.pairId, input: d.input, postOnly: d.postOnly, sendCount: d.sendCount, draft: d }); setPage('planner') }}
           onPlanSell={(p) => { setPrefill(p); setPage('planner') }} />}
+        {page === 'portfolio' && <PortfolioPage reload={`${reload}|${demo}|${exchange}`} onOpenPlan={(id) => openPlans('all', id)} />}
         {page === 'log' && <LogPage />}
         {page === 'settings' && <SettingsPage section={section} onSection={setSection}
           keys={<KeyPage active={exchange} keys={keys} onKeyChanged={refreshKey} onUse={switchExchange} />}

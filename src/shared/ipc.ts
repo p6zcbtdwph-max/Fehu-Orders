@@ -5,6 +5,7 @@ import type { LadderInput, LadderLevel, Side } from './ladder'
 import type { BackupSummary } from './backup'
 import type { ExchangeId } from './exchanges'
 import type { HomeIpView } from './ip'
+import type { CashPot, PortfolioSource } from './portfolio'
 
 export interface PairDto {
   id: string
@@ -46,6 +47,10 @@ export interface SettingsDto {
   language?: 'de' | 'en'
   /** Mindest-Orderwert je Order in EUR (Standard 10 €) */
   minOrderEur: number
+  /** Portfolio: eigene Cash-Töpfe */
+  cashPots?: CashPot[]
+  /** Portfolio: Entwürfe im Soll mitzählen (Standard ja) */
+  portfolioDrafts?: boolean
 }
 
 export interface SendResult {
@@ -227,6 +232,8 @@ export interface Api {
   saveTemplate(t: TemplateDto): Promise<void>
   deleteTemplate(id: string): Promise<void>
   planStatus(): Promise<PlanStatusDto[]>
+  /** Portfolio: Pläne, Entwürfe, Stand, offene Orders, Euro und Kurse aller Börsen mit Plänen oder Schlüssel */
+  portfolio(): Promise<PortfolioSource[]>
   drafts(): Promise<DraftDto[]>
   saveDraft(d: DraftDto): Promise<void>
   deleteDraft(id: string): Promise<void>

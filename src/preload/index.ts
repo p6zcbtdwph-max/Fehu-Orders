@@ -39,6 +39,7 @@ const api: Api = {
   saveTemplate: (t) => call('template:save', t),
   deleteTemplate: (id) => call('template:delete', id),
   planStatus: () => call('plans:status'),
+  portfolio: () => call('portfolio'),
   drafts: () => call('drafts'),
   saveDraft: (d) => call('draft:save', d),
   deleteDraft: (id) => call('draft:delete', id),
