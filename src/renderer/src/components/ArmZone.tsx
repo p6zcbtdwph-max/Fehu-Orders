@@ -9,7 +9,8 @@ import { NumberField } from './NumberField'
 import { num, pct } from '../format'
 import { tr } from '@shared/i18n'
 import { useMoney } from '../money'
-import { exName, probeOk } from '@shared/exchanges'
+import { exchangeOf, exName, probeOk } from '@shared/exchanges'
+import TradeKeyGate, { canTest, useTradeKey } from './TradeKeyGate'
 
 /** Noch nicht gesendete Stufen einer Zone */
 export const zoneLevels = (p: PlanDto, zone: number): LadderLevel[] => {
@@ -68,6 +69,8 @@ export default function ArmZoneModal({ plan, zone, progress, pair, onClose, onSe
   const cost = levels.reduce((a, l) => a + l.cost, 0)
   const dec = pair?.priceDecimals ?? 2
   const cond = triggerText(plan, zone, progress)
+  const ex = exchangeOf(plan)
+  const tk = useTradeKey(ex)
   const blocked = !!edited && !edited.valid
 
   async function go(validate: boolean) {
@@ -87,13 +90,14 @@ export default function ArmZoneModal({ plan, zone, progress, pair, onClose, onSe
   return (
     <Modal title={tr(`Zone ${zone + 1} aktivieren?`, `Arm zone ${zone + 1}?`)} size="sm" onClose={() => !busy && onClose()}
       footer={<>
-        <button type="button" className="btn btn-secondary" disabled={!!busy || blocked || !levels.length} onClick={() => go(true)}>{busy === 'validate' ? tr('Prüfe …', 'Checking …') : tr('Testen', 'Test')}</button>
-        <button type="button" className="btn btn-primary" disabled={!!busy || blocked || !levels.length} onClick={() => go(false)}>
+        <button type="button" className="btn btn-secondary" disabled={!!busy || blocked || !levels.length || !canTest(tk, ex)} onClick={() => go(true)}>{busy === 'validate' ? tr('Prüfe …', 'Checking …') : tr('Testen', 'Test')}</button>
+        <button type="button" className="btn btn-primary" disabled={!!busy || blocked || !levels.length || tk.has === false} onClick={() => go(false)}>
           <Shield size={16} /> {busy === 'send' ? tr('Sende …', 'Sending …') : tr(`${levels.length} Orders senden`, `Send ${levels.length} orders`)}
         </button>
       </>}>
       <div className="space-y-3 text-sm">
         <p className={`notice ${cond.met ? 'notice-success' : 'notice-info'} text-xs`}>{cond.text}</p>
+        <TradeKeyGate exchange={ex} state={tk} />
         <p>
           {buy ? tr('Kaufen', 'Buy') : tr('Verkaufen', 'Sell')} {plan.pairName}: {levels.length} {tr('Stufen von', 'levels from')}{' '}
           {levels.length ? `${fmtPrice(levels[0].price, dec)} ${tr('bis', 'to')} ${fmtPrice(levels[levels.length - 1].price, dec)} ${sym}` : '–'}.

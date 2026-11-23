@@ -3,7 +3,8 @@ import { useState } from 'react'
 import { Bell } from 'lucide-react'
 import type { SendSplit } from '@shared/send-split'
 import { tr } from '@shared/i18n'
-import { exName, FIRST_TEST_MAX_EUR, probeHint } from '@shared/exchanges'
+import { activeExchange, exName, FIRST_TEST_MAX_EUR, probeHint } from '@shared/exchanges'
+import TradeKeyGate, { useTradeKey } from '../../components/TradeKeyGate'
 import type { LadderInput, LadderLevel } from '@shared/ladder'
 import type { PairDto } from '@shared/ipc'
 import { api } from '../../api'
@@ -90,15 +91,17 @@ export function ConfirmSendDialog({ input, pair, last, busy, limit, overLimit, t
   onSend: () => void
   onClose: () => void
 }): JSX.Element {
+  const tk = useTradeKey(activeExchange())
   const { eur, fmtPrice, sym } = useMoney()
   const base = pair.name.split('/')[0] ?? ''
   return (
     <Modal title={tr('Orders wirklich senden?', 'Really send the orders?')} size="sm" onClose={() => !busy && onClose()}
       footer={<>
         <button type="button" className="btn btn-secondary" disabled={!!busy} onClick={() => onClose()}>{tr('Abbrechen', 'Cancel')}</button>
-        <button type="button" className="btn btn-primary" disabled={!!busy || overLimit} onClick={() => onSend()}>{busy ? tr('Sende …', 'Sending …') : tr(`${nowCount} Orders senden`, `Send ${nowCount} orders`)}</button>
+        <button type="button" className="btn btn-primary" disabled={!!busy || overLimit || tk.has === false} onClick={() => onSend()}>{busy ? tr('Sende …', 'Sending …') : tr(`${nowCount} Orders senden`, `Send ${nowCount} orders`)}</button>
       </>}>
       <div className="space-y-2 text-sm">
+        <TradeKeyGate exchange={activeExchange()} state={tk} />
         {overLimit && limit !== null && <p className="notice notice-warning">{tr(
           <><strong>Über deiner Obergrenze von {eur(limit)} pro Sendung.</strong> Zur Sicherheit wird so nichts gesendet. Am Anfang steht sie auf 50 €, damit der erste Test klein bleibt. Ändern kannst du sie unter Einstellungen › Sicherheit.</>,
           <><strong>Above your limit of {eur(limit)} per send.</strong> For safety nothing is sent like this. It starts at 50 € so your first test stays small. You can change it under Settings › Safety.</>,

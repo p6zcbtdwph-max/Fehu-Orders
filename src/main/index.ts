@@ -13,6 +13,7 @@ import {
   addLog, addPlan, clearAllCredentials, moveTradeKeyToMemory, tradeKeyInMemory, loadHomeIps, saveHomeIps, systemLocale, clearCredentials, exportAll, importAll, getLog, markAlarmFired, deleteDraft, deleteTemplate, getDrafts, getFillBook, saveFillBook, markDraftReleased, saveDraft, getNotified, getPlans, getSettings, getTemplates, hasRealPlan, loadCredentials, newUserref, saveCredentials, saveSettings, saveTemplate, setNotified, updatePlan, type PlanRecord, type Settings,
 } from './store'
 import type { ClearAllResult, DraftDto, KeyStatusDto, LogEntry, PlanStatusDto, SaveKeyResult, SendRequest, SendResult, TemplateDto } from '../shared/ipc'
+import { cleanManualLots, dateToSec, type LotEvent } from '../shared/holding-period'
 import { checksPass, isKeyRole, isTradeKeyMode, needTradeKeyText, readChecks, roleName, type KeyRole } from '../shared/key-roles'
 import { alarmHit, assetLabel, checkKeyFormat, normalizeCoinbase, priceGuard } from '../shared/safety'
 import { planStatus, zoneProgress, type OrderSnapshot } from '../shared/plan-status'
@@ -291,6 +292,7 @@ handle('settings:save', (s: Partial<Settings>) => {
   if (s.language === 'de' || s.language === 'en') patch.language = s.language
   if (isExchangeId(s.exchange)) patch.exchange = s.exchange
   if (isTradeKeyMode(s.tradeKeyMode)) patch.tradeKeyMode = s.tradeKeyMode
+  if (s.manualLots !== undefined) patch.manualLots = cleanManualLots(s.manualLots)
   if (s.cashPots !== undefined) patch.cashPots = cleanCashPots(s.cashPots)
   if (typeof s.portfolioDrafts === 'boolean') patch.portfolioDrafts = s.portfolioDrafts
   if (s.portfolioTargets !== undefined) patch.portfolioTargets = cleanTargets(s.portfolioTargets)
@@ -444,6 +446,23 @@ handle('portfolio', async (): Promise<PortfolioSource[]> => {
     if (errors.length) out.error = `${exchangeName(ex)}: ${errors[0]}`
     return out
   }))
+})
+/**
+ * Haltefrist: alle bekannten Ausführungen der aktiven Börse mit Datum (aus dem Ausführungsbuch) plus selbst eingetragene Käufe.
+ * Orders ohne Ausführungsdatum fehlen hier absichtlich: Ein falsches, zu frühes Datum würde zu viel als steuerfrei zeigen.
+ */
+handle('tax:events', (): LotEvent[] => {
+  const ex = activeEx()
+  const coinOf = new Map(getPlans().filter((p) => exchangeOf(p) === ex).map((p) => [p.userref, p.pairName.split('/')[0]]))
+  const fills: LotEvent[] = getFillBook(ex).orders.flatMap((o): LotEvent[] => {
+    const coin = coinOf.get(o.userref)
+    return coin && o.filled > 0 && o.closedAt ? [{ coin, side: o.side, volume: o.filled, at: o.closedAt, source: 'app' }] : []
+  })
+  const manual: LotEvent[] = getSettings().manualLots.filter((l) => l.exchange === ex).flatMap((l): LotEvent[] => {
+    const at = dateToSec(l.date)
+    return at === null ? [] : [{ coin: l.coin, side: 'buy', volume: l.volume, at, source: 'manual' }]
+  })
+  return [...fills, ...manual]
 })
 handle('drafts', () => getDrafts().filter((d) => exchangeOf(d) === activeEx()))
 // Beim Speichern wird ein ausgelöster Kursalarm wieder scharf

@@ -5,6 +5,7 @@ import { heldZones, isHeld } from '@shared/ladder'
 import { tr } from '@shared/i18n'
 import { ipKind, ipProblem, maskIp } from '@shared/ip'
 import { EXCHANGE_IDS, exchangeName, type ExchangeId } from '@shared/exchanges'
+import { dateToSec, type LotEvent } from '@shared/holding-period'
 import { KEY_ROLES, needTradeKeyText, readChecks, type KeyRoles } from '@shared/key-roles'
 import { normalizeHoldings } from '@shared/portfolio'
 import { assetLabel } from '@shared/safety'
@@ -125,9 +126,33 @@ export function createDemoApi(): Api {
       const keys = Object.fromEntries(EXCHANGE_IDS.map((id) => [id, demoRoles[id].read || demoRoles[id].trade])) as Record<ExchangeId, boolean>
       return wait({ hasKey: keys[settings.exchange], encryption: true, touchId: true, exchange: settings.exchange, keys, roles: structuredClone(demoRoles), tradeKeyMode: settings.tradeKeyMode ?? 'keep' }, 0)
     },
-    saveKey: async () => { throw new Error(tr('Im Demo-Modus brauchst du keinen Schlüssel. Beende zuerst die Demo.', 'You need no key in demo mode. End the demo first.')) },
+    saveKey: async (key, secret, opts) => {
+      // Im Sendefenster darf man den Handels-Schlüssel auch in der Demo „einfügen“, damit man den Ablauf sieht
+      if (opts?.role === 'trade' && key && secret) {
+        const ex = opts.exchange ?? settings.exchange
+        demoRoles[ex] = { ...demoRoles[ex], trade: true, tradeTemporary: (settings.tradeKeyMode ?? 'keep') !== 'keep' }
+        return wait({ saved: true, checks: demoChecks() }, 500)
+      }
+      throw new Error(tr('Im Demo-Modus brauchst du keinen Schlüssel. Beende zuerst die Demo.', 'You need no key in demo mode. End the demo first.'))
+    },
     verifyKey: (ex, role) => wait(role === 'read' ? readChecks(demoChecks(), ex ?? 'kraken').map((c) => (c.id === 'no-trade' ? { ...c, ok: true, detail: undefined } : c)) : demoChecks().map((c) => ({ ...c })), 600),
     clearKey: async (ex, role) => { demoRoles[ex ?? settings.exchange][role ?? 'trade'] = false },
+    lotEvents: () => {
+      // Beispiel: BTC teils über ein Jahr gehalten, ETH ganz frisch, SOL selbst eingetragen
+      const day = 86_400
+      const now = Math.floor(Date.now() / 1000)
+      const app: LotEvent[] = [
+        { coin: 'BTC', side: 'buy', volume: 0.008, at: now - 430 * day, source: 'app' },
+        { coin: 'BTC', side: 'buy', volume: 0.007, at: now - 300 * day, source: 'app' },
+        { coin: 'BTC', side: 'buy', volume: 0.005, at: now - 40 * day, source: 'app' },
+        { coin: 'ETH', side: 'buy', volume: 0.5, at: now - 20 * day, source: 'app' },
+      ]
+      const manual: LotEvent[] = (settings.manualLots ?? []).filter((l) => l.exchange === settings.exchange).flatMap((l) => {
+        const at = dateToSec(l.date)
+        return at === null ? [] : [{ coin: l.coin, side: 'buy' as const, volume: l.volume, at, source: 'manual' as const }]
+      })
+      return wait(settings.exchange === 'kraken' ? [...app, ...manual] : manual)
+    },
     clearAllKeys: async (opts) => {
       const deleted = EXCHANGE_IDS.map((exchange) => ({ exchange, roles: KEY_ROLES.filter((r) => demoRoles[exchange][r]) })).filter((d) => d.roles.length)
       const cancelled = opts?.cancelOrders ? orders.splice(0).length : undefined
@@ -160,7 +185,9 @@ export function createDemoApi(): Api {
       plans.unshift(plan)
       const placed = place(plan, plan.sentIndices!.map((i) => req.levels.findIndex((l) => l.index === i)))
       if (req.draftId) drafts = drafts.map((d) => (d.id === req.draftId ? { ...d, status: 'released', releasedAt: new Date().toISOString(), userref: plan.userref } : d))
-      return wait({ userref: plan.userref, validate: false, orders: placed, check: { found: placed.filter((o) => o.txid).length, placed: placed.filter((o) => o.txid).length } }, 500)
+      const forget = settings.tradeKeyMode === 'once'
+      if (forget) demoRoles[settings.exchange] = { ...demoRoles[settings.exchange], trade: false, tradeTemporary: false }
+      return wait({ userref: plan.userref, validate: false, orders: placed, check: { found: placed.filter((o) => o.txid).length, placed: placed.filter((o) => o.txid).length }, ...(forget ? { tradeKeyForgotten: true } : {}) }, 500)
     },
     async sendRest(userref, validate) {
       const plan = plans.find((p) => p.userref === userref)

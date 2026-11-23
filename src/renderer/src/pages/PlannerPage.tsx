@@ -10,6 +10,7 @@ import { firstTestInput, wrongSide } from '@shared/safety'
 import { NumberField } from '../components/NumberField'
 import AmountInput, { tidy } from '../components/AmountInput'
 import HoldingsCard from '../components/HoldingsCard'
+import TaxFreeCard from '../components/TaxFreeCard'
 import { holdingsFor, sellablePairs } from '@shared/holdings'
 import PlanResults from './planner/PlanResults'
 import { ConfirmSendDialog, DraftDialog, FirstTestDialog, SaveTemplateDialog } from './planner/PlannerDialogs'
@@ -277,6 +278,12 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
   const have = available && needAsset ? available[needAsset] ?? 0 : null
   const shortfall = have !== null && nowCost > 0 && have + 1e-12 < need
   // Stufen auf der falschen Seite des Kurses würden sofort ausgeführt (oder mit Post-only sofort storniert)
+  // Beim Verkaufen: Haltefrist des gewählten Coins (steuerfrei nach einem Jahr)
+  const taxCard = selling && pair ? (
+    <TaxFreeCard key={`${pairsExchange}-${pair.base}`} coin={pair.name.split('/')[0]} decimals={pair.volumeDecimals}
+      held={holding ? holding.available + holding.locked + holding.earn : undefined}
+      sellVolume={sendable.reduce((a, l) => a + l.volume, 0)} />
+  ) : null
   const wrong = wrongSide(input.side, toSend.map((l) => l.price), last)
   // Über der Obergrenze pro Sendung schickt der Hauptprozess nichts raus. Lieber vorher sagen als hinterher.
   const overLimit = limit !== null && nowCost > limit + 1e-9
@@ -489,6 +496,7 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
           </section>
 
           {selling && <HoldingsCard holdings={holdings} pairId={pairId} showAll={showAll} onShowAll={setShowAll} onPick={(id) => { setPairId(id); setResult(null) }} eur={eur} hasKey={hasKey} loading={holdLoading} />}
+          {taxCard}
           </>}
           {step === 2 && (
             <div className="grid grid-cols-1 gap-4 @lg:grid-cols-[22rem_1fr]">
@@ -564,6 +572,7 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
       </section>
 
       {selling && <HoldingsCard holdings={holdings} pairId={pairId} showAll={showAll} onShowAll={setShowAll} onPick={(id) => { setPairId(id); setResult(null) }} eur={eur} hasKey={hasKey} loading={holdLoading} />}
+          {taxCard}
 
       <div className="grid grid-cols-1 gap-4 @lg:grid-cols-[22rem_1fr]">
         {planEl}

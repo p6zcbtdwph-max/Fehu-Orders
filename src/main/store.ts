@@ -6,6 +6,7 @@ import { copyFileSync, existsSync, readFileSync, renameSync, writeFileSync, unli
 import { join } from 'node:path'
 import type { ClosedOrder, Credentials } from './exchange'
 import { EXCHANGE_IDS, exchangeOf, isExchangeId, type ExchangeId } from '../shared/exchanges'
+import { cleanManualLots, type ManualLot } from '../shared/holding-period'
 import { isTradeKeyMode, KEY_ROLES, type KeyRole, type TradeKeyMode } from '../shared/key-roles'
 import { DEFAULT_MIN_ORDER_EUR, MAX_MIN_ORDER_EUR, type LadderInput, type LadderLevel, type Side } from '../shared/ladder'
 import type { DraftDto, LogEntry } from '../shared/ipc'
@@ -139,9 +140,11 @@ export interface Settings {
   tradeKeyMode: TradeKeyMode
   /** Portfolio: eigene Einträge für Orte ohne Schnittstelle (Wallet, Broker) */
   manualHoldings: ManualHolding[]
+  /** Haltefrist: selbst eingetragene ältere Käufe (vor der App oder außerhalb gekauft) */
+  manualLots: ManualLot[]
 }
 
-export const DEFAULT_SETTINGS: Settings = { tradeKeyMode: 'keep', minOrderEur: DEFAULT_MIN_ORDER_EUR, maxPlanEur: 50, watchlist: ['BTC/EUR', 'ETH/EUR'], currency: 'EUR', numberFormat: 'de', exchange: 'kraken', cashPots: [], portfolioDrafts: true, portfolioTargets: {}, manualHoldings: [] }
+export const DEFAULT_SETTINGS: Settings = { tradeKeyMode: 'keep', minOrderEur: DEFAULT_MIN_ORDER_EUR, maxPlanEur: 50, watchlist: ['BTC/EUR', 'ETH/EUR'], currency: 'EUR', numberFormat: 'de', exchange: 'kraken', cashPots: [], portfolioDrafts: true, portfolioTargets: {}, manualHoldings: [], manualLots: [] }
 
 export interface PlanRecord {
   /** Fehlt bei Plänen aus der Zeit, als es nur Kraken gab */
@@ -223,6 +226,7 @@ export function cleanSettings(raw: Record<string, unknown>): Settings {
   s.manualHoldings = cleanManual(raw.manualHoldings)
   if (typeof raw.portfolioDrafts === 'boolean') s.portfolioDrafts = raw.portfolioDrafts
   if (isTradeKeyMode(raw.tradeKeyMode)) s.tradeKeyMode = raw.tradeKeyMode
+  s.manualLots = cleanManualLots(raw.manualLots)
   const min = Number(raw.minOrderEur)
   if (raw.minOrderEur !== undefined && raw.minOrderEur !== null && Number.isFinite(min) && min >= 1 && min <= MAX_MIN_ORDER_EUR) s.minOrderEur = min
   return s
