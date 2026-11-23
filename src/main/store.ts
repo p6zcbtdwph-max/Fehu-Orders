@@ -11,7 +11,7 @@ import type { DraftDto, LogEntry } from '../shared/ipc'
 import { makeBackup, type BackupData } from '../shared/backup'
 import { cleanIps, type HomeIp } from '../shared/ip'
 import { langFromLocale, tr, type Lang } from '../shared/i18n'
-import { cleanCashPots, type CashPot } from '../shared/portfolio'
+import { cleanCashPots, cleanTargets, type CashPot, type PortfolioTargets } from '../shared/portfolio'
 
 const file = (name: string) => join(app.getPath('userData'), name)
 
@@ -83,9 +83,11 @@ export interface Settings {
   cashPots: CashPot[]
   /** Portfolio: offene Entwürfe im Soll mitzählen */
   portfolioDrafts: boolean
+  /** Portfolio: Wunsch-Aufteilung in Prozent je Coin und 'cash' */
+  portfolioTargets: PortfolioTargets
 }
 
-export const DEFAULT_SETTINGS: Settings = { minOrderEur: DEFAULT_MIN_ORDER_EUR, maxPlanEur: 50, watchlist: ['BTC/EUR', 'ETH/EUR'], currency: 'EUR', numberFormat: 'de', exchange: 'kraken', cashPots: [], portfolioDrafts: true }
+export const DEFAULT_SETTINGS: Settings = { minOrderEur: DEFAULT_MIN_ORDER_EUR, maxPlanEur: 50, watchlist: ['BTC/EUR', 'ETH/EUR'], currency: 'EUR', numberFormat: 'de', exchange: 'kraken', cashPots: [], portfolioDrafts: true, portfolioTargets: {} }
 
 export interface PlanRecord {
   /** Fehlt bei Plänen aus der Zeit, als es nur Kraken gab */
@@ -163,6 +165,7 @@ export function cleanSettings(raw: Record<string, unknown>): Settings {
   if (raw.language === 'de' || raw.language === 'en') s.language = raw.language
   if (isExchangeId(raw.exchange)) s.exchange = raw.exchange
   s.cashPots = cleanCashPots(raw.cashPots)
+  s.portfolioTargets = cleanTargets(raw.portfolioTargets)
   if (typeof raw.portfolioDrafts === 'boolean') s.portfolioDrafts = raw.portfolioDrafts
   const min = Number(raw.minOrderEur)
   if (raw.minOrderEur !== undefined && raw.minOrderEur !== null && Number.isFinite(min) && min >= 1 && min <= MAX_MIN_ORDER_EUR) s.minOrderEur = min

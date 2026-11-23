@@ -5,7 +5,7 @@ import type { LadderInput, LadderLevel, Side } from './ladder'
 import type { BackupSummary } from './backup'
 import type { ExchangeId } from './exchanges'
 import type { HomeIpView } from './ip'
-import type { CashPot, PortfolioSource } from './portfolio'
+import type { CashPot, PortfolioSource, PortfolioTargets } from './portfolio'
 
 export interface PairDto {
   id: string
@@ -51,6 +51,8 @@ export interface SettingsDto {
   cashPots?: CashPot[]
   /** Portfolio: Entwürfe im Soll mitzählen (Standard ja) */
   portfolioDrafts?: boolean
+  /** Portfolio: Wunsch-Aufteilung in Prozent je Coin und 'cash' */
+  portfolioTargets?: PortfolioTargets
 }
 
 export interface SendResult {

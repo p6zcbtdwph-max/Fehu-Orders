@@ -28,7 +28,7 @@ const round = (v: number, d: number) => Math.round(v * 10 ** d) / 10 ** d
 
 export function createDemoApi(): Api {
   let homeIps: { ip: string; label?: string }[] = [{ ip: '203.0.113.42', label: tr('Zuhause', 'Home') }]
-  let settings: SettingsDto = { minOrderEur: 10, maxPlanEur: 5000, watchlist: ['BTC/EUR', 'ETH/EUR', 'SOL/EUR'], currency: 'EUR', numberFormat: 'de', exchange: 'kraken', portfolioDrafts: true, cashPots: [{ id: 'demo-pot', name: tr('Tagesgeld', 'Savings account'), amount: 5000 }] }
+  let settings: SettingsDto = { minOrderEur: 10, maxPlanEur: 5000, watchlist: ['BTC/EUR', 'ETH/EUR', 'SOL/EUR'], currency: 'EUR', numberFormat: 'de', exchange: 'kraken', portfolioDrafts: true, portfolioTargets: { BTC: 25, ETH: 15, SOL: 5, cash: 55 }, cashPots: [{ id: 'demo-pot', name: tr('Tagesgeld', 'Savings account'), amount: 5000 }] }
   const balances: Record<string, number> = { ZEUR: 2500, XXBT: 0.02, XETH: 0.5, SOL: 4 }
   let templates: TemplateDto[] = [
     { id: 'demo-1', name: 'Dip-Kauf 10 Stufen', pairName: 'BTC/EUR', postOnly: true,

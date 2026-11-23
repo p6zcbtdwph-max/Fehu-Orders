@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildPortfolio, cleanCashPots, draftValue, shares, toEur, type PortfolioSource } from './portfolio'
+import { buildPortfolio, cleanCashPots, cleanTargets, draftValue, shares, targetGaps, targetSum, toEur, type PortfolioSource } from './portfolio'
 import type { DraftDto, PlanDto } from './ipc'
 
 const input = { side: 'buy' as const, priceStart: 60000, priceEnd: 50000, steps: 4, total: 400, spacing: 'linear' as const, curve: 'flat' as const, ratio: 1 }
@@ -130,5 +130,29 @@ describe('Hilfen', () => {
     expect(cleanCashPots([{ id: 'a', name: ' Tagesgeld ', amount: 10 }, { id: 'b', name: 'x', amount: -1 }, 'kaputt', { id: 'c', name: 'R', amount: 5, reserve: true }]))
       .toEqual([{ id: 'a', name: 'Tagesgeld', amount: 10 }, { id: 'c', name: 'R', amount: 5, reserve: true }])
     expect(cleanCashPots(null)).toEqual([])
+  })
+})
+
+describe('Zielaufteilung', () => {
+  const slices = [
+    { key: 'BTC', label: 'BTC', value: 600 },
+    { key: 'ETH', label: 'ETH', value: 100 },
+    { key: 'cash', label: 'Cash', value: 300 },
+    { key: 'reserve', label: 'Reserve', value: 5000 },
+  ]
+  it('rechnet Abweichung in Punkten und Euro, ohne Reserve, größte zuerst', () => {
+    const g = targetGaps(slices, { BTC: 40, ETH: 20, cash: 30, SOL: 10 })
+    expect(g.map((x) => x.key)).toEqual(['BTC', 'ETH', 'SOL', 'cash'])
+    const btc = g[0]
+    expect(btc.share).toBeCloseTo(60)
+    expect(btc.points).toBeCloseTo(20)
+    expect(btc.eur).toBeCloseTo(-200)
+    expect(g.find((x) => x.key === 'ETH')!.eur).toBeCloseTo(100)
+    expect(g.find((x) => x.key === 'SOL')!.share).toBe(0)
+  })
+  it('übernimmt nur gültige Ziele', () => {
+    expect(cleanTargets({ btc: 40, cash: 30, 'x y': 5, ETH: 0, SOL: 120, ADA: '10' })).toEqual({ BTC: 40, cash: 30, ADA: 10 })
+    expect(cleanTargets([1])).toEqual({})
+    expect(targetSum({ BTC: 40, cash: 30 })).toBe(70)
   })
 })

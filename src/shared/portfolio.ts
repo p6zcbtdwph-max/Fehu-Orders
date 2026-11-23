@@ -318,3 +318,58 @@ export function shares(slices: PortfolioSlice[]): Record<string, number> {
   const total = sum(slices.map((s) => s.value))
   return Object.fromEntries(slices.map((s) => [s.key, total > 0 ? (s.value / total) * 100 : 0]))
 }
+
+/** Wunsch-Aufteilung in Prozent je Coin (Schlüssel wie in der Torte, z. B. BTC) und 'cash' */
+export type PortfolioTargets = Record<string, number>
+
+export const MAX_TARGETS = 30
+/** Ab so vielen Prozentpunkten Abweichung zeigt die App einen Hinweis */
+export const TARGET_HINT_POINTS = 3
+
+/** Nur gültige Ziele übernehmen: Coin-Kürzel aus Buchstaben und Ziffern, 0–100 % */
+export function cleanTargets(raw: unknown): PortfolioTargets {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
+  const out: PortfolioTargets = {}
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    const n = Number(v)
+    const key = k === 'cash' ? k : k.trim().toUpperCase()
+    if (!/^[A-Z0-9]{1,12}$/.test(key) && key !== 'cash') continue
+    if (!Number.isFinite(n) || n <= 0 || n > 100) continue
+    out[key] = n
+    if (Object.keys(out).length >= MAX_TARGETS) break
+  }
+  return out
+}
+
+export const targetSum = (t: PortfolioTargets): number => sum(Object.values(t))
+
+export interface TargetGap {
+  key: string
+  label: string
+  /** Anteil jetzt (nach allen Plänen) und Ziel, in Prozent */
+  share: number
+  target: number
+  /** Abweichung in Prozentpunkten (positiv = über dem Ziel) */
+  points: number
+  /** Euro, die bis zum Ziel fehlen (positiv = kaufen) bzw. zu viel sind (negativ) */
+  eur: number
+}
+
+/**
+ * Vergleicht eine Torte mit den Zielen. Die Reserve zählt nicht mit, sie ist kein Teil der Anlage.
+ * Coins mit Ziel, aber ohne Bestand, erscheinen mit 0 %. Sortiert nach größter Abweichung.
+ */
+export function targetGaps(slices: PortfolioSlice[], targets: PortfolioTargets): TargetGap[] {
+  const base = slices.filter((s) => s.key !== 'reserve')
+  const total = sum(base.map((s) => s.value))
+  const keys = new Set([...base.map((s) => s.key), ...Object.keys(targets)])
+  const out: TargetGap[] = []
+  for (const key of keys) {
+    const target = targets[key]
+    if (target === undefined) continue
+    const value = base.find((s) => s.key === key)?.value ?? 0
+    const share = total > 0 ? (value / total) * 100 : 0
+    out.push({ key, label: key === 'cash' ? 'Cash' : key, share, target, points: share - target, eur: (target / 100) * total - value })
+  }
+  return out.sort((a, b) => Math.abs(b.points) - Math.abs(a.points) || a.key.localeCompare(b.key))
+}

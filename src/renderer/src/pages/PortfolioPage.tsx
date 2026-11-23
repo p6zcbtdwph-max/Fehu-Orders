@@ -1,17 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
-import { ChevronDown, ChevronRight, Eye, EyeOff, Plus, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, Eye, EyeOff, Plus, Target, Trash2 } from 'lucide-react'
 import { api } from '../api'
 import SectionCard from '../components/ui/SectionCard'
 import Segmented from '../components/ui/Segmented'
 import { tr } from '@shared/i18n'
 import { activeExchange, exchangeName } from '@shared/exchanges'
-import { buildPortfolio, MAX_CASH_POTS, shares, type CashPot, type CoinRow, type PortfolioSlice, type PortfolioSource } from '@shared/portfolio'
+import { buildPortfolio, cleanTargets, MAX_CASH_POTS, MAX_TARGETS, shares, TARGET_HINT_POINTS, targetGaps, targetSum, type CashPot, type CoinRow, type PortfolioSlice, type PortfolioSource, type PortfolioTargets, type TargetGap } from '@shared/portfolio'
 import { parseNumber, toInputText } from '@shared/number-format'
 import { num, numberFormat, pct } from '../format'
 import { useMoney } from '../money'
 import { categoryColor, cssColor, useChartTheme } from '../utils/chartTheme'
 import { Kpi } from './PlansPage'
+import type { Prefill } from './PlannerPage'
 
 const HIDE_KEY = 'fehu-orders-portfolio-hidden'
 const MASK = '•••'
@@ -21,17 +22,20 @@ interface Props {
   reload: string | number
   /** Plan oder Entwurf in „Meine Pläne“ öffnen (nur für die gerade gewählte Börse) */
   onOpenPlan: (id: string) => void
+  /** Neuen Plan im Planer öffnen, vorausgefüllt (wird nie automatisch gesendet) */
+  onNewPlan: (p: Prefill) => void
 }
 
 /** Portfolio: alle Pläne je Coin, Ist (gekauft) und Soll (noch geplant), dazu Cash */
-export default function PortfolioPage({ reload, onOpenPlan }: Props): JSX.Element {
+export default function PortfolioPage({ reload, onOpenPlan, onNewPlan }: Props): JSX.Element {
   const { eur, fmtPrice, sym } = useMoney()
   const [sources, setSources] = useState<PortfolioSource[] | null>(null)
   const [pots, setPots] = useState<CashPot[]>([])
   const [includeDrafts, setIncludeDrafts] = useState(true)
   const [usdRate, setUsdRate] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [view, setView] = useState<'ist' | 'after'>('after')
+  const [view, setView] = useState<'ist' | 'after' | 'target'>('after')
+  const [targets, setTargets] = useState<PortfolioTargets>({})
   const [open, setOpen] = useState<string | null>(null)
   const [hidden, setHidden] = useState(() => { try { return localStorage.getItem(HIDE_KEY) === '1' } catch { return false } })
 
@@ -42,6 +46,7 @@ export default function PortfolioPage({ reload, onOpenPlan }: Props): JSX.Elemen
       setSources(src)
       setPots(s.cashPots ?? [])
       setIncludeDrafts(s.portfolioDrafts !== false)
+      setTargets(s.portfolioTargets ?? {})
       // Dollar-Kurs nur, wenn ein Plan in Dollar läuft
       if (src.some((x) => [...x.plans, ...x.drafts].some((p) => /\/(USD|USDC|USDT)$/.test(p.pairName)))) api().usdRate().then(setUsdRate).catch(() => setUsdRate(null))
     } catch (e) {
@@ -67,6 +72,28 @@ export default function PortfolioPage({ reload, onOpenPlan }: Props): JSX.Elemen
     setPots(next)
     api().saveSettings({ cashPots: next }).catch((e) => setError((e as Error).message))
   }
+  const saveTargets = (next: PortfolioTargets) => {
+    const clean = cleanTargets(next)
+    setTargets(clean)
+    api().saveSettings({ portfolioTargets: clean }).catch((e) => setError((e as Error).message))
+  }
+  /** Kauf- oder Verkaufsplan für die Lücke zum Ziel im Planer vorbereiten (Börse oben links, Euro-Paar) */
+  async function planFor(g: TargetGap) {
+    setError(null)
+    try {
+      const pair = (await api().pairs()).find((x) => x.name === `${g.key}/EUR`)
+      if (!pair) throw new Error(tr(`Für ${g.key} gibt es bei ${exchangeName(activeExchange())} kein Euro-Paar. Wechsle oben links die Börse.`, `${exchangeName(activeExchange())} has no euro pair for ${g.key}. Switch the exchange at the top left.`))
+      const price = await api().price(pair.id)
+      const buy = g.eur > 0
+      const at = (f: number) => +(price * f).toPrecision(6)
+      onNewPlan({ pairId: pair.id, input: {
+        side: buy ? 'buy' : 'sell', unit: 'quote', total: Math.round(Math.abs(g.eur) * 100) / 100, steps: 5,
+        priceStart: at(buy ? 0.98 : 1.03), priceEnd: at(buy ? 0.85 : 1.25), spacing: 'linear', curve: 'flat', ratio: 1,
+      } })
+    } catch (e) {
+      setError((e as Error).message)
+    }
+  }
   const saveDrafts = (on: boolean) => {
     setIncludeDrafts(on)
     api().saveSettings({ portfolioDrafts: on }).catch(() => undefined)
@@ -75,7 +102,10 @@ export default function PortfolioPage({ reload, onOpenPlan }: Props): JSX.Elemen
   const errors = (sources ?? []).filter((s) => s.error)
   const colorOf = (key: string, i: number) => (key === 'cash' ? cssColor('chart-neutral') : key === 'reserve' ? cssColor('chart-grid-strong') : categoryColor(i))
   const order = p ? p.rows.map((r) => r.coin) : []
-  const color = (key: string) => colorOf(key, order.indexOf(key))
+  const color = (key: string) => colorOf(key, order.indexOf(key) >= 0 ? order.indexOf(key) : order.length + Object.keys(targets).indexOf(key))
+  const gaps = p ? targetGaps(p.after, targets) : []
+  // Hinweis zum Coin mit der größten Abweichung (Cash folgt daraus von selbst)
+  const hint = gaps.find((g) => g.key !== 'cash' && Math.abs(g.points) >= TARGET_HINT_POINTS)
 
   return (
     <div className="page">
@@ -112,14 +142,25 @@ export default function PortfolioPage({ reload, onOpenPlan }: Props): JSX.Elemen
             <p className="notice notice-info">{tr(`Ohne Schlüssel kennt die App das Euro-Guthaben bei ${p.cashUnknown.map(exchangeName).join(', ')} nicht, es fehlt im Cash.`, `Without a key the app does not know the euro balance at ${p.cashUnknown.map(exchangeName).join(', ')}, it is missing from cash.`)}</p>
           )}
 
+          {hint && (
+            <div className="notice notice-warning flex flex-wrap items-center gap-3">
+              <Target size={16} className="flex-shrink-0" />
+              <span className="min-w-0 flex-1">{gapText(hint, hidden ? null : eur)} {tr('Nur ein Hinweis, es wird nichts automatisch gesendet.', 'Just a hint, nothing is sent automatically.')}</span>
+              {<button type="button" className="btn btn-secondary btn-sm" onClick={() => planFor(hint)}>{hint.eur > 0 ? tr('Kaufplan dafür anlegen', 'Create buy plan') : tr('Verkaufsplan dafür anlegen', 'Create sell plan')}</button>}
+            </div>
+          )}
+
           <div className="space-y-4">
             <SectionCard title={tr('Aufteilung', 'Allocation')} action={
-              <Segmented<'ist' | 'after'> value={view} onChange={setView} aria-label={tr('Aufteilung', 'Allocation')}
-                options={[{ id: 'ist', label: tr('Ist', 'Now'), title: tr('So ist es heute', 'As it is today') }, { id: 'after', label: tr('Soll', 'Planned'), title: tr('Nachdem alle Pläne gelaufen sind', 'After all plans have run') }]} />}>
-              <Donut slices={view === 'ist' ? p.ist : p.after} color={color} hidden={hidden} center={view === 'ist' ? tr('heute', 'today') : tr('nach allen Plänen', 'after all plans')} money={money} />
+              <Segmented<'ist' | 'after' | 'target'> value={view} onChange={setView} aria-label={tr('Aufteilung', 'Allocation')}
+                options={[{ id: 'ist', label: tr('Ist', 'Now'), title: tr('So ist es heute', 'As it is today') }, { id: 'after', label: tr('Soll', 'Planned'), title: tr('Nachdem alle Pläne gelaufen sind', 'After all plans have run') }, { id: 'target', label: tr('Ziel', 'Target'), title: tr('Deine Wunsch-Aufteilung', 'Your desired allocation') }]} />}>
+              {view === 'target'
+                ? <TargetEditor gaps={gaps} targets={targets} coins={order} onChange={saveTargets} color={color} hidden={hidden} eur={eur} onPlan={planFor} />
+                : <Donut slices={view === 'ist' ? p.ist : p.after} color={color} hidden={hidden} center={view === 'ist' ? tr('heute', 'today') : tr('nach allen Plänen', 'after all plans')} money={money} targets={targets} />}
               <p className="mt-3 text-xs text-ink-muted">{view === 'ist'
                 ? tr('Coins zum heutigen Kurs, Cash mit den Euro in offenen Kauforders.', 'Coins at today’s price, cash including euro in open buy orders.')
-                : tr('Als wären alle offenen und geplanten Orders ausgeführt: Euro wandern vom Cash zum Coin. Reserve bleibt unberührt.', 'As if all open and planned orders were filled: euro moves from cash to the coin. The reserve stays untouched.')}</p>
+                : view === 'after' ? tr('Als wären alle offenen und geplanten Orders ausgeführt: Euro wandern vom Cash zum Coin. Reserve bleibt unberührt.', 'As if all open and planned orders were filled: euro moves from cash to the coin. The reserve stays untouched.')
+                : tr('Verglichen wird mit der Aufteilung nach allen Plänen, ohne Reserve. Die Knöpfe öffnen den Planer mit einem Vorschlag, gesendet wird erst, wenn du es dort tust.', 'Compared with the allocation after all plans, without the reserve. The buttons open the planner with a suggestion, nothing is sent until you do it there.')}</p>
             </SectionCard>
 
             <SectionCard title={tr('Je Coin', 'By coin')} action={
@@ -158,6 +199,15 @@ export default function PortfolioPage({ reload, onOpenPlan }: Props): JSX.Elemen
   )
 }
 
+/** Satz zur Abweichung, z. B. „ETH liegt nach deinen Plänen 4 Punkte unter deinem Ziel (rund 540 €).“ */
+function gapText(g: TargetGap, eur: ((n: number) => string) | null): string {
+  const pts = num(Math.abs(g.points), 0)
+  const amount = eur ? tr(` (rund ${eur(Math.abs(g.eur))})`, ` (about ${eur(Math.abs(g.eur))})`) : ''
+  return g.points < 0
+    ? tr(`${g.label} liegt nach deinen Plänen ${pts} Punkte unter deinem Ziel${amount}.`, `${g.label} is ${pts} points below your target after your plans${amount}.`)
+    : tr(`${g.label} liegt nach deinen Plänen ${pts} Punkte über deinem Ziel${amount}.`, `${g.label} is ${pts} points above your target after your plans${amount}.`)
+}
+
 const pctSigned = (x: number) => `${x > 0 ? '+' : x < 0 ? '−' : ''}${pct(Math.abs(x))}`
 
 function Coverage({ p, money }: { p: NonNullable<ReturnType<typeof buildPortfolio>>; money: (n: number) => string }) {
@@ -174,7 +224,7 @@ function Coverage({ p, money }: { p: NonNullable<ReturnType<typeof buildPortfoli
   )
 }
 
-function Donut({ slices, color, hidden, center, money }: { slices: PortfolioSlice[]; color: (key: string) => string; hidden: boolean; center: string; money: (n: number) => string }) {
+function Donut({ slices, color, hidden, center, money, targets = {}, plain }: { slices: PortfolioSlice[]; color: (key: string) => string; hidden: boolean; center: string; money: (n: number) => string; targets?: PortfolioTargets; plain?: boolean }) {
   const t = useChartTheme()
   const share = shares(slices)
   const total = slices.reduce((a, s) => a + s.value, 0)
@@ -193,7 +243,7 @@ function Donut({ slices, color, hidden, center, money }: { slices: PortfolioSlic
         </ResponsiveContainer>
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
           <span className="text-xs text-ink-muted">{center}</span>
-          <span className="text-lg font-semibold tabular-nums">{money(total)}</span>
+          {!plain && <span className="text-lg font-semibold tabular-nums">{money(total)}</span>}
         </div>
       </div>
       <ul className="min-w-0 max-w-md flex-1 basis-56 space-y-1.5 text-sm">
@@ -201,7 +251,8 @@ function Donut({ slices, color, hidden, center, money }: { slices: PortfolioSlic
           <li key={s.key} className="flex items-center gap-2">
             <span className="h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ background: color(s.key) }} />
             <span className="min-w-0 flex-1 truncate">{s.label === 'Cash' ? 'Cash' : s.label === 'Reserve' ? tr('Reserve', 'Reserve') : s.label}</span>
-            <span className="tabular-nums text-ink-muted">{hidden ? MASK : money(s.value)}</span>
+            {!plain && <span className="tabular-nums text-ink-muted">{hidden ? MASK : money(s.value)}</span>}
+            {targets[s.key] !== undefined && <span className="w-20 text-right text-xs tabular-nums text-ink-muted">{tr(`Ziel ${num(targets[s.key], 1)} %`, `target ${num(targets[s.key], 1)} %`)}</span>}
             <span className="w-14 text-right font-medium tabular-nums">{num(share[s.key], 1)} %</span>
           </li>
         ))}
@@ -354,6 +405,95 @@ function AmountField({ value, onChange }: { value: number; onChange: (n: number)
       <input className={`input input-sm w-36 text-right tabular-nums ${invalid ? 'border-danger-500' : ''}`} inputMode="decimal" value={text} aria-label={tr('Betrag in Euro', 'Amount in euro')} aria-invalid={invalid}
         onChange={(e) => setText(e.target.value)} onBlur={commit} onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }} />
       <span className="text-ink-muted">€</span>
+    </span>
+  )
+}
+
+/** Ziele bearbeiten: je Coin und Cash ein Prozentwert, daneben Abweichung und Knopf für einen passenden Plan */
+function TargetEditor({ gaps, targets, coins, onChange, color, hidden, eur, onPlan }: {
+  gaps: TargetGap[]; targets: PortfolioTargets; coins: string[]; onChange: (t: PortfolioTargets) => void; color: (key: string) => string
+  hidden: boolean; eur: (n: number) => string; onPlan: (g: TargetGap) => void
+}) {
+  const [add, setAdd] = useState('')
+  const keys = [...new Set([...coins, ...Object.keys(targets).filter((k) => k !== 'cash'), 'cash'])]
+  const total = targetSum(targets)
+  const set = (key: string, v: number) => {
+    const next = { ...targets }
+    if (v > 0) next[key] = v
+    else delete next[key]
+    onChange(next)
+  }
+  const addCoin = () => {
+    const k = add.trim().toUpperCase()
+    if (!/^[A-Z0-9]{1,12}$/.test(k) || keys.includes(k)) return
+    set(k, 5)
+    setAdd('')
+  }
+  const slices = Object.entries(targets).map(([key, value]) => ({ key, label: key === 'cash' ? 'Cash' : key, value }))
+  return (
+    <div className="space-y-4">
+      {slices.length > 0 && <Donut slices={slices} color={color} hidden={false} center={tr('Ziel', 'target')} money={() => ''} plain />}
+      <div className="overflow-x-auto">
+        <table className="data-table">
+          <thead><tr>
+            <th>Coin</th>
+            <th className="num">{tr('Nach Plänen', 'After plans')}</th>
+            <th className="num">{tr('Ziel', 'Target')}</th>
+            <th className="num">{tr('Abweichung', 'Difference')}</th>
+            <th />
+          </tr></thead>
+          <tbody>
+            {keys.map((key) => {
+              const g = gaps.find((x) => x.key === key)
+              const off = g && Math.abs(g.points) >= TARGET_HINT_POINTS
+              return (
+                <tr key={key}>
+                  <td className="font-medium"><span className="mr-2 inline-block h-2.5 w-2.5 rounded-full" style={{ background: color(key) }} />{key === 'cash' ? 'Cash' : key}</td>
+                  <td className="num text-ink-muted">{g ? `${num(g.share, 1)} %` : '–'}</td>
+                  <td className="num"><PercentField value={targets[key] ?? 0} onChange={(v) => set(key, v)} label={key} /></td>
+                  <td className={`num ${off ? (g!.points < 0 ? 'text-warning-fg' : 'text-info-fg') : 'text-ink-muted'}`}>
+                    {g ? `${g.points > 0 ? '+' : g.points < 0 ? '−' : ''}${num(Math.abs(g.points), 1)} ${tr('Punkte', 'pts')}` : '–'}
+                    {g && !hidden && Math.abs(g.eur) >= 1 && <span className="block text-xs text-ink-muted">{g.eur > 0 ? tr(`${eur(g.eur)} fehlen`, `${eur(g.eur)} short`) : tr(`${eur(-g.eur)} zu viel`, `${eur(-g.eur)} too much`)}</span>}
+                  </td>
+                  <td className="num">{off && key !== 'cash' && <button type="button" className="btn btn-ghost btn-sm" onClick={() => onPlan(g!)}>{g!.eur > 0 ? tr('Kaufplan', 'Buy plan') : tr('Verkaufsplan', 'Sell plan')} <ChevronRight size={14} /></button>}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div className="flex flex-wrap items-center gap-3 text-sm">
+        {Object.keys(targets).length < MAX_TARGETS && (
+          <span className="flex items-center gap-2">
+            <input className="input input-sm w-28" placeholder={tr('Coin, z. B. ADA', 'Coin, e.g. ADA')} value={add} maxLength={12} aria-label={tr('Coin hinzufügen', 'Add coin')}
+              onChange={(e) => setAdd(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') addCoin() }} />
+            <button type="button" className="btn btn-secondary btn-sm" onClick={addCoin}><Plus size={14} /> {tr('Coin', 'Coin')}</button>
+          </span>
+        )}
+        <span className={`ml-auto tabular-nums ${Math.abs(total - 100) < 0.05 || total === 0 ? 'text-ink-muted' : 'text-warning-fg'}`}>
+          {tr(`Summe ${num(total, 1)} %`, `Total ${num(total, 1)} %`)}{total > 0 && Math.abs(total - 100) >= 0.05 ? tr(', sollte 100 % sein', ', should be 100 %') : ''}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+/** Prozentfeld 0–100, übernimmt beim Verlassen */
+function PercentField({ value, onChange, label }: { value: number; onChange: (n: number) => void; label: string }) {
+  const fmt = numberFormat()
+  const [text, setText] = useState(value ? toInputText(value, fmt) : '')
+  useEffect(() => setText(value ? toInputText(value, fmt) : ''), [value, fmt])
+  const parsed = parseNumber(text, fmt)
+  const invalid = text.trim() !== '' && (Number.isNaN(parsed) || parsed < 0 || parsed > 100)
+  const commit = () => {
+    const n = text.trim() === '' ? 0 : parsed
+    if (!invalid && n !== value) onChange(n)
+  }
+  return (
+    <span className="inline-flex items-center gap-1">
+      <input className={`input input-sm w-20 text-right tabular-nums ${invalid ? 'border-danger-500' : ''}`} inputMode="decimal" value={text} placeholder="0" aria-label={tr(`Ziel für ${label} in Prozent`, `Target for ${label} in percent`)} aria-invalid={invalid}
+        onChange={(e) => setText(e.target.value)} onBlur={commit} onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }} />
+      <span className="text-ink-muted">%</span>
     </span>
   )
 }
