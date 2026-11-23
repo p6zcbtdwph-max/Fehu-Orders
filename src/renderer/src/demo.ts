@@ -6,6 +6,8 @@ import { tr } from '@shared/i18n'
 import { ipKind, ipProblem, maskIp } from '@shared/ip'
 import { EXCHANGE_IDS, exchangeName, type ExchangeId } from '@shared/exchanges'
 import { KEY_ROLES, needTradeKeyText, readChecks, type KeyRoles } from '@shared/key-roles'
+import { normalizeHoldings } from '@shared/portfolio'
+import { assetLabel } from '@shared/safety'
 import type { Api, DraftDto, KeyCheck, LogEntry, OpenOrderDto, PairDto, PlanDto, PlanStatusDto, SendResult, SettingsDto, TemplateDto } from '@shared/ipc'
 
 const P = (id: string, name: string, base: string, priceDecimals: number, orderMin: number, price: number) =>
@@ -30,7 +32,7 @@ const round = (v: number, d: number) => Math.round(v * 10 ** d) / 10 ** d
 
 export function createDemoApi(): Api {
   let homeIps: { ip: string; label?: string }[] = [{ ip: '203.0.113.42', label: tr('Zuhause', 'Home') }]
-  let settings: SettingsDto = { minOrderEur: 10, maxPlanEur: 5000, watchlist: ['BTC/EUR', 'ETH/EUR', 'SOL/EUR'], currency: 'EUR', numberFormat: 'de', exchange: 'kraken', portfolioDrafts: true, portfolioTargets: { BTC: 25, ETH: 15, SOL: 5, cash: 55 }, cashPots: [{ id: 'demo-pot', name: tr('Tagesgeld', 'Savings account'), amount: 5000 }] }
+  let settings: SettingsDto = { minOrderEur: 10, maxPlanEur: 5000, watchlist: ['BTC/EUR', 'ETH/EUR', 'SOL/EUR'], currency: 'EUR', numberFormat: 'de', exchange: 'kraken', portfolioDrafts: true, portfolioTargets: { BTC: 25, ETH: 15, SOL: 5, cash: 55 }, manualHoldings: [{ id: 'demo-ledger', place: 'Ledger', coin: 'BTC', amount: 0.05, at: new Date().toISOString() }], cashPots: [{ id: 'demo-pot', name: tr('Tagesgeld', 'Savings account'), amount: 5000 }] }
   const balances: Record<string, number> = { ZEUR: 2500, XXBT: 0.02, XETH: 0.5, SOL: 4 }
   let templates: TemplateDto[] = [
     { id: 'demo-1', name: 'Dip-Kauf 10 Stufen', pairName: 'BTC/EUR', postOnly: true,
@@ -255,8 +257,12 @@ export function createDemoApi(): Api {
       const [status, free] = await Promise.all([this.planStatus(), this.available()])
       const open = drafts.filter((d) => d.status === 'draft')
       const ids = [...new Set([...plans, ...open].map((x) => x.pairId))]
+      const holdings = normalizeHoldings(balances, MARKET.map((m) => m.pair), assetLabel)
+      const coins = new Set([...holdings.map((h) => h.coin), ...(settings.manualHoldings ?? []).map((m) => m.coin)])
+      const coinPrices = Object.fromEntries(MARKET.filter((m) => coins.has(m.pair.name.split('/')[0])).map((m) => [m.pair.name.split('/')[0], m.price]))
       return wait([{ exchange: 'kraken' as const, hasKey: true, plans: plans.map((p) => ({ ...p, exchange: 'kraken' as const })), drafts: open.map((d) => ({ ...d })), status,
-        openOrders: orders.map((o) => ({ ...o })), eurTotal: balances.ZEUR, eurFree: free.ZEUR, prices: Object.fromEntries(ids.map((id) => [id, priceOf(id)])) }])
+        openOrders: orders.map((o) => ({ ...o })), eurTotal: balances.ZEUR, eurFree: free.ZEUR, prices: Object.fromEntries(ids.map((id) => [id, priceOf(id)])),
+        whole: { exchange: 'kraken' as const, holdings, coinPrices, eurTotal: balances.ZEUR, at: new Date().toISOString() } }])
     },
     async saveDraft(d) { drafts = drafts.some((x) => x.id === d.id) ? drafts.map((x) => (x.id === d.id ? d : x)) : [d, ...drafts] },
     async deleteDraft(id) { drafts = drafts.filter((d) => d.id !== id) },

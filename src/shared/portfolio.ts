@@ -21,6 +21,8 @@ export interface PortfolioSource {
   prices: Record<string, number>
   /** Fehler beim Laden dieser Börse (die anderen werden trotzdem gezeigt) */
   error?: string
+  /** Für „Gesamtes Portfolio“: alle Bestände und Euro-Kurse je Coin */
+  whole?: WholeSource
 }
 
 /** Eigener Cash-Topf, z. B. Tagesgeld. reserve = Notgroschen, zählt nicht für Käufe. */
@@ -372,4 +374,189 @@ export function targetGaps(slices: PortfolioSlice[], targets: PortfolioTargets):
     out.push({ key, label: key === 'cash' ? 'Cash' : key, share, target, points: share - target, eur: (target / 100) * total - value })
   }
   return out.sort((a, b) => Math.abs(b.points) - Math.abs(a.points) || a.key.localeCompare(b.key))
+}
+
+// ───────────── Stufe 2: alles, was du besitzt ─────────────
+
+/** Bestand eines Coins bei einer Börse, Coin-Name schon vereinheitlicht (XXBT → BTC) */
+export interface HoldingDto {
+  coin: string
+  /** Gesamt: frei + in Orders + Earn */
+  amount: number
+  /** Davon in Earn / Staking */
+  earn: number
+}
+
+/** Eigener Eintrag für Orte ohne Schnittstelle (Hardware-Wallet, Broker …) */
+export interface ManualHolding {
+  id: string
+  /** Ort, z. B. „Ledger“ oder „Trade Republic“ */
+  place: string
+  coin: string
+  amount: number
+  /** Stand der Angabe (ISO-Datum), damit man sieht, wie alt sie ist */
+  at?: string
+}
+
+export const MAX_MANUAL = 50
+
+/** Nur gültige eigene Einträge übernehmen */
+export function cleanManual(raw: unknown): ManualHolding[] {
+  if (!Array.isArray(raw)) return []
+  const out: ManualHolding[] = []
+  for (const x of raw) {
+    if (!x || typeof x !== 'object') continue
+    const r = x as Record<string, unknown>
+    const amount = Number(r.amount)
+    const coin = typeof r.coin === 'string' ? r.coin.trim().toUpperCase() : ''
+    if (typeof r.id !== 'string' || !r.id || typeof r.place !== 'string' || !/^[A-Z0-9]{1,12}$/.test(coin) || !Number.isFinite(amount) || amount < 0 || amount > MAX_CASH_AMOUNT) continue
+    out.push({ id: r.id.slice(0, 64), place: r.place.trim().slice(0, 40), coin, amount, ...(typeof r.at === 'string' && r.at.length <= 40 ? { at: r.at } : {}) })
+    if (out.length >= MAX_MANUAL) break
+  }
+  return out
+}
+
+/** Euro-Codes der Börsen (zählen als Cash, nicht als Coin) */
+const EUR_CODES = new Set(['EUR', 'ZEUR'])
+
+/**
+ * Bestände einer Börse vereinheitlichen: Coin-Namen über die Paar-Namen (Basis-Code → „BTC“ aus „BTC/EUR“),
+ * Kraken-Codes wie XXBT oder SOL.S über label. Euro fällt heraus (ist Cash).
+ */
+export function normalizeHoldings(
+  balances: Record<string, number>,
+  pairs: { name: string; base: string }[],
+  label: (code: string) => { name: string; earn?: string } = (c) => ({ name: c }),
+): HoldingDto[] {
+  const byBase = new Map<string, string>()
+  for (const p of pairs) if (!byBase.has(p.base)) byBase.set(p.base, p.name.split('/')[0])
+  const out = new Map<string, HoldingDto>()
+  for (const [code, v] of Object.entries(balances)) {
+    if (!(v > 0) || EUR_CODES.has(code)) continue
+    const l = label(code)
+    if (EUR_CODES.has(l.name)) continue
+    const coin = (!l.earn && byBase.get(code)) || l.name
+    const h = out.get(coin) ?? { coin, amount: 0, earn: 0 }
+    h.amount += v
+    if (l.earn) h.earn += v
+    out.set(coin, h)
+  }
+  return [...out.values()]
+}
+
+/** Was „Gesamtes Portfolio“ je Börse zusätzlich braucht */
+export interface WholeSource {
+  exchange: ExchangeId
+  /** null = unbekannt (kein Schlüssel oder Fehler) */
+  holdings: HoldingDto[] | null
+  /** Euro-Kurs je Coin, soweit die Börse einen kennt */
+  coinPrices: Record<string, number>
+  eurTotal: number | null
+  /** Zeitpunkt der Daten (ISO) */
+  at: string
+  /** Alter Stand (Börse gerade nicht erreichbar) */
+  stale?: boolean
+}
+
+export interface WholeRow {
+  coin: string
+  /** Menge je Ort: Börsen-Id oder Name des eigenen Eintrags */
+  places: Record<string, number>
+  amount: number
+  earn: number
+  price: number | null
+  value: number | null
+  /** Noch geplant laut deinen Plänen (aus Stufe 1) */
+  soll: number
+  /** Ø Einstand aus deinen Plänen, falls bekannt */
+  avgPrice: number | null
+}
+
+export interface WholePortfolio {
+  rows: WholeRow[]
+  /** Orte in fester Reihenfolge: erst Börsen, dann eigene Einträge */
+  places: string[]
+  coins: number
+  cash: number
+  cashReserve: number
+  total: number
+  soll: number
+  /** Ausgeblendete Kleinstbestände (unter 1 €) */
+  dust: number
+  /** Coins ohne Euro-Kurs */
+  unpriced: string[]
+  ist: PortfolioSlice[]
+  after: PortfolioSlice[]
+}
+
+export const DUST_EUR = 1
+
+/**
+ * Gesamtes Portfolio: Bestände aller Börsen plus eigene Einträge, bewertet zum Euro-Kurs.
+ * Soll kommt aus den Plänen (Stufe 1), Euro in offenen Kauforders liegen noch im Cash.
+ */
+export function buildWhole(whole: WholeSource[], manual: ManualHolding[], plan: Portfolio): WholePortfolio {
+  const rows = new Map<string, WholeRow>()
+  const row = (coin: string): WholeRow => {
+    let r = rows.get(coin)
+    if (!r) rows.set(coin, (r = { coin, places: {}, amount: 0, earn: 0, price: null, value: null, soll: 0, avgPrice: null }))
+    return r
+  }
+  const prices = new Map<string, number>()
+  for (const w of whole) for (const [c, p] of Object.entries(w.coinPrices)) if (p > 0 && !prices.has(c)) prices.set(c, p)
+  for (const r of plan.rows) if (r.price !== null && !prices.has(r.coin)) prices.set(r.coin, r.price)
+
+  const places: string[] = []
+  for (const w of whole) {
+    if (!w.holdings) continue
+    if (!places.includes(w.exchange)) places.push(w.exchange)
+    for (const h of w.holdings) {
+      const r = row(h.coin)
+      r.places[w.exchange] = (r.places[w.exchange] ?? 0) + h.amount
+      r.amount += h.amount
+      r.earn += h.earn
+    }
+  }
+  for (const m of manual) {
+    if (!(m.amount > 0)) continue
+    const place = m.place || m.coin
+    if (!places.includes(place)) places.push(place)
+    const r = row(m.coin)
+    r.places[place] = (r.places[place] ?? 0) + m.amount
+    r.amount += m.amount
+  }
+  for (const pr of plan.rows) {
+    const r = pr.soll !== 0 || rows.has(pr.coin) ? row(pr.coin) : null
+    if (!r) continue
+    r.soll = pr.soll
+    r.avgPrice = pr.avgPrice
+  }
+
+  let dust = 0
+  const unpriced: string[] = []
+  const list: WholeRow[] = []
+  for (const r of rows.values()) {
+    const p = prices.get(r.coin) ?? null
+    r.price = p
+    r.value = p !== null ? r.amount * p : null
+    if (p === null && r.amount > 0) unpriced.push(r.coin)
+    if (r.value !== null && r.value < DUST_EUR && r.soll === 0) { dust++; continue }
+    list.push(r)
+  }
+  list.sort((a, b) => (b.value ?? 0) + Math.max(0, b.soll) - ((a.value ?? 0) + Math.max(0, a.soll)) || a.coin.localeCompare(b.coin))
+
+  const cash = plan.cashExchange + plan.cashPots
+  const coins = sum(list.map((r) => r.value ?? 0))
+  const soll = sum(list.map((r) => r.soll))
+  const afterCash = Math.max(0, cash - soll)
+  const reserve = plan.cashReserve
+  const tail = (c: number): PortfolioSlice[] => [
+    ...(c > 0 ? [{ key: 'cash', label: 'Cash', value: c }] : []),
+    ...(reserve > 0 ? [{ key: 'reserve', label: 'Reserve', value: reserve }] : []),
+  ]
+  return {
+    rows: list, places, coins, cash, cashReserve: reserve, total: coins + cash + reserve, soll, dust, unpriced,
+    ist: [...list.filter((r) => (r.value ?? 0) > 0).map((r) => ({ key: r.coin, label: r.coin, value: r.value as number })), ...tail(cash)],
+    after: [...list.map((r) => ({ key: r.coin, label: r.coin, value: Math.max(0, (r.value ?? 0) + r.soll) })).filter((s) => s.value > 0), ...tail(afterCash)],
+  }
 }

@@ -6,7 +6,7 @@ import type { BackupSummary } from './backup'
 import type { KeyRole, KeyRoles, TradeKeyMode } from './key-roles'
 import type { ExchangeId } from './exchanges'
 import type { HomeIpView } from './ip'
-import type { CashPot, PortfolioSource, PortfolioTargets } from './portfolio'
+import type { CashPot, ManualHolding, PortfolioSource, PortfolioTargets } from './portfolio'
 
 export interface PairDto {
   id: string
@@ -56,6 +56,8 @@ export interface SettingsDto {
   portfolioTargets?: PortfolioTargets
   /** Wie lange der Handels-Schlüssel bleibt (Standard: dauerhaft) */
   tradeKeyMode?: TradeKeyMode
+  /** Portfolio: eigene Einträge (Wallet, Broker) */
+  manualHoldings?: ManualHolding[]
 }
 
 export interface SendResult {

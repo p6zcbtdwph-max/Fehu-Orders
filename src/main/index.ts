@@ -14,14 +14,14 @@ import {
 } from './store'
 import type { ClearAllResult, DraftDto, KeyStatusDto, LogEntry, PlanStatusDto, SaveKeyResult, SendRequest, SendResult, TemplateDto } from '../shared/ipc'
 import { checksPass, isKeyRole, isTradeKeyMode, needTradeKeyText, readChecks, roleName, type KeyRole } from '../shared/key-roles'
-import { alarmHit, checkKeyFormat, normalizeCoinbase, priceGuard } from '../shared/safety'
+import { alarmHit, assetLabel, checkKeyFormat, normalizeCoinbase, priceGuard } from '../shared/safety'
 import { planStatus, zoneProgress, type OrderSnapshot } from '../shared/plan-status'
 import { hasZones, heldZones, isHeld, MAX_MIN_ORDER_EUR, MAX_STEPS, prepareForSend, type LadderLevel, type Side } from '../shared/ladder'
 import { langFromLocale, setLang, tr } from '../shared/i18n'
 import { moneyText, toInputText, type NumberFormat } from '../shared/number-format'
 import { splitSend } from '../shared/send-split'
 import { ipKind, ipProblem, maskIp, MAX_IPS, type HomeIpView } from '../shared/ip'
-import { cleanCashPots, cleanTargets, type PortfolioSource } from '../shared/portfolio'
+import { cleanCashPots, cleanManual, cleanTargets, normalizeHoldings, type PortfolioSource, type WholeSource } from '../shared/portfolio'
 
 /** Sprache aus den Einstellungen, sonst die Systemsprache des Macs */
 const applyLanguage = () => setLang(getSettings().language ?? langFromLocale(systemLocale()))
@@ -294,6 +294,7 @@ handle('settings:save', (s: Partial<Settings>) => {
   if (s.cashPots !== undefined) patch.cashPots = cleanCashPots(s.cashPots)
   if (typeof s.portfolioDrafts === 'boolean') patch.portfolioDrafts = s.portfolioDrafts
   if (s.portfolioTargets !== undefined) patch.portfolioTargets = cleanTargets(s.portfolioTargets)
+  if (s.manualHoldings !== undefined) patch.manualHoldings = cleanManual(s.manualHoldings)
   if (s.minOrderEur !== undefined) {
     const min = Number(s.minOrderEur)
     if (!Number.isFinite(min) || min < 1 || min > MAX_MIN_ORDER_EUR) throw new Error(tr(`Der Mindest-Orderwert muss zwischen 1 € und ${MAX_MIN_ORDER_EUR} € liegen.`, `The minimum order value must be between 1 € and ${MAX_MIN_ORDER_EUR} €.`))
@@ -393,35 +394,53 @@ handle('portfolio', async (): Promise<PortfolioSource[]> => {
   const keys = connected()
   const allPlans = getPlans()
   const allDrafts = getDrafts().filter((d) => d.status === 'draft')
-  const exs = EXCHANGE_IDS.filter((ex) => keys.includes(ex) || allPlans.some((p) => exchangeOf(p) === ex) || allDrafts.some((d) => exchangeOf(d) === ex))
+  // Eigene Einträge (Wallet, Broker) bekommen ihren Kurs von der gewählten Börse
+  const manualCoins = [...new Set(getSettings().manualHoldings.map((m) => m.coin))]
+  const active = activeEx()
+  const exs = EXCHANGE_IDS.filter((ex) => keys.includes(ex) || allPlans.some((p) => exchangeOf(p) === ex) || allDrafts.some((d) => exchangeOf(d) === ex) || (ex === active && manualCoins.length > 0))
   return Promise.all(exs.map(async (ex): Promise<PortfolioSource> => {
     const plans = allPlans.filter((p) => exchangeOf(p) === ex)
     const drafts = allDrafts.filter((d) => exchangeOf(d) === ex)
     const hasKey = keys.includes(ex)
+    const at = new Date().toISOString()
     const out: PortfolioSource = { exchange: ex, hasKey, plans, drafts, status: [], openOrders: [], eurTotal: null, eurFree: null, prices: {} }
+    const whole: WholeSource = { exchange: ex, holdings: null, coinPrices: {}, eurTotal: null, at }
     const errors: string[] = []
-    const ids = [...new Set([...plans, ...drafts].map((x) => x.pairId))].slice(0, 50)
-    if (ids.length) {
-      try { out.prices = await clientFor(ex).lastPrices(ids) } catch (e) { errors.push((e as Error).message) }
-    }
+    let bal: Record<string, number> | null = null
     if (hasKey) {
       try {
         const k = clientFor(ex)
-        const [status, open, bal, free] = await Promise.all([
+        const [status, open, b, free] = await Promise.all([
           plans.length ? computeStatuses(ex) : Promise.resolve([]),
           plans.length ? k.openOrders() : Promise.resolve([]),
           k.balances(),
           k.available().catch(() => null),
         ])
         const refs = new Set(plans.map((p) => p.userref))
+        bal = b
         out.status = status
         out.openOrders = open.filter((o) => refs.has(o.userref))
-        out.eurTotal = bal.ZEUR ?? bal.EUR ?? 0
+        out.eurTotal = b.ZEUR ?? b.EUR ?? 0
         out.eurFree = free ? free.ZEUR ?? free.EUR ?? 0 : null
+        whole.eurTotal = out.eurTotal
       } catch (e) {
         errors.push((e as Error).message)
       }
     }
+    // Kurse: Paare der Pläne und je gehaltenem Coin (und eigenem Eintrag) das Euro-Paar, alles in einer Abfrage
+    const pairs = await pairsFor(ex).catch(() => [] as PairInfo[])
+    if (bal) whole.holdings = normalizeHoldings(bal, pairs, ex === 'kraken' ? assetLabel : (c) => ({ name: c }))
+    const coins = [...new Set([...(whole.holdings ?? []).map((h) => h.coin), ...(ex === active ? manualCoins : [])])]
+    const eurPair = new Map(coins.map((c) => [c, pairs.find((p) => p.name === `${c}/EUR`)?.id]).filter((x): x is [string, string] => !!x[1]))
+    const ids = [...new Set([...[...plans, ...drafts].map((x) => x.pairId), ...eurPair.values()])].slice(0, 100)
+    if (ids.length) {
+      try {
+        const prices = await clientFor(ex).lastPrices(ids)
+        out.prices = prices
+        for (const [c, id] of eurPair) if (prices[id] > 0) whole.coinPrices[c] = prices[id]
+      } catch (e) { errors.push((e as Error).message) }
+    }
+    out.whole = whole
     if (errors.length) out.error = `${exchangeName(ex)}: ${errors[0]}`
     return out
   }))
