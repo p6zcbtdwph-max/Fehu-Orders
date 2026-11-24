@@ -1,10 +1,12 @@
 // „Meine Pläne“: Entwürfe und gesendete Pläne in einer Liste, jeder mit einem Status.
 // Ein Plan durchläuft vier Zustände: Entwurf → (Wartet auf dich) → Läuft → Fertig.
+// Wurde ein Plan storniert, ohne dass etwas ausgeführt wurde, gilt er als „Abgebrochen“: Er steht dann
+// nicht mehr in „Meine Pläne“, sondern nur noch im Verlauf.
 import type { DraftDto, PlanDto, PlanStatusDto } from './ipc'
 import { heldZones, isHeld, zoneTrigger, type LadderLevel } from './ladder'
 import { triggerMet } from './plan-status'
 
-export type BoardStatus = 'draft' | 'wait' | 'run' | 'done'
+export type BoardStatus = 'draft' | 'wait' | 'run' | 'done' | 'cancelled'
 
 /** Grund, warum ein Plan auf dich wartet */
 export type WaitReason =
@@ -29,14 +31,16 @@ export interface BoardEntry {
   st?: PlanStatusDto
 }
 
-/** Noch nicht gesendete Stufen einer Zone */
+/** Noch nicht gesendete Stufen einer Zone. Nach dem Stornieren gibt es keine mehr. */
 export const zoneLevels = (p: PlanDto, zone: number): LadderLevel[] => {
+  if (p.cancelledAt) return []
   const sent = new Set(p.sentIndices ?? [])
   return (p.levels ?? []).filter((l) => l.zone === zone && !sent.has(l.index) && !l.problem)
 }
 
 /** Stufen, die beim ersten Senden zurückgehalten wurden (ohne pausierte Zonen, die haben ihren eigenen Knopf) */
 export const restLevels = (p: PlanDto): LadderLevel[] => {
+  if (p.cancelledAt) return []
   const sent = new Set(p.sentIndices ?? [])
   const held = heldZones(p.input)
   return (p.levels ?? []).filter((l) => !sent.has(l.index) && !isHeld(l, held) && !l.problem)
@@ -56,12 +60,23 @@ export const readyZones = (p: PlanDto, st: PlanStatusDto | undefined): number[] 
 export function planStatusOf(p: PlanDto, st: PlanStatusDto | undefined): { status: BoardStatus; wait?: WaitReason } {
   const ready = readyZones(p, st)
   if (ready.length) return { status: 'wait', wait: { kind: 'zone', zone: ready[0] } }
-  if (!st) return { status: 'run' }
+  // In der App storniert, Börse gerade nicht erreichbar: es bleibt beim Abbruch
+  if (!st) return { status: p.cancelledAt ? 'cancelled' : 'run' }
   const left = restLevels(p).length > 0 || heldWithLevels(p).length > 0
-  return { status: st.open > 0 || left ? 'run' : 'done' }
+  if (st.open > 0 || left) return { status: 'run' }
+  return { status: wasCancelled(p, st) && !hasFills(st) ? 'cancelled' : 'done' }
 }
 
-const ORDER: Record<BoardStatus, number> = { wait: 0, draft: 1, run: 1, done: 2 }
+/** Ist von einem Plan etwas ausgeführt worden (auch nur teilweise)? */
+export const hasFills = (st: PlanStatusDto | undefined): boolean => !!st && (st.filled > 0 || st.partial > 0 || st.filledVolume > 0)
+
+/** Wurde ein Plan storniert, in der App oder direkt bei der Börse (bzw. sind Orders abgelaufen)? */
+export const wasCancelled = (p: PlanDto, st: PlanStatusDto | undefined): boolean => !!p.cancelledAt || (st?.canceled ?? 0) > 0
+
+/** Gehört der Eintrag in „Meine Pläne“? Abgebrochene Pläne ohne Ausführung stehen nur noch im Verlauf. */
+export const onBoard = (e: Pick<BoardEntry, 'status'>): boolean => e.status !== 'cancelled'
+
+const ORDER: Record<BoardStatus, number> = { wait: 0, draft: 1, run: 1, done: 2, cancelled: 3 }
 
 /** Alle Pläne für „Meine Pläne“: zuerst, was auf dich wartet, dann das Neueste, Fertiges am Ende */
 export function planBoard(drafts: DraftDto[], plans: PlanDto[], status: Record<number, PlanStatusDto>): BoardEntry[] {
@@ -84,12 +99,21 @@ export function planBoard(drafts: DraftDto[], plans: PlanDto[], status: Record<n
   return out.sort((a, b) => ORDER[a.status] - ORDER[b.status] || b.at.localeCompare(a.at))
 }
 
-/** Anzahl je Reiter: Entwürfe (inkl. Kursalarm), Laufend (inkl. Zone bereit), Fertig */
-export function boardCounts(entries: BoardEntry[]): { all: number; drafts: number; running: number; done: number; waiting: number } {
+/** Gesendet und noch nicht fertig oder abgebrochen */
+export const isRunning = (e: Pick<BoardEntry, 'kind' | 'status'>): boolean => e.kind === 'plan' && (e.status === 'run' || e.status === 'wait')
+
+/** Abgebrochene Pläne (nichts ausgeführt) für den Verlauf, neueste zuerst */
+export const cancelledPlans = (entries: BoardEntry[]): BoardEntry[] =>
+  entries.filter((e) => e.status === 'cancelled').sort((a, b) => (b.plan?.cancelledAt ?? b.at).localeCompare(a.plan?.cancelledAt ?? a.at))
+
+/** Anzahl je Reiter: Entwürfe (inkl. Kursalarm), Laufend (inkl. Zone bereit), Fertig. Abgebrochene zählen nicht mit. */
+export function boardCounts(entries: BoardEntry[]): { all: number; drafts: number; running: number; done: number; waiting: number; cancelled: number } {
+  const shown = entries.filter(onBoard)
   return {
-    all: entries.length,
+    all: shown.length,
+    cancelled: entries.length - shown.length,
     drafts: entries.filter((e) => e.kind === 'draft').length,
-    running: entries.filter((e) => e.kind === 'plan' && e.status !== 'done').length,
+    running: entries.filter(isRunning).length,
     done: entries.filter((e) => e.status === 'done').length,
     waiting: entries.filter((e) => e.status === 'wait').length,
   }

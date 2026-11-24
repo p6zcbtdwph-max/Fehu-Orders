@@ -1,7 +1,8 @@
 import { api } from '../api'
 import { useEffect, useMemo, useState } from 'react'
-import { Download, RefreshCw } from 'lucide-react'
+import { ChevronRight, Download, RefreshCw } from 'lucide-react'
 import type { LogEntry } from '@shared/ipc'
+import { cancelledPlans, type BoardEntry } from '@shared/plan-board'
 import SectionCard from '../components/ui/SectionCard'
 import Badge from '../components/ui/Badge'
 import Segmented from '../components/ui/Segmented'
@@ -48,8 +49,9 @@ export function toCsv(entries: LogEntry[]): string {
 
 type Filter = 'all' | 'orders' | 'errors'
 
-export default function LogPage(): JSX.Element {
+export default function LogPage({ board = [], onOpenPlan }: { board?: BoardEntry[]; onOpenPlan?: (id: string) => void }): JSX.Element {
   const { eur } = useMoney()
+  const cancelled = cancelledPlans(board)
   const [entries, setEntries] = useState<LogEntry[]>([])
   const [filter, setFilter] = useState<Filter>('all')
   const load = () => api().log().then(setEntries).catch(() => setEntries([]))
@@ -80,6 +82,35 @@ export default function LogPage(): JSX.Element {
           <button type="button" className="btn btn-primary" disabled={!shown.length} onClick={exportCsv}><Download size={16} /> {tr('Als CSV speichern', 'Save as CSV')}</button>
         </div>
       </header>
+
+      {cancelled.length > 0 && (
+        <SectionCard className="mb-4" title={tr(`Abgebrochene Pläne (${cancelled.length})`, `Cancelled plans (${cancelled.length})`)}>
+          <p className="mb-3 text-sm text-ink-muted">{tr(
+            'Storniert, bevor etwas ausgeführt wurde. Sie zählen nicht als fertig und stehen deshalb nicht mehr in „Meine Pläne“.',
+            'Cancelled before anything was filled. They do not count as done and are therefore no longer listed in “My plans”.',
+          )}</p>
+          <div className="overflow-x-auto">
+            <table className="data-table">
+              <thead><tr><th>Plan</th><th>{tr('Gesendet', 'Sent')}</th><th>{tr('Abgebrochen', 'Cancelled')}</th><th className="num">Orders</th><th className="num">{tr('Gegenwert', 'Value')}</th><th /></tr></thead>
+              <tbody>
+                {cancelled.map((e) => (
+                  <tr key={e.id} className={onOpenPlan ? 'cursor-pointer hover:bg-sunken-soft' : ''} onClick={() => onOpenPlan?.(e.id)}>
+                    <td className="whitespace-nowrap">
+                      <span className="font-medium text-ink">{e.name || e.pairName}</span>
+                      <span className="block text-xs text-ink-muted">{e.name ? `${e.pairName} ` : ''}{e.side === 'buy' ? tr('Kauf', 'buy') : tr('Verkauf', 'sell')} · Plan {e.plan?.userref}</span>
+                    </td>
+                    <td className="whitespace-nowrap tabular-nums text-ink-muted">{fmtTime(e.at)}</td>
+                    <td className="whitespace-nowrap tabular-nums text-ink-muted">{e.plan?.cancelledAt ? fmtTime(e.plan.cancelledAt) : tr('bei der Börse', 'at the exchange')}</td>
+                    <td className="num">{num(e.plan?.sent ?? 0, 0)}</td>
+                    <td className="num">{eur(e.plan?.totalCost ?? 0)}</td>
+                    <td className="text-right">{onOpenPlan && <ChevronRight size={14} className="inline text-ink-muted" />}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </SectionCard>
+      )}
 
       <SectionCard title={tr(`${shown.length} ${shown.length === 1 ? 'Eintrag' : 'Einträge'}`, `${shown.length} ${shown.length === 1 ? 'entry' : 'entries'}`)}
         action={<Segmented<Filter> value={filter} onChange={setFilter} options={[{ id: 'all', label: tr('Alles', 'All') }, { id: 'orders', label: 'Orders' }, { id: 'errors', label: tr('Fehler', 'Errors') }]} />}>

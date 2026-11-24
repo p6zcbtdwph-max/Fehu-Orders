@@ -10,13 +10,14 @@ describe('Demo-Modus', () => {
     const { levels } = buildLadder(input, pair)
     const probe = await api.send({ pairId: pair.id, pairName: pair.name, side: 'buy', input, levels, validate: true, postOnly: true })
     expect(probe.orders).toHaveLength(5)
-    expect((await api.plans()).length).toBe(2) // nur die Beispielpläne
+    expect((await api.plans()).length).toBe(3) // nur die Beispielpläne (einer davon abgebrochen)
     const r = await api.send({ pairId: pair.id, pairName: pair.name, side: 'buy', input, levels, validate: false, postOnly: true, sendCount: 2 })
     expect(r.orders.every((o) => o.txid?.startsWith('DEMO-'))).toBe(true)
     expect((await api.openOrders()).filter((o) => o.userref === r.userref)).toHaveLength(2)
     await api.sendRest(r.userref, false)
     expect((await api.openOrders()).filter((o) => o.userref === r.userref)).toHaveLength(5)
     expect(await api.cancelPlan(r.userref)).toBe(5)
+    expect((await api.plans()).find((p) => p.userref === r.userref)!.cancelledAt).toBeTruthy()
     await expect(api.saveKey('a', 'b')).rejects.toThrow(/Demo/)
   })
 

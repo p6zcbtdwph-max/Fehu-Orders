@@ -5,6 +5,7 @@ import { ChevronDown, ChevronRight, X } from 'lucide-react'
 import { tr } from '@shared/i18n'
 import type { OpenOrderDto, PairDto } from '@shared/ipc'
 import { groupOpenOrders, type OrderGroup } from '@shared/order-groups'
+import { findPair, pairLabel } from '@shared/pair-label'
 import SectionCard from './ui/SectionCard'
 import Segmented from './ui/Segmented'
 import { num } from '../format'
@@ -31,10 +32,9 @@ export default function OpenOrdersCard({ orders, pairs, onCancel }: { orders: Op
     else n.add(key)
     return n
   })
-  // Börsen nennen Paare in offenen Orders unterschiedlich (XBTEUR, BTC-EUR …): lesbaren Namen suchen
-  const pairOf = (id: string) => pairs.find((p) => p.id === id || p.name.replace('/', '') === id || p.name.replace('/', '-') === id)
-  const label = (id: string) => pairOf(id)?.name ?? id
-  const dec = (id: string) => pairOf(id)?.priceDecimals ?? 8
+  // Börsen nennen Paare in offenen Orders unterschiedlich (Kraken „XBTEUR“, Coinbase „BTC-EUR“ …): immer „BTC/EUR“ zeigen
+  const label = (id: string) => pairLabel(id, pairs)
+  const dec = (id: string) => findPair(id, pairs)?.priceDecimals ?? 8
   const side = (s: 'buy' | 'sell') => (s === 'buy' ? tr('Kauf', 'Buy') : tr('Verkauf', 'Sell'))
   const groups = groupOpenOrders(orders)
   const merged = groups.filter((g) => g.orders.length > 1).length

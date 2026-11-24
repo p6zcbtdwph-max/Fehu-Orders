@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { boardCounts, planBoard, planStatusOf, restLevels } from './plan-board'
+import { boardCounts, cancelledPlans, isRunning, planBoard, planStatusOf, restLevels } from './plan-board'
 import type { DraftDto, PlanDto, PlanStatusDto } from './ipc'
 
 const lvl = (index: number, zone?: number) => ({ index, price: 100 - index, volume: 1, cost: 100 - index, share: 0.1, zone })
@@ -66,6 +66,38 @@ describe('Liste „Meine Pläne“', () => {
   })
   it('zählt je Reiter', () => {
     const b = planBoard([draft('a'), draft('b', { alarmFiredAt: 'x' })], [plan(1), plan(2)], { 1: st(1), 2: st(2, { open: 1 }) })
-    expect(boardCounts(b)).toEqual({ all: 4, drafts: 2, running: 1, done: 1, waiting: 1 })
+    expect(boardCounts(b)).toEqual({ all: 4, drafts: 2, running: 1, done: 1, waiting: 1, cancelled: 0 })
+  })
+})
+
+describe('Abgebrochene Pläne', () => {
+  const nothing = { filled: 0, filledVolume: 0, filledCost: 0, averagePrice: 0 }
+  it('in der App storniert und nichts ausgeführt: abgebrochen, nicht fertig', () => {
+    expect(planStatusOf(plan(1, { cancelledAt: '2026-11-24T10:00:00Z' }), st(1, { ...nothing, canceled: 2 })).status).toBe('cancelled')
+  })
+  it('bei der Börse storniert (ohne App) und nichts ausgeführt: ebenfalls abgebrochen', () => {
+    expect(planStatusOf(plan(1), st(1, { ...nothing, canceled: 2 })).status).toBe('cancelled')
+  })
+  it('teilweise ausgeführt und Rest storniert: fertig, denn es wurde etwas gekauft', () => {
+    expect(planStatusOf(plan(1, { cancelledAt: '2026-11-24T10:00:00Z' }), st(1, { filled: 1, canceled: 1 })).status).toBe('done')
+    expect(planStatusOf(plan(1), st(1, { ...nothing, partial: 1, filledVolume: 0.3, canceled: 1 })).status).toBe('done')
+  })
+  it('nach dem Stornieren gibt es keine Reststufen und keine pausierten Zonen mehr', () => {
+    const p = plan(1, { levels: [lvl(0), lvl(1), lvl(2)], sentIndices: [0, 1], cancelledAt: '2026-11-24T10:00:00Z' })
+    expect(restLevels(p)).toEqual([])
+    expect(planStatusOf(p, st(1, { ...nothing, canceled: 2 })).status).toBe('cancelled')
+  })
+  it('Einzelne Order storniert, Rest noch nicht gesendet: läuft weiter', () => {
+    const p = plan(1, { levels: [lvl(0), lvl(1), lvl(2)], sentIndices: [0, 1] })
+    expect(planStatusOf(p, st(1, { ...nothing, canceled: 2 })).status).toBe('run')
+  })
+  it('in der App storniert, Börse gerade nicht erreichbar: abgebrochen', () => {
+    expect(planStatusOf(plan(1, { cancelledAt: '2026-11-24T10:00:00Z' }), undefined).status).toBe('cancelled')
+  })
+  it('zählt nicht in Meine Pläne mit, steht aber im Verlauf', () => {
+    const b = planBoard([], [plan(1), plan(2, { cancelledAt: '2026-11-24T10:00:00Z' }), plan(3)], { 1: st(1), 2: st(2, { ...nothing, canceled: 2 }), 3: st(3, { open: 1 }) })
+    expect(boardCounts(b)).toMatchObject({ all: 2, running: 1, done: 1, cancelled: 1 })
+    expect(b.filter(isRunning).map((e) => e.id)).toEqual(['p:3'])
+    expect(cancelledPlans(b).map((e) => e.id)).toEqual(['p:2'])
   })
 })
