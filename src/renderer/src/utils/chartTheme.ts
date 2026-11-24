@@ -11,7 +11,7 @@ const FALLBACK: Record<string, string> = {
   // Fehu Design 0.1.0, hell (tokens.json › chart.light und Signalfarben)
   'chart-1': '#B8862E', 'chart-2': '#2A6FB8', 'chart-3': '#D0533A', 'chart-4': '#1C9A88', 'chart-5': '#8A5BC4', 'chart-6': '#5C8F2A',
   'chart-good': '#367A49', 'chart-warning': '#B8541A', 'chart-critical': '#C2352A', 'chart-neutral': '#CFC6B5',
-  'chart-text': '#857E71', 'chart-grid': '#E5DFD3', 'chart-grid-strong': '#CFC6B5', 'chart-surface': '#FFFDF9', 'chart-sunken': '#F2EEE6',
+  'chart-text': '#5C564C', 'chart-grid': '#E5DFD3', 'chart-grid-strong': '#CFC6B5', 'chart-surface': '#FFFDF9', 'chart-sunken': '#F2EEE6',
   'chart-border': '#E5DFD3', 'chart-ink': '#1C1915', 'chart-cursor': '#CFC6B5', 'chart-empty': '#E5DFD3',
 }
 
