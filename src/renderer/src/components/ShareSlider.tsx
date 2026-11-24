@@ -59,7 +59,7 @@ export default function ShareSlider({ shares, colors, labels, onChange }: {
         {cuts.map((c, k) => (
           <div key={k} role="slider" tabIndex={0} aria-label={tr(`Grenze zwischen ${labels[k]} und ${labels[k + 1]}`, `Border between ${labels[k]} and ${labels[k + 1]}`)}
             aria-valuemin={0} aria-valuemax={100} aria-valuenow={c} aria-valuetext={`${labels[k]} ${shares[k]} %, ${labels[k + 1]} ${shares[k + 1]} %`}
-            className="absolute top-1/2 z-10 flex h-11 w-4 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize touch-none items-center justify-center rounded-md border border-line-strong bg-surface shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-500"
+            className="absolute top-1/2 z-10 flex h-11 w-4 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize touch-none items-center justify-center rounded-md border border-line-strong bg-surface shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-focus/40"
             style={{ left: `${c}%` }}
             onPointerDown={(e) => drag(k, e)}
             onKeyDown={(e) => {

@@ -120,7 +120,7 @@ export function ReleaseModal({ draft, pair, last, minOrder, hasKey, onNeedKey, o
           <div className={`notice ${failed.length ? 'notice-warning' : 'notice-success'}`}>
             {result.validate
               ? failed.length ? tr(`Test: ${failed.length} Orders würden abgelehnt. Grund: ${failed[0].error}`, `Test run: ${failed.length} orders would be rejected. Reason: ${failed[0].error}`) : probeOk(ok)
-              : tr(`${ok} Orders angelegt${failed.length ? `, ${failed.length} fehlgeschlagen (${failed[0].error})` : ''}. Plan-Nummer ${result.userref}.`, `${ok} orders placed${failed.length ? `, ${failed.length} failed (${failed[0].error})` : ''}. Plan number ${result.userref}.`)}
+              : tr(`${ok} Orders angelegt${failed.length ? `, ${failed.length} nicht geklappt (${failed[0].error})` : ''}. Plan-Nummer ${result.userref}.`, `${ok} orders placed${failed.length ? `, ${failed.length} failed (${failed[0].error})` : ''}. Plan number ${result.userref}.`)}
             {result.orders.some((o) => o.uncertain) && <p className="mt-1 text-xs font-medium">{tr('Die Verbindung brach ab. Schau unter „Meine Pläne“ nach, was wirklich angelegt wurde.', 'The connection dropped. Check under “My plans” what was really placed.')}</p>}
           </div>
         )}

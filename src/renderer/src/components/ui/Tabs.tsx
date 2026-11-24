@@ -74,13 +74,13 @@ export default function Tabs<T extends string>({ tabs, active, onChange, variant
             onClick={() => onChange(tab.id)}
             className={`-mb-px inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm transition-colors ${
               on
-                ? 'border-accent-500 font-semibold text-accent-fg'
+                ? 'border-accent-edge font-semibold text-accent-fg'
                 : 'border-transparent text-ink-muted hover:text-ink'
             }`}
           >
             {tab.label}
             {tab.count !== undefined && (
-              <span className={`rounded-full px-1.5 text-xs tabular-nums ${on ? 'bg-accent-soft text-accent-fg dark:text-accent-300' : 'bg-sunken text-ink-muted'}`}>
+              <span className={`rounded-full px-1.5 text-xs tabular-nums ${on ? 'bg-accent-soft text-accent-fg' : 'bg-sunken text-ink-muted'}`}>
                 {tab.count}
               </span>
             )}

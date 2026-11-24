@@ -46,7 +46,7 @@ function CenterSlider({ label, hint, value, formulaValue, custom, disabledText, 
     <div className={disabled ? 'opacity-60' : undefined}>
       <div className="flex items-baseline justify-between gap-2">
         <span className="label mb-0 flex items-center gap-1.5">
-          <span className={`inline-block h-2.5 w-2.5 rounded-full ${tone === 'volume' ? 'bg-accent-600 dark:bg-accent-400' : 'bg-ink-muted'}`} aria-hidden />
+          <span className={`inline-block h-2.5 w-2.5 rounded-full ${tone === 'volume' ? 'bg-accent' : 'bg-ink-muted'}`} aria-hidden />
           {label}
         </span>
         <span className="text-sm font-semibold tabular-nums">{percent(value)}</span>
@@ -77,13 +77,13 @@ function CenterTrack({ centers, shares, firstLabel, lastLabel, legend }: { cente
   return (
     <div>
       <div className="relative mx-2 h-9" aria-hidden>
-        <div className="absolute inset-x-0 top-1/2 h-px bg-[var(--color-border)]" />
+        <div className="absolute inset-x-0 top-1/2 h-px bg-line" />
         {centers.positions.map((p, i) => {
           const size = max > 0 ? 4 + 10 * Math.sqrt(shares[i] / max) : 6
-          return <span key={i} className="absolute top-1/2 rounded-full bg-accent-500/60 dark:bg-accent-400/60" style={{ left: `${p * 100}%`, width: size, height: size, transform: 'translate(-50%, -50%)' }} />
+          return <span key={i} className="absolute top-1/2 rounded-full bg-accent/60" style={{ left: `${p * 100}%`, width: size, height: size, transform: 'translate(-50%, -50%)' }} />
         })}
         <span className="absolute top-0 h-full w-0.5 rounded bg-ink-muted transition-[left] duration-fast" style={{ left: `${centers.order * 100}%`, transform: 'translateX(-50%)' }} />
-        <span className="absolute top-0 h-full w-0.5 rounded bg-accent-600 transition-[left] duration-fast dark:bg-accent-400" style={{ left: `${centers.volume * 100}%`, transform: 'translateX(-50%)' }} />
+        <span className="absolute top-0 h-full w-0.5 rounded bg-accent transition-[left] duration-fast" style={{ left: `${centers.volume * 100}%`, transform: 'translateX(-50%)' }} />
       </div>
       <div className="flex justify-between gap-2 whitespace-nowrap text-xs tabular-nums text-ink-faint">
         <span>{firstLabel}</span>
@@ -112,7 +112,7 @@ export default function CenterSliders({ side, steps, centers, shares, orderCente
   const priceAt = (c: number) => formatPrice(priceStart + (priceEnd - priceStart) * c)
   const T = centerText()
   return (
-    <div className="space-y-3 rounded-lg border border-[var(--color-border)] p-3">
+    <div className="space-y-3 rounded-lg border border-line p-3">
       <div>
         <span className="label mb-0">{T.heading}</span>
         <span className="block text-xs text-ink-muted">{T.intro}</span>

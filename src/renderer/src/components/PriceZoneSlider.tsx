@@ -66,14 +66,14 @@ export default function PriceZoneSlider({ zones, side, last, colors, marks = [],
         ))}
         {last && last >= domain.lo && last <= domain.hi && (
           <div className="absolute -top-5 h-[3.25rem] w-0.5 -translate-x-1/2 bg-ink" style={{ left: `${x(last)}%` }} aria-hidden>
-            <span className={`absolute top-0 whitespace-nowrap text-[10px] font-semibold leading-none text-ink ${x(last) > 85 ? 'right-1.5' : 'left-1.5'}`}>{tr('Kurs', 'Price')}</span>
+            <span className={`absolute top-0 whitespace-nowrap text-xs font-semibold leading-none text-ink ${x(last) > 85 ? 'right-1.5' : 'left-1.5'}`}>{tr('Kurs', 'Price')}</span>
           </div>
         )}
         {handles.map((h, k) => (
           <div key={`${h.zone}-${h.edge}`} role="slider" tabIndex={0} aria-label={label(k)}
             aria-valuemin={Math.round(domain.lo)} aria-valuemax={Math.round(domain.hi)} aria-valuenow={h.price} aria-valuetext={`${label(k)}: ${fmtPrice(h.price)}`}
             title={`${label(k)}: ${fmtPrice(h.price)}`}
-            className="absolute top-1/2 z-10 h-6 w-3.5 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize touch-none rounded-sm border-2 border-surface shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-500"
+            className="absolute top-1/2 z-10 h-6 w-3.5 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize touch-none rounded-sm border-2 border-surface shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-focus/40"
             style={{ left: `${x(h.price)}%`, background: colors[h.zone] }}
             onPointerDown={(e) => drag(k, e)}
             onKeyDown={(e) => {
@@ -85,7 +85,7 @@ export default function PriceZoneSlider({ zones, side, last, colors, marks = [],
             }} />
         ))}
       </div>
-      <div className="mx-2 mt-1 flex justify-between text-[11px] text-ink-muted tabular-nums">
+      <div className="mx-2 mt-1 flex justify-between text-xs text-ink-muted tabular-nums">
         <span>{fmtPrice(domain.lo)}</span>
         <span>{fmtPrice(domain.hi)}</span>
       </div>

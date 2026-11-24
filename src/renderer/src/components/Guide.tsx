@@ -105,7 +105,7 @@ export const guideSteps = (): Step[] => [
       <>
         <p className="notice notice-warning"><strong>Aus Sicherheitsgründen kannst du am Anfang pro Sendung nur bis 50 € senden.</strong> Ein größerer Plan wird nicht abgeschickt, und die App sagt dir, dass die Obergrenze erreicht ist. Das ist kein Fehler, sondern Absicht.</p>
         <p>So bleibt dein erster echter Test klein, falls du dich vertippst oder noch etwas nicht ganz verstanden hast. Unter <strong>Neuer Plan</strong> lädt <strong>Erster Test</strong> dafür einen fertigen Mini-Plan.</p>
-        <p>Wenn alles geklappt hat, hebst du die Grenze hier unter <strong>Einstellungen › Sicherheit › Obergrenze pro Sendung</strong> an, zum Beispiel auf 500 €. Sie gilt für jede einzelne Sendung.</p>
+        <p>Wenn alles geklappt hat, hebst du die Grenze hier unter <strong>Einstellungen › Sicherheit › Obergrenze pro Sendung</strong> an, zum Beispiel auf 500 €. Die Grenze gilt für jede einzelne Sendung.</p>
       </>,
       <>
         <p className="notice notice-warning"><strong>For safety reasons you can only send up to 50 € per send at the start.</strong> A larger plan is not sent, and the app tells you that the limit has been reached. This is not a bug, it is on purpose.</p>
@@ -218,7 +218,7 @@ export default function Guide({ step, onStep, onClose, onPage, demo, onStartDemo
   }, [step, blocked])
 
   return (
-    <div role="dialog" aria-label={tr('Einführung', 'Introduction')} className={`card fixed bottom-5 right-5 z-40 max-h-[calc(100vh-2.5rem)] overflow-y-auto p-5 shadow-xl ${s.risk ? 'w-[30rem] ring-2 ring-danger-500/50' : 'w-[24rem]'}`} style={{ maxWidth: 'calc(100vw - 2.5rem)' }}>
+    <div role="dialog" aria-label={tr('Einführung', 'Introduction')} className={`card fixed bottom-5 right-5 z-40 max-h-[calc(100vh-2.5rem)] overflow-y-auto p-5 shadow-lg ${s.risk ? 'w-[30rem] ring-2 ring-danger-edge' : 'w-[24rem]'}`} style={{ maxWidth: 'calc(100vw - 2.5rem)' }}>
       <div className="mb-3 flex items-center gap-2">
         <GraduationCap size={18} className="text-accent-fg" />
         <span className="eyebrow flex-1">{tr('Einführung', 'Introduction')} · {tr(`${step + 1} von ${steps.length}`, `${step + 1} of ${steps.length}`)}</span>
@@ -233,7 +233,7 @@ export default function Guide({ step, onStep, onClose, onPage, demo, onStartDemo
         </label>
       )}
       <div className="mt-4 flex items-center gap-1" aria-hidden>
-        {steps.map((_, i) => <span key={i} className={`h-1.5 flex-1 rounded-full ${i <= step ? 'bg-accent-500' : 'bg-track'}`} />)}
+        {steps.map((_, i) => <span key={i} className={`h-1.5 flex-1 rounded-full ${i <= step ? 'bg-accent' : 'bg-track'}`} />)}
       </div>
       <div className="mt-4 flex items-center gap-2">
         {step > 0 && <button type="button" className="btn btn-ghost" onClick={() => onStep(step - 1)}><ArrowLeft size={16} /> {tr('Zurück', 'Back')}</button>}

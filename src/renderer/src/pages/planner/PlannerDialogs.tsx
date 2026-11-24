@@ -39,8 +39,8 @@ export function FirstTestDialog({ limit, setLimit, minOrder, hasKey, onNeedKey, 
           <li>
             <strong>{tr('Obergrenze klein halten.', 'Keep the limit small.')}</strong>{' '}
             {limit !== null && limit > 50
-              ? <>{tr('Sie steht bei', 'It is set to')} {eur(limit)}. <button type="button" className="btn-link" onClick={() => api().saveSettings({ maxPlanEur: 50 }).then((s) => setLimit(s.maxPlanEur))}>{tr('Auf 50 € senken', 'Lower to 50 €')}</button></>
-              : limit !== null ? <>{tr('Sie steht bei', 'It is set to')} {eur(limit)}. {tr('Passt.', 'Fine.')}</> : null}
+              ? <>{tr('Die Obergrenze steht bei', 'It is set to')} {eur(limit)}. <button type="button" className="btn-link" onClick={() => api().saveSettings({ maxPlanEur: 50 }).then((s) => setLimit(s.maxPlanEur))}>{tr('Auf 50 € senken', 'Lower to 50 €')}</button></>
+              : limit !== null ? <>{tr('Die Obergrenze steht bei', 'It is set to')} {eur(limit)}. {tr('Passt.', 'Fine.')}</> : null}
           </li>
           {tr(
             <>

@@ -8,7 +8,7 @@ import { tr } from '@shared/i18n'
 import { activeExchange, exchangeName } from '@shared/exchanges'
 import { buildPortfolio, buildWhole, cleanManual, MAX_MANUAL, type ManualHolding, type WholePortfolio, type WholeSource, cleanTargets, MAX_CASH_POTS, MAX_TARGETS, shares, TARGET_HINT_POINTS, targetGaps, targetSum, type CashPot, type CoinRow, type PortfolioSlice, type PortfolioSource, type PortfolioTargets, type TargetGap } from '@shared/portfolio'
 import { parseNumber, toInputText } from '@shared/number-format'
-import { num, numberFormat, pct } from '../format'
+import { num, numberFormat, pct, fmtDate, fmtDayMonth, fmtTime } from '../format'
 import { useMoney } from '../money'
 import { categoryColor, cssColor, useChartTheme } from '../utils/chartTheme'
 import { Kpi } from './PlansPage'
@@ -161,7 +161,7 @@ export default function PortfolioPage({ reload, onOpenPlan, onNewPlan }: Props):
       {error && <p className="notice notice-danger mb-4">{error}</p>}
       {errors.map((s) => <p key={s.exchange} className="notice notice-warning mb-4">{tr(`Nicht alles geladen. ${s.error} Die übrigen Börsen werden trotzdem gezeigt.`, `Not everything loaded. ${s.error} The other exchanges are still shown.`)}</p>)}
 
-      {!p ? <p className="text-sm text-ink-muted">{tr('Wird geladen …', 'Loading …')}</p> : (
+      {!p ? <div className="space-y-2" aria-busy="true" aria-label={tr('Wird geladen', 'Loading')}><div className="skeleton h-4 w-1/3" /><div className="skeleton h-16" /><div className="skeleton h-4 w-2/3" /></div> : (
         <div className="space-y-4">
           {whole && <SourceChips sources={sources ?? []} manual={manual} />}
           {whole ? (
@@ -455,7 +455,7 @@ function AmountField({ value, onChange }: { value: number; onChange: (n: number)
   }
   return (
     <span className="flex items-center gap-1">
-      <input className={`input input-sm w-36 text-right tabular-nums ${invalid ? 'border-danger-500' : ''}`} inputMode="decimal" value={text} aria-label={tr('Betrag in Euro', 'Amount in euro')} aria-invalid={invalid}
+      <input className={`input input-sm w-36 text-right tabular-nums ${invalid ? 'border-danger' : ''}`} inputMode="decimal" value={text} aria-label={tr('Betrag in Euro', 'Amount in euro')} aria-invalid={invalid}
         onChange={(e) => setText(e.target.value)} onBlur={commit} onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }} />
       <span className="text-ink-muted">€</span>
     </span>
@@ -544,7 +544,7 @@ function PercentField({ value, onChange, label }: { value: number; onChange: (n:
   }
   return (
     <span className="inline-flex items-center gap-1">
-      <input className={`input input-sm w-20 text-right tabular-nums ${invalid ? 'border-danger-500' : ''}`} inputMode="decimal" value={text} placeholder="0" aria-label={tr(`Ziel für ${label} in Prozent`, `Target for ${label} in percent`)} aria-invalid={invalid}
+      <input className={`input input-sm w-20 text-right tabular-nums ${invalid ? 'border-danger' : ''}`} inputMode="decimal" value={text} placeholder="0" aria-label={tr(`Ziel für ${label} in Prozent`, `Target for ${label} in percent`)} aria-invalid={invalid}
         onChange={(e) => setText(e.target.value)} onBlur={commit} onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }} />
       <span className="text-ink-muted">%</span>
     </span>
@@ -554,7 +554,7 @@ function PercentField({ value, onChange, label }: { value: number; onChange: (n:
 const timeText = (iso: string) => {
   const d = new Date(iso)
   const today = new Date().toDateString() === d.toDateString()
-  return d.toLocaleString(tr('de-DE', 'en-GB'), today ? { hour: '2-digit', minute: '2-digit' } : { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+  return today ? fmtTime(d) : `${fmtDayMonth(d)}, ${fmtTime(d)}`
 }
 
 /** Woher die Zahlen kommen und wie frisch sie sind */
@@ -568,7 +568,7 @@ function SourceChips({ sources, manual }: { sources: PortfolioSource[]; manual: 
           : wh?.holdings ? (wh.stale ? tr(`letzter Stand ${timeText(wh.at)}`, `last known ${timeText(wh.at)}`) : tr(`Stand ${timeText(wh.at)}`, `as of ${timeText(wh.at)}`))
           : tr('nicht geladen', 'not loaded')
         return (
-          <span key={s.exchange} className={`rounded-full border px-2.5 py-1 ${ok ? 'border-success-200 text-success-fg' : 'border-warning-200 text-warning-fg'}`}>
+          <span key={s.exchange} className={`rounded-full border px-2.5 py-1 ${ok ? 'border-success-edge text-success-fg' : 'border-warning-edge text-warning-fg'}`}>
             ● {exchangeName(s.exchange)} · {text}
           </span>
         )
@@ -638,7 +638,7 @@ function ManualCard({ manual, onChange }: { manual: ManualHolding[]; onChange: (
               <input className="input input-sm min-w-0 flex-1 basis-40" value={m.place} maxLength={40} aria-label={tr('Ort', 'Place')} placeholder={tr('Ort, z. B. Ledger', 'Place, e.g. Ledger')} onChange={(e) => update(m.id, { place: e.target.value })} />
               <input className="input input-sm w-24 uppercase" value={m.coin} maxLength={12} aria-label="Coin" placeholder="BTC" onChange={(e) => update(m.id, { coin: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '') })} />
               <QtyField value={m.amount} onChange={(amount) => update(m.id, { amount })} />
-              {m.at && <span className="text-xs text-ink-faint" title={tr('Zuletzt geändert', 'Last changed')}>{new Date(m.at).toLocaleDateString(tr('de-DE', 'en-GB'))}</span>}
+              {m.at && <span className="text-xs text-ink-faint" title={tr('Zuletzt geändert', 'Last changed')}>{fmtDate(m.at)}</span>}
               <button type="button" className="btn-mini" aria-label={tr('Eintrag löschen', 'Delete entry')} title={tr('Löschen', 'Delete')} onClick={() => onChange(manual.filter((x) => x.id !== m.id))}><Trash2 size={14} /></button>
             </li>
           ))}
@@ -656,7 +656,7 @@ function QtyField({ value, onChange }: { value: number; onChange: (n: number) =>
   const parsed = parseNumber(text, fmt)
   const invalid = text.trim() !== '' && (Number.isNaN(parsed) || parsed < 0)
   return (
-    <input className={`input input-sm w-36 text-right tabular-nums ${invalid ? 'border-danger-500' : ''}`} inputMode="decimal" value={text} placeholder="0" aria-label={tr('Menge', 'Amount')} aria-invalid={invalid}
+    <input className={`input input-sm w-36 text-right tabular-nums ${invalid ? 'border-danger' : ''}`} inputMode="decimal" value={text} placeholder="0" aria-label={tr('Menge', 'Amount')} aria-invalid={invalid}
       onChange={(e) => setText(e.target.value)} onBlur={() => { const n = text.trim() === '' ? 0 : parsed; if (!invalid && n !== value) onChange(n) }}
       onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }} />
   )

@@ -75,7 +75,7 @@ export default function TradeKeyGate({ exchange, state }: { exchange: ExchangeId
       : tr('Er wird verschlüsselt im Schlüsselbund gespeichert.', 'It is stored encrypted in the keychain.')
 
   return (
-    <div className="space-y-2 rounded-lg border border-accent-400 bg-accent-soft p-3 text-sm">
+    <div className="space-y-2 rounded-lg border border-accent-edge bg-accent-soft p-3 text-sm">
       <p className="flex items-start gap-2"><KeyRound size={16} className="mt-0.5 flex-shrink-0" />
         <span><strong>{tr(`Handels-Schlüssel für ${ex.name} einfügen`, `Paste the ${ex.name} trading key`)}</strong>{' '}
           {tr(`Zum Senden braucht die App ihn. ${keepText}`, `The app needs it to send. ${keepText}`)}</span>

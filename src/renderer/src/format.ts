@@ -17,3 +17,12 @@ export { localDate } from '../../shared/dates'
 
 /** Sprache für Datum und Uhrzeit: Deutsch oder britisches Englisch (24 Stunden, Tag vor Monat) */
 export const dateLocale = (): string => (lang() === 'en' ? 'en-GB' : 'de-DE')
+
+// Datum und Zeit nach Fehu Design (04 Texte.md): 24.11.2026, 24.11., 14:05, 24.11.2026, 14:05
+const asDate = (x: Date | number | string): Date => (x instanceof Date ? x : new Date(x))
+export const fmtDate = (x: Date | number | string): string => asDate(x).toLocaleDateString(dateLocale(), { day: '2-digit', month: '2-digit', year: 'numeric' })
+export const fmtDayMonth = (x: Date | number | string): string => asDate(x).toLocaleDateString(dateLocale(), { day: '2-digit', month: '2-digit' })
+export const fmtTime = (x: Date | number | string): string => asDate(x).toLocaleTimeString(dateLocale(), { hour: '2-digit', minute: '2-digit' })
+export const fmtDateTime = (x: Date | number | string): string => `${fmtDate(x)}, ${fmtTime(x)}`
+export const fmtDateTimeSeconds = (x: Date | number | string): string =>
+  `${fmtDate(x)}, ${asDate(x).toLocaleTimeString(dateLocale(), { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`

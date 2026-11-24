@@ -598,7 +598,7 @@ async function freshPriceGuard(ex: ExchangeId, pairId: string, side: 'buy' | 'se
   try {
     last = await clientFor(ex).lastPrice(pairId)
   } catch (e) {
-    const msg = `${tr('Der aktuelle Kurs konnte nicht geprüft werden, deshalb wurde nichts gesendet.', 'The current price could not be checked, so nothing was sent.')} ${(e as Error).message}`
+    const msg = `${tr('Den aktuellen Kurs zu prüfen hat nicht geklappt, deshalb wurde nichts gesendet.', 'The current price could not be checked, so nothing was sent.')} ${(e as Error).message}`
     addLog({ ...base, success: false, message: msg })
     throw new Error(msg)
   }

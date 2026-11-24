@@ -1,4 +1,5 @@
 import { api, isDemo, setDemo } from './api'
+import { DISPLAY_SCALES, applyDisplayScale, readDisplayScale, type DisplayScale } from './displayScale'
 import Guide, { guideSteps } from './components/Guide'
 import { useEffect, useState } from 'react'
 import Segmented from './components/ui/Segmented'
@@ -74,7 +75,7 @@ const noDrag = { WebkitAppRegion: 'no-drag' } as React.CSSProperties
 
 /** Eine Zeile in der Seitenleiste */
 function NavButton({ on, icon: Icon, label, onClick, tone }: { on: boolean; icon: typeof ListOrdered; label: string; onClick: () => void; tone?: 'warning' }) {
-  const active = tone === 'warning' ? 'bg-warning-soft font-medium text-warning-fg' : 'bg-accent-soft font-medium text-ink'
+  const active = tone === 'warning' ? 'bg-warning-soft font-medium text-warning-fg' : 'bg-accent-soft font-medium text-accent-fg'
   return (
     <button type="button" onClick={onClick} aria-current={on && !tone ? 'page' : undefined} aria-pressed={tone ? on : undefined}
       className={`group flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-sm transition-colors ${on ? active : 'text-ink-muted hover:bg-sunken-soft hover:text-ink'}`}>
@@ -117,6 +118,7 @@ export default function App(): JSX.Element {
   // Auch die Börse als Modulwert, damit Texte wie „An Kraken senden“ den richtigen Namen zeigen
   setActiveExchange(exchange)
   const [demo, setDemoState] = useState(isDemo())
+  const [displayScale, setDisplayScale] = useState<DisplayScale>(readDisplayScale())
   // Beim allerersten Start öffnet sich die Einführung von selbst
   const [guideStep, setGuideStep] = useState<number | null>(() => {
     try { return localStorage.getItem(GUIDE_SEEN) ? null : 0 } catch { return null }
@@ -225,12 +227,12 @@ export default function App(): JSX.Element {
         <div className="px-4 pb-3 pt-11">
           <div className="flex items-center gap-3">
             <div className="relative flex-shrink-0 rounded-xl bg-black shadow-sm">
-              <div className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-warning-500/40" />
               <img src={logoUrl} alt="Fehu Orders" className="h-9 w-9 rounded-xl" />
+              <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-surface bg-app-orders" aria-hidden />
             </div>
             <div className="min-w-0 leading-tight">
               <p className="eyebrow">Fehu Finance</p>
-              <p className="eyebrow text-warning-fg">Orders · Beta</p>
+              <p className="eyebrow">Orders · Beta</p>
             </div>
           </div>
         </div>
@@ -269,6 +271,11 @@ export default function App(): JSX.Element {
           keys={<KeyPage active={exchange} keys={keys} onKeyChanged={refreshKey} onUse={switchExchange} />}
           display={<SectionCard title={tr('Anzeige', 'Display')}>
             <div className="space-y-4 text-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span><span className="font-medium">{tr('Anzeigegröße', 'Display size')}</span><span className="block text-xs text-ink-muted">{tr('Macht alles gleichmäßig größer oder kleiner, auch Knöpfe und Abstände.', 'Makes everything larger or smaller, including buttons and spacing.')}</span></span>
+                <Segmented<string> value={String(displayScale)} onChange={(v) => { const s = Number(v) as DisplayScale; applyDisplayScale(s); setDisplayScale(s) }} aria-label={tr('Anzeigegröße', 'Display size')}
+                  options={DISPLAY_SCALES.map((s) => ({ id: String(s), label: `${Math.round(s * 100)} %` }))} />
+              </div>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span><span className="font-medium">{tr('Sprache', 'Language')}</span><span className="block text-xs text-ink-muted">{tr('Das Zahlenformat wechselt mit, lässt sich danach aber getrennt einstellen.', 'The number format switches along, but can be set separately afterwards.')}</span></span>
                 <Segmented<Lang> value={lng} onChange={switchLang} aria-label={tr('Sprache', 'Language')}

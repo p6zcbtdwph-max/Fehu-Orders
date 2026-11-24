@@ -31,7 +31,7 @@ export function NumberField({ label, value, onChange, hint, step = 'any', emptyV
   return (
     <label className="block">
       <span className="label">{label}</span>
-      <input className={`input w-full tabular-nums ${invalid ? 'border-danger-500' : ''}`} inputMode="decimal" step={step} value={text} aria-invalid={invalid}
+      <input className={`input w-full tabular-nums ${invalid ? 'border-danger' : ''}`} inputMode="decimal" step={step} value={text} aria-invalid={invalid}
         onChange={(e) => {
           setText(e.target.value)
           const n = parseNumber(e.target.value, fmt)

@@ -45,14 +45,14 @@ export default function KpiStrip({ items, className = '' }: { items: Kpi[]; clas
           <>
             <p className="truncate text-xs text-ink-muted">{k.label}</p>
             <p className={`mt-0.5 whitespace-nowrap text-2xl font-semibold tabular-nums ${TONE[k.tone ?? 'default']}`}>{k.value}</p>
-            {k.hint && <p className="mt-0.5 truncate text-xs text-ink-muted">{k.hint}</p>}
+            {k.hint && <p className="mt-0.5 line-clamp-2 text-xs text-ink-muted">{k.hint}</p>}
           </>
         )
         return k.onClick ? (
           <button key={k.label} type="button" onClick={k.onClick} aria-pressed={!!k.active}
             className={`relative min-w-0 ${span} px-4 py-3 text-left transition-colors hover:bg-sunken-soft ${k.active ? 'bg-sunken-soft' : 'bg-surface'}`}>
             {body}
-            {k.active && <span className="absolute inset-x-4 bottom-0 h-0.5 rounded-full bg-accent-500" />}
+            {k.active && <span className="absolute inset-x-4 bottom-0 h-0.5 rounded-full bg-accent" />}
           </button>
         ) : (
           <div key={k.label} className={`min-w-0 bg-surface px-4 py-3 ${span}`}>{body}</div>

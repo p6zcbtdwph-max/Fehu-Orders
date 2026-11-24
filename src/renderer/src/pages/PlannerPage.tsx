@@ -476,7 +476,7 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
           <nav className="mb-4 flex flex-wrap gap-2" aria-label={tr('Schritte', 'Steps')}>
             {STEPS.map((label, i) => (
               <button key={i} type="button" onClick={() => goStep(i + 1)} aria-current={step === i + 1 ? 'step' : undefined} disabled={i > 0 && !pair}
-                className={`rounded-full px-3 py-1 text-sm transition-colors ${step === i + 1 ? 'bg-accent-500 font-semibold text-white' : step > i + 1 ? 'bg-success-soft text-success-fg' : 'bg-sunken text-ink-muted hover:text-ink'}`}>
+                className={`rounded-full px-3 py-1 text-sm transition-colors ${step === i + 1 ? 'bg-accent font-semibold text-accent-on' : step > i + 1 ? 'bg-success-soft text-success-fg' : 'bg-sunken text-ink-muted hover:text-ink'}`}>
                 {i + 1} {label}
               </button>
             ))}
@@ -537,11 +537,11 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
                 </div>
               </SectionCard>
               <div className="grid grid-cols-1 gap-3 @md:grid-cols-2">
-                <button type="button" className="card flex flex-col items-start gap-1 p-4 text-left transition-colors hover:border-accent-400 disabled:opacity-50" disabled={!ladder?.valid || !!busy} onClick={openDraftForm}>
+                <button type="button" className="card flex flex-col items-start gap-1 p-4 text-left transition-colors hover:border-accent-edge disabled:opacity-50" disabled={!ladder?.valid || !!busy} onClick={openDraftForm}>
                   <span className="flex items-center gap-2 font-semibold text-ink"><ClipboardList size={16} /> {draft ? tr('Entwurf speichern', 'Save draft') : tr('Als Entwurf aufheben', 'Save as draft')}</span>
                   <span className="text-sm text-ink-muted">{tr('Geht noch nicht an die Börse und sperrt kein Geld. Du findest ihn unter „Meine Pläne“ und kannst ihn später senden, auch mit Kursalarm.', 'Does not go to the exchange yet and locks no funds. You find it under “My plans” and can send it later, also with a price alert.')}</span>
                 </button>
-                <button type="button" data-primary-action className="card flex flex-col items-start gap-1 border-accent-400 bg-accent-soft p-4 text-left transition-colors hover:border-accent-500 disabled:opacity-50" disabled={!canSend} onClick={openConfirm}>
+                <button type="button" data-primary-action className="card flex flex-col items-start gap-1 border-accent-edge bg-accent-soft p-4 text-left transition-colors hover:border-accent-edge disabled:opacity-50" disabled={!canSend} onClick={openConfirm}>
                   <span className="flex items-center gap-2 font-semibold text-ink"><Send size={16} /> {tr(`Jetzt an ${exName()} senden`, `Send to ${exName()} now`)}</span>
                   <span className="text-sm text-ink-muted">{tr(`Die Orders werden echt angelegt. ${exName()} sperrt dafür den Betrag, bis sie ausgeführt oder storniert sind. Vorher siehst du noch eine Bestätigung.`, `The orders are really placed. ${exName()} locks the amount until they are filled or cancelled. You see a confirmation first.`)}</span>
                 </button>

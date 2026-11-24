@@ -5,7 +5,7 @@ import type { LogEntry } from '@shared/ipc'
 import SectionCard from '../components/ui/SectionCard'
 import Badge from '../components/ui/Badge'
 import Segmented from '../components/ui/Segmented'
-import { dateLocale, localDate, num } from '../format'
+import { localDate, num, fmtDateTimeSeconds } from '../format'
 import { tr } from '@shared/i18n'
 import { useMoney } from '../money'
 
@@ -27,7 +27,7 @@ export const actionLabel = (a: string): string => ({
   restore: tr('Sicherung eingespielt', 'Backup restored'),
 } as Record<string, string>)[a] ?? a
 
-const fmtTime = (iso: string) => new Date(iso).toLocaleString(dateLocale(), { dateStyle: 'short', timeStyle: 'medium' })
+const fmtTime = (iso: string) => fmtDateTimeSeconds(iso)
 
 /** CSV für Excel/Numbers: Semikolon, Komma als Dezimalzeichen, BOM für Umlaute. Spalten in der gewählten Sprache. */
 export function toCsv(entries: LogEntry[]): string {
@@ -77,7 +77,7 @@ export default function LogPage(): JSX.Element {
         </div>
         <div className="ml-auto flex flex-shrink-0 gap-2">
           <button type="button" className="btn btn-secondary" onClick={load}><RefreshCw size={16} /> {tr('Aktualisieren', 'Refresh')}</button>
-          <button type="button" className="btn btn-primary" disabled={!shown.length} onClick={exportCsv}><Download size={16} /> {tr('Als CSV speichern', 'Save as CSV')}</button>
+          <button type="button" className="btn btn-secondary" disabled={!shown.length} onClick={exportCsv} title={tr('Als CSV-Datei', 'As CSV file')}><Download size={16} /> {tr('Exportieren', 'Export')}</button>
         </div>
       </header>
 
@@ -96,7 +96,7 @@ export default function LogPage(): JSX.Element {
                     <td className="num">{e.count !== undefined ? num(e.count, 0) : '–'}</td>
                     <td className="num">{e.amount !== undefined ? eur(e.amount) : '–'}</td>
                     <td className="min-w-[16rem]">
-                      <Badge tone={e.success ? 'success' : 'danger'}>{e.success ? 'OK' : tr('Fehler', 'Error')}</Badge>
+                      <Badge tone={e.success ? 'success' : 'danger'}>{e.success ? tr('Erledigt', 'Done') : tr('Fehler', 'Error')}</Badge>
                       {e.message && <span className="ml-2 text-xs text-ink-muted">{e.message}</span>}
                     </td>
                   </tr>

@@ -81,7 +81,7 @@ export default function HomeIps(): JSX.Element {
     <div className="space-y-2 rounded-lg border border-line p-3" data-guide="home-ip">
       <p className="flex items-center gap-2 font-medium text-ink"><Lock size={15} className="text-ink-muted" /> {tr('Deine IP-Adressen', 'Your IP addresses')}</p>
       <p className="text-xs text-ink-muted">{tr(
-        'Hier kannst du die Adresse(n) ablegen, die du bei der Börse einträgst, damit du sie nicht woanders aufschreiben musst. Sie liegen verschlüsselt im Schlüsselbund deines Macs, genau wie die API-Schlüssel, und kommen nicht in die Datensicherung.',
+        'Hier kannst du die Adresse(n) ablegen, die du bei der Börse einträgst, damit du sie nicht woanders aufschreiben musst. Die Adressen liegen verschlüsselt im Schlüsselbund deines Macs, genau wie die API-Schlüssel, und kommen nicht in die Datensicherung.',
         'Keep the address(es) you enter at the exchange here, so you do not have to note them elsewhere. They are stored encrypted in your Mac’s keychain, just like the API keys, and are not included in backups.',
       )}</p>
       {list.length > 0 && (
@@ -116,7 +116,7 @@ export default function HomeIps(): JSX.Element {
           <div className="grid grid-cols-1 gap-2 @md:grid-cols-[1fr_12rem]">
             <label className="block">
               <span className="label">{tr('IP-Adresse', 'IP address')}</span>
-              <input className={`input w-full font-mono ${touched && problem ? 'border-danger-500' : ''}`} autoFocus value={ip} placeholder={tr('z. B. 84.123.45.67', 'e.g. 84.123.45.67')}
+              <input className={`input w-full font-mono ${touched && problem ? 'border-danger' : ''}`} autoFocus value={ip} placeholder={tr('z. B. 84.123.45.67', 'e.g. 84.123.45.67')}
                 spellCheck={false} autoComplete="off" onChange={(e) => { setIp(e.target.value); setError(null) }} onBlur={() => setTouched(true)} onKeyDown={(e) => e.key === 'Enter' && add()} />
             </label>
             <label className="block">
