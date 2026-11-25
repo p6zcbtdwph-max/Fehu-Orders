@@ -86,7 +86,7 @@ export default function LogPage({ board = [], onOpenPlan }: { board?: BoardEntry
       {cancelled.length > 0 && (
         <SectionCard className="mb-4" title={tr(`Abgebrochene Pläne (${cancelled.length})`, `Cancelled plans (${cancelled.length})`)}>
           <p className="mb-3 text-sm text-ink-muted">{tr(
-            'Storniert, bevor etwas ausgeführt wurde. Sie zählen nicht als fertig und stehen deshalb nicht mehr in „Meine Pläne“.',
+            'Storniert, bevor etwas ausgeführt wurde. Solche Pläne zählen nicht als fertig und stehen deshalb nicht mehr in „Meine Pläne“.',
             'Cancelled before anything was filled. They do not count as done and are therefore no longer listed in “My plans”.',
           )}</p>
           <div className="overflow-x-auto">
