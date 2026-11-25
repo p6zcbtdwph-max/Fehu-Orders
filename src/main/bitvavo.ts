@@ -60,7 +60,7 @@ const splitTxid = (txid: string) => {
 }
 
 const CLOSED: Record<string, string> = { filled: 'closed', canceled: 'canceled', expired: 'expired', rejected: 'canceled' }
-const INTERVALS: Record<number, string> = { 60: '1h', 240: '4h', 1440: '1d' }
+const INTERVALS: Record<number, string> = { 60: '1h', 240: '4h', 1440: '1d', 10080: '1W' }
 
 export class Bitvavo implements Exchange {
   readonly id = 'bitvavo' as const
