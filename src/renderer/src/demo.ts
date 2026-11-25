@@ -9,6 +9,7 @@ import { dateToSec, type LotEvent } from '@shared/holding-period'
 import { KEY_ROLES, needTradeKeyText, readChecks, type KeyRoles } from '@shared/key-roles'
 import { normalizeHoldings } from '@shared/portfolio'
 import { assetLabel } from '@shared/safety'
+import { findPair } from '@shared/pair-label'
 import type { Api, DraftDto, KeyCheck, LogEntry, OpenOrderDto, PairDto, PlanDto, PlanStatusDto, SendResult, SettingsDto, TemplateDto } from '@shared/ipc'
 
 const P = (id: string, name: string, base: string, priceDecimals: number, orderMin: number, price: number) =>
@@ -77,7 +78,8 @@ export function createDemoApi(): Api {
     return indices.map((i) => {
       const l = plan.levels![i]
       const txid = `DEMO-${String(nextTx++).padStart(5, '0')}`
-      orders.push({ txid, pair: plan.pairName.replace('/', ''), side: plan.side, price: l.price, volume: l.volume, filled: 0, cost: 0, fee: 0, userref: plan.userref })
+      // Wie bei Kraken: offene Orders nennen das Paar mit Krakens Altnamen (XBTEUR, XDGEUR)
+      orders.push({ txid, pair: plan.pairName.replace('/', '').replace('BTC', 'XBT').replace('DOGE', 'XDG'), side: plan.side, price: l.price, volume: l.volume, filled: 0, cost: 0, fee: 0, userref: plan.userref })
       return { index: l.index, price: l.price, volume: l.volume, txid }
     })
   }
@@ -117,6 +119,15 @@ export function createDemoApi(): Api {
       { zone: 1, levels: 3, sent: 3, sentVolume: zs[1], filledVolume: zv(1, 2), filledShare: zv(1, 2) / zs[1] },
       { zone: 2, levels: 3, sent: 0, sentVolume: 0, filledVolume: 0, filledShare: 0 },
     ] })
+  }
+
+  // Ein abgebrochener Plan: gesendet, dann storniert, bevor etwas ausgeführt wurde. Steht nur im Verlauf.
+  {
+    const levels = [2800, 2700, 2600].map((price, index) => ({ index, price, volume: round(40 / price, 8), cost: 40, share: 1 / 3 }))
+    plans.push({ userref: nextRef++, createdAt: new Date(Date.now() - 9 * 86400_000).toISOString(), cancelledAt: new Date(Date.now() - 8 * 86400_000).toISOString(),
+      pairId: 'XETHZEUR', pairName: 'ETH/EUR', side: 'buy',
+      input: { side: 'buy', priceStart: 2800, priceEnd: 2600, steps: 3, total: 120, spacing: 'linear', curve: 'flat', ratio: 1 },
+      sent: 3, failed: 0, totalCost: 120, levels, sentIndices: [0, 1, 2], postOnly: true })
   }
 
   const wait = <T,>(v: T, ms = 150) => new Promise<T>((r) => setTimeout(() => r(v), ms))
@@ -221,6 +232,8 @@ export function createDemoApi(): Api {
     async cancelPlan(userref) {
       const n = orders.filter((o) => o.userref === userref).length
       orders = orders.filter((o) => o.userref !== userref)
+      const plan = plans.find((p) => p.userref === userref)
+      if (plan && !plan.cancelledAt) plan.cancelledAt = new Date().toISOString()
       addLog({ action: 'cancel-plan', userref, success: true, count: n, message: tr(`${n} Orders storniert`, `${n} orders cancelled`) })
       return wait(n)
     },
@@ -261,7 +274,7 @@ export function createDemoApi(): Api {
     async available() {
       const out = { ...balances }
       for (const o of orders) {
-        const p = MARKET.find((m) => m.pair.name.replace('/', '') === o.pair)?.pair
+        const p = findPair(o.pair, MARKET.map((m) => m.pair))
         if (!p) continue
         if (o.side === 'buy') out.ZEUR -= o.price * o.volume
         else out[p.base] = (out[p.base] ?? 0) - o.volume

@@ -4,7 +4,7 @@ import SectionCard from '../components/ui/SectionCard'
 import { assetLabel } from '@shared/safety'
 import { activeExchange, exName } from '@shared/exchanges'
 import { tr } from '@shared/i18n'
-import { boardCounts, type BoardEntry } from '@shared/plan-board'
+import { boardCounts, isRunning, type BoardEntry } from '@shared/plan-board'
 import { num } from '../format'
 import { useMoney } from '../money'
 import type { PlanData } from '../plan-data'
@@ -38,7 +38,7 @@ export default function OverviewPage({ hasKey, demo, data, onOpenPlan, onOpenPla
   const { board, balances, available, error } = data
   const counts = boardCounts(board)
   const todo = board.filter((e) => e.status === 'wait')
-  const running = board.filter((e) => e.kind === 'plan' && e.status !== 'done').slice(0, 5)
+  const running = board.filter(isRunning).slice(0, 5)
   const filled = running.reduce((a, e) => a + (e.st?.filled ?? 0), 0)
   const levels = running.reduce((a, e) => a + (e.plan?.levels?.length ?? e.plan?.sent ?? 0), 0)
 

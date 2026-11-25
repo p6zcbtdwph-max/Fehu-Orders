@@ -152,6 +152,8 @@ export function toEur(amount: number, quote: string, usdRate: number | null): nu
 
 /** Noch nicht gesendete Stufen eines Plans: zurückgehaltene Reste und pausierte Zonen */
 export function unsentLevels(p: PlanDto) {
+  // Storniert: was noch nicht gesendet war, kommt auch nicht mehr
+  if (p.cancelledAt) return { all: [], heldZones: 0 }
   const sent = new Set(p.sentIndices ?? [])
   const held = heldZones(p.input)
   const all = (p.levels ?? []).filter((l) => !sent.has(l.index) && !l.problem)

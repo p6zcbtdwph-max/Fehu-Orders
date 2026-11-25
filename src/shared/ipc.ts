@@ -103,6 +103,8 @@ export interface PlanDto {
   levels?: LadderLevel[]
   sentIndices?: number[]
   postOnly?: boolean
+  /** Zeitpunkt, an dem der Plan in der App storniert wurde. Danach gibt es keine Reststufen oder Zonen mehr zu senden. */
+  cancelledAt?: string
 }
 
 export interface TemplateDto {

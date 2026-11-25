@@ -163,6 +163,8 @@ export interface PlanRecord {
   /** Indizes der Stufen, die schon an Kraken gingen */
   sentIndices?: number[]
   postOnly?: boolean
+  /** In der App storniert (ISO-Zeit) */
+  cancelledAt?: string
 }
 
 /**

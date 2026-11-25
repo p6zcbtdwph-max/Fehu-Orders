@@ -334,7 +334,12 @@ handle('plan:cancel', (userref: number) => {
   const plan = getPlans().find((p) => p.userref === userref)
   // Ein Plan wird immer bei der Börse storniert, auf der er angelegt wurde
   const ex = exchangeOf(plan)
-  return logged({ action: 'cancel-plan', userref, pair: plan?.pairName, side: plan?.side }, () => cancellerFor(ex).cancelPlan(userref).catch((e) => { throw cancelHint(ex, e) }), (n) => ({ count: n, message: tr(`${n} Orders storniert`, `${n} orders cancelled`) }))
+  return logged({ action: 'cancel-plan', userref, pair: plan?.pairName, side: plan?.side }, async () => {
+    const n = await cancellerFor(ex).cancelPlan(userref).catch((e) => { throw cancelHint(ex, e) })
+    // Merken: Der Plan ist beendet. Reststufen und pausierte Zonen gehen danach nicht mehr raus.
+    if (plan) updatePlan(userref, (p) => ({ ...p, cancelledAt: p.cancelledAt ?? new Date().toISOString() }))
+    return n
+  }, (n) => ({ count: n, message: tr(`${n} Orders storniert`, `${n} orders cancelled`) }))
 })
 handle('order:cancel', (txid: string) => logged({ action: 'cancel-order', message: txid }, () => cancellerFor(activeEx()).cancelOrder(txid).catch((e) => { throw cancelHint(activeEx(), e) })))
 /**
@@ -823,6 +828,7 @@ handle('send', (req: SendRequest): Promise<SendResult> => oneAtATime(async () =>
 /** Restliche Stufen eines Plans nachschicken (gleiche userref, damit „Plan stornieren“ alles erfasst) */
 handle('plan:rest', (userref: number, validate: boolean): Promise<SendResult> => oneAtATime(async () => {
   const plan = planFor(userref)
+  if (plan.cancelledAt) throw new Error(tr('Dieser Plan wurde storniert. Lege für neue Orders einen neuen Plan an.', 'This plan was cancelled. Create a new plan for new orders.'))
   const sent = new Set(plan.sentIndices ?? [])
   // Entschärfte Zonen gehen nicht mit „Rest senden“ raus, die haben ihren eigenen Knopf
   const held = heldZones(plan.input)
@@ -842,6 +848,7 @@ handle('plan:rest', (userref: number, validate: boolean): Promise<SendResult> =>
  */
 handle('plan:zone', (userref: number, zone: number, validate: boolean, edited?: LadderLevel[]): Promise<SendResult> => oneAtATime(async () => {
   const plan = planFor(userref)
+  if (plan.cancelledAt) throw new Error(tr('Dieser Plan wurde storniert. Lege für neue Orders einen neuen Plan an.', 'This plan was cancelled. Create a new plan for new orders.'))
   const zones = plan.input.zones ?? []
   if (!Number.isInteger(zone) || !zones[zone]) throw new Error(tr('Diese Zone gibt es in dem Plan nicht.', 'This zone does not exist in the plan.'))
   if (zones[zone].armed !== false) throw new Error(tr(`Zone ${zone + 1} ist schon aktiv.`, `Zone ${zone + 1} is already armed.`))

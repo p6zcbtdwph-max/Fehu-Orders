@@ -264,7 +264,7 @@ export default function App(): JSX.Element {
           onEditDraft={(d) => { setPrefill({ pairId: d.pairId, input: d.input, postOnly: d.postOnly, sendCount: d.sendCount, draft: d }); setPage('planner') }}
           onPlanSell={(p) => { setPrefill(p); setPage('planner') }} />}
         {page === 'portfolio' && <PortfolioPage reload={`${reload}|${demo}|${exchange}`} onOpenPlan={(id) => openPlans('all', id)} onNewPlan={(pf) => { setPrefill(pf); setPage('planner') }} />}
-        {page === 'log' && <LogPage />}
+        {page === 'log' && <LogPage board={planData.board} onOpenPlan={(id) => openPlans('all', id)} />}
         {page === 'settings' && <SettingsPage section={section} onSection={setSection} onKeysChanged={refreshKey}
           keys={<KeyPage active={exchange} keys={keys} onKeyChanged={refreshKey} onUse={switchExchange} />}
           display={<SectionCard title={tr('Anzeige', 'Display')}>

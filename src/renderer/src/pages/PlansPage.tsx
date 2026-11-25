@@ -6,7 +6,7 @@ import ArmZoneModal, { triggerText } from '../components/ArmZone'
 import { ReleaseModal, evaluate } from '../components/ReleaseDraft'
 import type { DraftDto, PlanDto, PlanStatusDto, SendResult } from '@shared/ipc'
 import { profitLadderSuggestion } from '@shared/plan-status'
-import { boardCounts, heldWithLevels, readyZones, restLevels, type BoardEntry, type BoardStatus } from '@shared/plan-board'
+import { boardCounts, heldWithLevels, isRunning, onBoard, readyZones, restLevels, wasCancelled, type BoardEntry, type BoardStatus } from '@shared/plan-board'
 import type { Prefill } from './PlannerPage'
 import SectionCard from '../components/ui/SectionCard'
 import Tabs from '../components/ui/Tabs'
@@ -35,8 +35,9 @@ export function StatusPill({ e }: { e: Pick<BoardEntry, 'status' | 'wait'> }): J
     wait: e.wait?.kind === 'alarm' ? tr('Kursalarm', 'Price alert') : tr('Wartet auf dich', 'Waiting for you'),
     run: tr('Läuft', 'Running'),
     done: tr('Fertig', 'Done'),
+    cancelled: tr('Abgebrochen', 'Cancelled'),
   }
-  const tone = { draft: 'neutral', wait: 'warning', run: 'accent', done: 'success' } as const
+  const tone = { draft: 'neutral', wait: 'warning', run: 'accent', done: 'success', cancelled: 'neutral' } as const
   return <Badge tone={tone[e.status]}>{e.status === 'wait' && e.wait?.kind === 'alarm' && <BellRing size={12} className="mr-1 inline" />}{text[e.status]}</Badge>
 }
 
@@ -54,8 +55,10 @@ export function progressText(e: BoardEntry): string {
   }
   const p = e.plan!
   const total = p.levels?.length ?? p.sent
+  if (e.status === 'cancelled') return tr('Nichts ausgeführt, storniert', 'Nothing filled, cancelled')
   if (!e.st) return tr(`${p.sent} von ${total} gesendet`, `${p.sent} of ${total} sent`)
-  return tr(`${e.st.filled} von ${total} ausgeführt`, `${e.st.filled} of ${total} filled`) + (e.st.open ? tr(`, ${e.st.open} offen`, `, ${e.st.open} open`) : '')
+  return tr(`${e.st.filled} von ${total} ausgeführt`, `${e.st.filled} of ${total} filled`) + (e.st.open ? tr(`, ${e.st.open} offen`, `, ${e.st.open} open`)
+    : e.status === 'done' && wasCancelled(p, e.st) ? tr(', Rest storniert', ', rest cancelled') : '')
 }
 
 interface Props {
@@ -79,9 +82,10 @@ export default function PlansPage({ hasKey, data, view, onView, onEditDraft, onP
   const [notice, setNotice] = useState<string | null>(null)
   const open = view.id ? board.find((e) => e.id === view.id) : undefined
 
-  const shown = board.filter((e) => view.filter === 'all'
+  // Abgebrochene Pläne (nichts ausgeführt) stehen nur noch im Verlauf
+  const shown = board.filter(onBoard).filter((e) => view.filter === 'all'
     || (view.filter === 'drafts' && e.kind === 'draft')
-    || (view.filter === 'running' && e.kind === 'plan' && e.status !== 'done')
+    || (view.filter === 'running' && isRunning(e))
     || (view.filter === 'done' && e.status === 'done'))
 
   async function cancelOne(txid: string) {
@@ -195,6 +199,10 @@ function PlanDetail({ e, data, hasKey, onBack, onEditDraft, onPlanSell, onNeedKe
         <h2 className="text-xl font-semibold text-ink">{entryTitle(e)}</h2>
         <StatusPill e={e} />
       </div>
+      {e.status === 'cancelled' && <p className="notice notice-info">{tr(
+        'Dieser Plan wurde storniert, bevor etwas ausgeführt wurde. Er zählt deshalb nicht als fertig und steht nicht mehr in „Meine Pläne“, sondern nur noch im Verlauf.',
+        'This plan was cancelled before anything was filled. It therefore does not count as done and is no longer listed in “My plans”, only in the history.',
+      )}</p>}
       {e.draft
         ? <DraftDetail d={e.draft} entry={e} data={data} hasKey={hasKey} onEdit={onEditDraft} onNeedKey={onNeedKey} onNotice={onNotice} />
         : <SentDetail p={e.plan!} st={e.st} data={data} onPlanSell={onPlanSell} onCancelOrder={onCancelOrder} />}
