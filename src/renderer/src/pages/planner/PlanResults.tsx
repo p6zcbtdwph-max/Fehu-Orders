@@ -10,7 +10,7 @@ import { windowLabel } from '../../components/HistoryHints'
 import SectionCard from '../../components/ui/SectionCard'
 import Segmented from '../../components/ui/Segmented'
 import { useChartTheme } from '../../utils/chartTheme'
-import { dateLocale, num, pct } from '../../format'
+import { num, pct, fmtDate, fmtDayMonth, fmtDateTime } from '../../format'
 import { useMoney } from '../../money'
 
 export const RANGES: { id: number; label: () => string; interval: number; days: number }[] = [
@@ -61,13 +61,13 @@ export default function PlanResults({ input, ladder, pair, last, candles, daily,
             <LineChart data={candles.map(([t, c]) => ({ t: t * 1000, c }))}>
               <CartesianGrid {...theme.grid} />
               <XAxis dataKey="t" type="number" scale="time" domain={['dataMin', 'dataMax']} {...theme.axis}
-                tickFormatter={(v) => new Date(v).toLocaleDateString(dateLocale(), { day: '2-digit', month: '2-digit' })} />
+                tickFormatter={(v) => fmtDayMonth(v)} />
               <YAxis {...theme.axis} width={70} tickFormatter={(v) => fmtPrice(v, 0)}
                 domain={[
                   (min: number) => Math.min(min, chartLow ?? min, ...sendable.map((l) => l.price)) * 0.98,
                   (max: number) => Math.max(max, chartHigh ?? max, ...sendable.map((l) => l.price)) * 1.02,
                 ]} />
-              <Tooltip {...theme.tooltip} labelFormatter={(v) => new Date(Number(v)).toLocaleString(dateLocale(), { dateStyle: 'short', timeStyle: 'short' })}
+              <Tooltip {...theme.tooltip} labelFormatter={(v) => fmtDateTime(Number(v))}
                 formatter={(v) => [fmtPrice(Number(v), pair?.priceDecimals ?? 2), tr('Kurs', 'Price')]} />
               {zoned && input.zones!.map((z, i) => (
                 <ReferenceArea key={`z${i}`} y1={z.priceStart} y2={zoneEnd(z)} fill={zoneColor(theme.series, i)} fillOpacity={0.1} strokeOpacity={0} ifOverflow="extendDomain" />
@@ -129,7 +129,7 @@ export default function PlanResults({ input, ladder, pair, last, candles, daily,
                     {daily.length > 0 && (() => {
                       const rc = reachOf(l.price)
                       if (!rc) return <td className="num">–</td>
-                      const when = rc.lastAt ? new Date(rc.lastAt * 1000).toLocaleDateString(dateLocale(), { day: '2-digit', month: '2-digit', year: '2-digit' }) : ''
+                      const when = rc.lastAt ? fmtDate(rc.lastAt * 1000) : ''
                       return (
                         <td className={`num ${rc.hits === 0 ? 'text-warning-fg' : 'text-ink-muted'}`} title={rc.hits ? tr(`an ${rc.hits} von ${rc.of} Tagen, zuletzt am ${when}`, `on ${rc.hits} of ${rc.of} days, last on ${when}`) : tr(`an keinem der letzten ${rc.of} Tage`, `on none of the last ${rc.of} days`)}>
                           {rc.hits ? tr(`${rc.hits} T`, `${rc.hits} d`) : tr('nie', 'never')}

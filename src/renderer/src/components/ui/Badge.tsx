@@ -20,10 +20,10 @@ const TONE: Record<BadgeTone, string> = {
 /** Nur die Farben eines Abzeichens, für Stellen mit eigener Größe */
 const COLORS: Record<BadgeTone, string> = {
   neutral: 'border-line bg-sunken text-ink-muted',
-  accent: 'border-accent-500/30 bg-accent-500/10 text-accent-fg',
-  success: 'border-success-500/30 bg-success-500/10 text-success-fg',
-  warning: 'border-warning-500/30 bg-warning-500/10 text-warning-fg',
-  danger: 'border-danger-500/30 bg-danger-500/10 text-danger-fg',
+  accent: 'border-accent-edge bg-accent-soft text-accent-fg',
+  success: 'border-success-edge bg-success-soft text-success-fg',
+  warning: 'border-warning-edge bg-warning-soft text-warning-fg',
+  danger: 'border-danger-edge bg-danger-soft text-danger-fg',
 }
 export function badgeTone(tone: BadgeTone = 'neutral'): string {
   return COLORS[tone]

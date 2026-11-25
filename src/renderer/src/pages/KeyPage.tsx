@@ -93,7 +93,7 @@ function TwoKeys({ exchange, roles, onPick }: { exchange: ExchangeId; roles: Key
   const tile = (role: KeyRole, Icon: typeof Eye, text: string) => {
     const has = roles[role]
     return (
-      <button type="button" onClick={() => onPick(role)} className="flex min-w-0 flex-1 items-start gap-3 rounded-xl border border-line bg-surface p-3 text-left transition-colors hover:border-accent-400">
+      <button type="button" onClick={() => onPick(role)} className="flex min-w-0 flex-1 items-start gap-3 rounded-xl border border-line bg-surface p-3 text-left transition-colors hover:border-accent-edge">
         <Icon size={18} className={`mt-0.5 flex-shrink-0 ${has ? 'text-success-fg' : 'text-ink-muted'}`} />
         <span className="min-w-0 space-y-1">
           <strong className="block">{roleName(role)}</strong>

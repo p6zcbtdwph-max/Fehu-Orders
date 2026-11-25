@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webFrame } from 'electron'
 import type { Api } from '../shared/ipc'
 
 async function call(channel: string, ...args: unknown[]): Promise<any> {
@@ -63,3 +63,8 @@ const api: Api = {
 }
 
 contextBridge.exposeInMainWorld('api', api)
+
+// Anzeigegröße (Fehu Design): vergrößert das ganze Fenster gleichmäßig über den Zoom-Faktor
+contextBridge.exposeInMainWorld('fehuDisplay', {
+  setZoom: (factor: number) => webFrame.setZoomFactor(factor)
+})

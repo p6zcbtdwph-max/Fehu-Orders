@@ -110,7 +110,7 @@ function TodoRow({ e, onOpen }: { e: BoardEntry; onOpen: () => void }) {
     <li className="flex flex-wrap items-center gap-3 py-2 text-sm">
       {alarm ? <BellRing size={16} className="text-warning-fg" /> : <Shield size={16} className="text-accent-fg" />}
       <span className="min-w-0 flex-1">{text}</span>
-      <button type="button" className="btn btn-primary btn-sm" onClick={onOpen}>
+      <button type="button" className="btn btn-secondary btn-sm" onClick={onOpen}>
         {alarm ? tr('Ansehen und senden', 'Review and send') : tr(`Zone ${(e.wait?.kind === 'zone' ? e.wait.zone : 0) + 1} aktivieren`, `Activate zone ${(e.wait?.kind === 'zone' ? e.wait.zone : 0) + 1}`)}
       </button>
     </li>
@@ -129,7 +129,6 @@ function FirstSteps({ hasKey, demo, sentAny, onGuide, onDemo, onNeedKey, onFirst
     { done: sentAny, label: tr('Ersten echten Test senden, höchstens 50 €', 'Send a first real test, at most 50 €'), action: onFirstTest, button: tr('Erster Test', 'First test') },
   ]
   if (hidden || steps.every((s) => s.done)) return null
-  const next = steps.findIndex((s) => !s.done)
   return (
     <SectionCard title={tr('Erste Schritte', 'First steps')} action={
       <button type="button" className="btn-mini" aria-label={tr('Erste Schritte ausblenden', 'Hide first steps')} title={tr('Ausblenden', 'Hide')}
@@ -139,7 +138,7 @@ function FirstSteps({ hasKey, demo, sentAny, onGuide, onDemo, onNeedKey, onFirst
           <li key={i} className="flex flex-wrap items-center gap-3">
             {s.done ? <Check size={16} className="text-success-fg" /> : <Circle size={16} className="text-ink-faint" />}
             <span className={`min-w-0 flex-1 ${s.done ? 'text-ink-muted line-through' : ''}`}>{i + 1}. {s.label}</span>
-            {!s.done && <button type="button" className={`btn btn-sm ${i === next ? 'btn-primary' : 'btn-secondary'}`} onClick={s.action}>{s.button}</button>}
+            {!s.done && <button type="button" className="btn btn-sm btn-secondary" onClick={s.action}>{s.button}</button>}
           </li>
         ))}
       </ol>

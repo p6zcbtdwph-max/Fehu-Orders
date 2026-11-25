@@ -7,7 +7,7 @@ import { tr } from '@shared/i18n'
 import { activeExchange, exName } from '@shared/exchanges'
 import { dateToSec, holdingPeriods, sellTaxNote, type LotEvent, type ManualLot } from '@shared/holding-period'
 import { localDate } from '@shared/dates'
-import { dateLocale, num } from '../format'
+import { num, fmtDate } from '../format'
 import { NumberField } from './NumberField'
 
 export default function TaxFreeCard({ coin, held, sellVolume, decimals }: {
@@ -35,7 +35,7 @@ export default function TaxFreeCard({ coin, held, sellVolume, decimals }: {
   const now = Math.floor(Date.now() / 1000)
   const hp = useMemo(() => (events ? holdingPeriods(events.filter((e) => e.coin === coin), now, held !== undefined ? { [coin]: held } : undefined)[0] : undefined), [events, coin, held, now])
   const fmt = (n: number) => num(n, decimals)
-  const day = (sec: number) => new Date(sec * 1000).toLocaleDateString(dateLocale(), { day: '2-digit', month: '2-digit', year: 'numeric' })
+  const day = (sec: number) => fmtDate(sec * 1000)
   const note = sellTaxNote(hp, sellVolume, fmt, day)
   const mine = manual.filter((l) => l.coin === coin && l.exchange === activeExchange())
 
@@ -59,7 +59,7 @@ export default function TaxFreeCard({ coin, held, sellVolume, decimals }: {
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <span className="flex items-center gap-2 text-sm font-semibold"><CalendarClock size={16} /> {tr(`Haltefrist ${coin}: steuerfrei nach einem Jahr`, `Holding period ${coin}: tax-free after one year`)}</span>
       </div>
-      {events === null ? <p className="text-xs text-ink-muted">{tr('Wird geladen …', 'Loading …')}</p> : (
+      {events === null ? <div className="space-y-2" aria-busy="true" aria-label={tr('Wird geladen', 'Loading')}><div className="skeleton h-4 w-1/3" /><div className="skeleton h-16" /><div className="skeleton h-4 w-2/3" /></div> : (
         <div className="space-y-3 text-sm">
           {!hp || !hp.lots.length ? (
             <p className="text-ink-muted">{tr(

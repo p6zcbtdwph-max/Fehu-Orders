@@ -61,13 +61,13 @@ function ExchangeMenu({ exchange, keys, hasKey, demo, onExchange, onManageKeys }
   }, [open])
 
   const status = demo ? tr('Demo', 'Demo') : hasKey === null ? '…' : hasKey ? tr('verbunden', 'connected') : tr('kein Schlüssel', 'no key')
-  const dot = demo ? 'bg-warning-500' : hasKey ? 'bg-success-500' : 'bg-ink-faint'
+  const dot = demo ? 'bg-warning' : hasKey ? 'bg-success' : 'bg-ink-faint'
 
   return (
     <div ref={ref} className="relative" style={noDrag}>
       <button type="button" onClick={() => setOpen(!open)} aria-haspopup="menu" aria-expanded={open}
         title={tr('Mit welcher Börse die App gerade arbeitet. Pläne, Entwürfe und Orders gelten je Börse.', 'Which exchange the app is working with. Plans, drafts and orders belong to one exchange each.')}
-        className="flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1 text-sm font-medium text-ink transition-colors hover:border-accent-400">
+        className="flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1 text-sm font-medium text-ink transition-colors hover:border-accent-edge">
         <span className={`h-2 w-2 rounded-full ${dot}`} aria-hidden />
         {exchangeName(exchange)}
         <span className="font-normal text-ink-muted">· {status}</span>

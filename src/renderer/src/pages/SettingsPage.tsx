@@ -8,7 +8,7 @@ import Tabs from '../components/ui/Tabs'
 import Modal from '../components/ui/Modal'
 import { NumberField } from './PlannerPage'
 import RiskNotice from '../components/RiskNotice'
-import { dateLocale, num } from '../format'
+import { num, fmtDateTime } from '../format'
 import { resetHints, seenHintCount } from '../components/Hint'
 import { tr } from '@shared/i18n'
 import { exName, FIRST_TEST_MAX_EUR } from '@shared/exchanges'
@@ -89,7 +89,7 @@ export default function SettingsPage({ section, onSection, keys, display, onKeys
   const [backupMsg, setBackupMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [restore, setRestore] = useState<BackupSummary | null>(null)
   const [busy, setBusy] = useState(false)
-  const date = (iso: string) => (iso ? new Date(iso).toLocaleString(dateLocale(), { dateStyle: 'medium', timeStyle: 'short' }) : tr('unbekannt', 'unknown'))
+  const date = (iso: string) => (iso ? fmtDateTime(iso) : tr('unbekannt', 'unknown'))
 
   async function doExport() {
     setBackupMsg(null)
@@ -200,8 +200,8 @@ export default function SettingsPage({ section, onSection, keys, display, onKeys
               <>Plans, fills, drafts, templates, settings and log are stored only on this Mac. Back them up to a file now and then, for example to iCloud Drive. The API key is deliberately <strong className="text-ink">not</strong> included. On a new Mac you add it again under “Exchanges and keys”.</>,
             )}</p>
             <div className="flex flex-wrap gap-2">
-              <button type="button" className="btn btn-secondary" onClick={doExport}><Download size={16} /> {tr('Sichern', 'Back up')}</button>
-              <button type="button" className="btn btn-outline" onClick={pick}><Upload size={16} /> {tr('Wiederherstellen …', 'Restore …')}</button>
+              <button type="button" className="btn btn-secondary" onClick={doExport}><Download size={16} /> {tr('Exportieren', 'Export')}</button>
+              <button type="button" className="btn btn-outline" onClick={pick}><Upload size={16} /> {tr('Importieren', 'Import')}</button>
             </div>
             {backupMsg && <p className={`notice break-all ${backupMsg.ok ? 'notice-success' : 'notice-danger'}`}>{backupMsg.text}</p>}
           </div>
@@ -228,7 +228,7 @@ export default function SettingsPage({ section, onSection, keys, display, onKeys
           <div className="space-y-2 text-sm">
             {tr(
               <><p>Sicherung vom <strong>{date(restore.createdAt)}</strong> mit {restore.plans} Plänen, {restore.drafts} Entwürfen, {restore.templates} Vorlagen und {restore.log} Protokoll-Einträgen.</p>
-              <p className="text-ink-muted">Sie ersetzt den aktuellen Stand in der App. Der jetzige Stand wird vorher automatisch im App-Ordner gesichert. Bei {exName()} ändert sich nichts, dein Schlüssel bleibt wie er ist.</p></>,
+              <p className="text-ink-muted">Die Sicherung ersetzt den aktuellen Stand in der App. Der jetzige Stand wird vorher automatisch im App-Ordner gesichert. Bei {exName()} ändert sich nichts, dein Schlüssel bleibt wie er ist.</p></>,
               <><p>Backup from <strong>{date(restore.createdAt)}</strong> with {restore.plans} plans, {restore.drafts} drafts, {restore.templates} templates and {restore.log} log entries.</p>
               <p className="text-ink-muted">It replaces the current state in the app. The current state is backed up automatically in the app folder first. Nothing changes at {exName()}, your key stays as it is.</p></>,
             )}

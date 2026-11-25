@@ -1,7 +1,6 @@
 // Gemeinsamer Stil für alle Diagramme (Recharts).
-// Farben folgen der Rolle, nicht dem Rang: Serie 1 ist immer Fehu-Gold, Serie 2 immer Indigo usw.
-// Palette mit dem Farbsehschwäche-Prüfer validiert (hell gegen #fcfcfb, dunkel gegen #0f172a).
-// Slot 5/6 liegen bei Deuteranopie nur knapp auseinander — ab 5 Serien immer Legende + direkte Beschriftung.
+// Farben folgen der Rolle, nicht dem Rang: Reihe 1 ist immer Gold, Reihe 2 Blau usw. (Fehu Design, chart.*).
+// Palette mit dem Farbsehschwäche-Prüfer validiert (hell gegen #FFFDF9, dunkel gegen #181613).
 
 import { useEffect, useState } from 'react'
 
@@ -9,12 +8,11 @@ import { useEffect, useState } from 'react'
 // hell und dunkel an einer Stelle. Hier werden sie nur ausgelesen; die Werte hier sind
 // der Rückfall für Tests ohne Stylesheet.
 const FALLBACK: Record<string, string> = {
-  'chart-1': '#c28d36', 'chart-2': '#6366f1', 'chart-3': '#14b8a6', 'chart-4': '#f43f5e', 'chart-5': '#0ea5e9', 'chart-6': '#a855f7',
-  'chart-good': '#10b981', 'chart-warning': '#f97316', 'chart-critical': '#f43f5e', 'chart-neutral': '#94a3b8',
-  'chart-text': '#6b7280', 'chart-grid': '#eef0f3', 'chart-grid-strong': '#e2e8f0', 'chart-surface': '#ffffff', 'chart-sunken': '#f8fafc',
-  'chart-border': '#e5e7eb', 'chart-ink': '#111827', 'chart-cursor': '#cbd5e1', 'chart-empty': '#e5e7eb',
-  'cat-1': '#6366f1', 'cat-2': '#22d3ee', 'cat-3': '#f59e0b', 'cat-4': '#10b981', 'cat-5': '#f43f5e', 'cat-6': '#a78bfa',
-  'cat-7': '#94a3b8', 'cat-8': '#fb923c', 'cat-9': '#34d399', 'cat-10': '#60a5fa', 'cat-11': '#f472b6', 'cat-12': '#facc15',
+  // Fehu Design 0.1.0, hell (tokens.json › chart.light und Signalfarben)
+  'chart-1': '#B8862E', 'chart-2': '#2A6FB8', 'chart-3': '#D0533A', 'chart-4': '#1C9A88', 'chart-5': '#8A5BC4', 'chart-6': '#5C8F2A',
+  'chart-good': '#367A49', 'chart-warning': '#B8541A', 'chart-critical': '#C2352A', 'chart-neutral': '#CFC6B5',
+  'chart-text': '#5C564C', 'chart-grid': '#E5DFD3', 'chart-grid-strong': '#CFC6B5', 'chart-surface': '#FFFDF9', 'chart-sunken': '#F2EEE6',
+  'chart-border': '#E5DFD3', 'chart-ink': '#1C1915', 'chart-cursor': '#CFC6B5', 'chart-empty': '#E5DFD3',
 }
 
 /** Liest eine Farbe aus den CSS-Variablen (--chart-…, --cat-…). */
@@ -27,7 +25,7 @@ export function cssColor(name: string): string {
 }
 
 const SERIES_KEYS = ['chart-1', 'chart-2', 'chart-3', 'chart-4', 'chart-5', 'chart-6']
-export const CATEGORY_COUNT = 12
+export const CATEGORY_COUNT = 6
 
 // Status: nur für gut/schlecht-Bedeutung, nie als „Serie 4“
 export const STATUS = {
@@ -39,17 +37,17 @@ export const STATUS = {
 
 /** Feste Farbe für die i-te Kategorie (Budget, Vermögen, Reisen, Bucket List …). */
 export function categoryColor(i: number): string {
-  return i < 0 ? STATUS.neutral : cssColor(`cat-${(i % CATEGORY_COUNT) + 1}`)
+  return i < 0 ? STATUS.neutral : cssColor(`chart-${(i % CATEGORY_COUNT) + 1}`)
 }
 
-/** Die 12 Kategoriefarben in fester Reihenfolge. */
+/** Die 6 Kategoriefarben in fester Reihenfolge (= Diagrammreihen). */
 export function categoryPalette(): string[] {
-  return Array.from({ length: CATEGORY_COUNT }, (_, i) => cssColor(`cat-${i + 1}`))
+  return Array.from({ length: CATEGORY_COUNT }, (_, i) => cssColor(`chart-${i + 1}`))
 }
 
-/** Auswahl für Farbwähler (Counter, Würfel, Experimente, Prozesse): dieselben 12 Töne plus Fehu-Gold. */
+/** Auswahl für Farbwähler: die 6 Reihenfarben. */
 export function pickerColors(): string[] {
-  return [cssColor('chart-1'), ...Array.from({ length: CATEGORY_COUNT }, (_, i) => cssColor(`cat-${i + 1}`)).filter(c => c !== cssColor('cat-7'))]
+  return Array.from({ length: CATEGORY_COUNT }, (_, i) => cssColor(`chart-${i + 1}`))
 }
 
 function isDark(): boolean {
@@ -96,15 +94,15 @@ export function chartTheme(dark = isDark()) {
       contentStyle: {
         background: c('chart-surface'),
         border: `1px solid ${c('chart-border')}`,
-        borderRadius: 10,
-        boxShadow: '0 8px 24px rgb(0 0 0 / 0.12)',
+        borderRadius: 8,
+        boxShadow: 'var(--fd-shadow-md)',
         fontSize: 12,
         color: c('chart-ink'),
         padding: '8px 10px',
       },
       labelStyle: { color: text, marginBottom: 4, fontWeight: 500 },
       itemStyle: { color: c('chart-ink'), padding: 0 },
-      cursor: { stroke: c('chart-cursor'), strokeWidth: 1, fill: dark ? 'rgb(148 163 184 / 0.08)' : 'rgb(100 116 139 / 0.06)' },
+      cursor: { stroke: c('chart-cursor'), strokeWidth: 1, fill: c('chart-ink'), fillOpacity: dark ? 0.08 : 0.06 },
     },
     legend: { wrapperStyle: { fontSize: 12, color: text } },
     line: { strokeWidth: 2, dot: false, activeDot: { r: 4 } },

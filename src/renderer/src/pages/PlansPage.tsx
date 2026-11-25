@@ -13,7 +13,7 @@ import Tabs from '../components/ui/Tabs'
 import Modal from '../components/ui/Modal'
 import Badge from '../components/ui/Badge'
 import { SendSuccessModal } from '../components/SendSuccess'
-import { dateLocale, num, pct } from '../format'
+import { num, pct, fmtDate, fmtDateTime } from '../format'
 import { tr } from '@shared/i18n'
 import { useMoney } from '../money'
 import { exchangeOf, exName, probeOk } from '@shared/exchanges'
@@ -44,8 +44,8 @@ export function StatusPill({ e }: { e: Pick<BoardEntry, 'status' | 'wait'> }): J
 /** Name in der Liste: Entwurfsname, sonst Paar und Richtung */
 export const entryTitle = (e: BoardEntry): string => e.name || `${e.pairName} ${e.side === 'buy' ? tr('Kauf', 'buy') : tr('Verkauf', 'sell')}`
 
-const dt = (iso: string) => new Date(iso).toLocaleString(dateLocale(), { dateStyle: 'short', timeStyle: 'short' })
-const fillDate = (t: number): string => new Date(t * 1000).toLocaleDateString(dateLocale(), { dateStyle: 'medium' })
+const dt = (iso: string) => fmtDateTime(iso)
+const fillDate = (t: number): string => fmtDate(t * 1000)
 
 /** Kurzer Fortschritt für die Liste */
 export function progressText(e: BoardEntry): string {
@@ -353,7 +353,7 @@ function SentDetail({ p, st, data, onPlanSell, onCancelOrder }: {
         {held.length || left.length || (p.side === 'buy' && st && st.filledVolume > 0) || (myOrders?.length ?? 0) > 0 ? (
           <span className="inline-flex flex-wrap gap-2">
             {held.map((z) => (
-              <button key={z} type="button" className={`btn whitespace-nowrap ${ready.has(z) ? 'btn-primary' : 'btn-outline'}`} title={triggerText(p, z, st?.zones).text}
+              <button key={z} type="button" className={`btn whitespace-nowrap btn-outline ${ready.has(z) ? 'border-accent-edge bg-accent-soft text-accent-fg' : ''}`} title={triggerText(p, z, st?.zones).text}
                 onClick={() => { setMsg(null); setArm(z) }}>
                 <Shield size={16} /> {tr(`Zone ${z + 1} aktivieren`, `Activate zone ${z + 1}`)}
               </button>
@@ -411,7 +411,7 @@ export function Kpi({ label, value, sub }: { label: string; value: string; sub?:
     <div className="card min-w-0 p-3">
       <p className="text-xs text-ink-muted">{label}</p>
       <p className="truncate text-lg font-semibold tabular-nums text-ink">{value}</p>
-      {sub && <p className="truncate text-xs text-ink-muted">{sub}</p>}
+      {sub && <p className="line-clamp-2 text-xs text-ink-muted">{sub}</p>}
     </div>
   )
 }
