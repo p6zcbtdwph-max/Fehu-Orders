@@ -257,6 +257,16 @@ export function createDemoApi(): Api {
     async saveSettings(s) { settings = { ...settings, ...s }; return { ...settings } },
     usdRate: () => wait(1.08),
     async ohlc(pairId, interval) {
+      if (interval === 10080) {
+        // Erfundene Wochenkerzen über knapp 4 Jahre: Tief, großer Anstieg, Rückgang bis zum Beispielkurs
+        const p = priceOf(pairId)
+        const now = Math.floor(Date.now() / 1000)
+        const path = (i: number) => i <= 40 ? 0.35 - 0.1 * (i / 40) : i <= 150 ? 0.25 + 1.65 * ((i - 40) / 110) ** 1.6 : 1.9 - 0.9 * ((i - 150) / 49)
+        return wait(Array.from({ length: 200 }, (_, i) => {
+          const c = p * path(i) * (1 + 0.05 * Math.sin(i * 0.9 + pairId.length))
+          return [now - (199 - i) * 7 * 86400, round(c, 6), round(c * 0.93, 6), round(c * 1.06, 6)] as OhlcRow
+        }))
+      }
       // Erfundener Kursverlauf, der genau beim Beispielkurs endet
       const off = pairId.length * 37
       const wave = (x: number) => 1 + 0.08 * Math.sin(x / 60) + 0.03 * Math.sin(x / 11) + 0.01 * Math.sin(x / 3)

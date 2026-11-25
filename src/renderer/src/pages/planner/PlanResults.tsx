@@ -3,6 +3,8 @@
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { hasZones, isHeld, zoneEnd, type Ladder, type LadderInput } from '@shared/ladder'
 import { reach, windowStats, type Candle, type OhlcRow } from '@shared/history'
+import { FIB_FLOOR, floorZone } from '@shared/fib'
+import { useState } from 'react'
 import type { PairDto, SendResult } from '@shared/ipc'
 import { tr } from '@shared/i18n'
 import { zoneColor } from '../../components/ZoneEditor'
@@ -10,7 +12,7 @@ import { windowLabel } from '../../components/HistoryHints'
 import SectionCard from '../../components/ui/SectionCard'
 import Segmented from '../../components/ui/Segmented'
 import { useChartTheme } from '../../utils/chartTheme'
-import { num, pct, fmtDate, fmtDayMonth, fmtDateTime } from '../../format'
+import { num, pct, pct2, fmtDate, fmtDayMonth, fmtDateTime } from '../../format'
 import { useMoney } from '../../money'
 
 export const RANGES: { id: number; label: () => string; interval: number; days: number }[] = [
@@ -18,6 +20,11 @@ export const RANGES: { id: number; label: () => string; interval: number; days: 
   { id: 90, label: () => tr('90 T', '90 d'), interval: 240, days: 90 },
   { id: 365, label: () => tr('1 J', '1 y'), interval: 1440, days: 365 },
 ]
+
+const FIB_KEY = 'fehu-orders-fib-zone'
+function readFibOn(): boolean {
+  try { return localStorage.getItem(FIB_KEY) !== '0' } catch { return true }
+}
 
 export interface PlanResultsProps {
   input: LadderInput
@@ -28,6 +35,8 @@ export interface PlanResultsProps {
   candles: OhlcRow[]
   /** Tageskerzen für „Erreicht“ */
   daily: Candle[]
+  /** Wochenkerzen über mehrere Jahre für die Fibonacci-Bodenzone */
+  weekly: Candle[]
   range: number
   setRange: (r: number) => void
   result: SendResult | null
@@ -37,7 +46,7 @@ export interface PlanResultsProps {
   later: Set<number>
 }
 
-export default function PlanResults({ input, ladder, pair, last, candles, daily, range, setRange, result, held, later }: PlanResultsProps): JSX.Element {
+export default function PlanResults({ input, ladder, pair, last, candles, daily, weekly, range, setRange, result, held, later }: PlanResultsProps): JSX.Element {
   const theme = useChartTheme()
   const { eur, fmtPrice } = useMoney()
   const zoned = hasZones(input)
@@ -52,6 +61,15 @@ export default function PlanResults({ input, ladder, pair, last, candles, daily,
   const extreme = input.side === 'buy' ? chartLow : chartHigh
   // Blasse Linien: Stufen, die später oder gar nicht rausgehen
   const partial = later.size > 0
+  // Fibonacci-Bodenzone (78,60 % bis 88,70 % Rückgang des letzten großen Anstiegs): nur Anzeige, nie eine Order
+  const [fibOn, setFibOn] = useState(readFibOn)
+  const toggleFib = (on: boolean) => {
+    setFibOn(on)
+    try { localStorage.setItem(FIB_KEY, on ? '1' : '0') } catch { /* gilt dann bis zum Neustart */ }
+  }
+  const fib = weekly.length > 1 ? floorZone(weekly, nowSec, last) : null
+  const fibColor = theme.series[4]
+  const showFib = fibOn ? fib : null
   return (
     <>
     {candles.length > 1 && ladder && (
@@ -64,13 +82,20 @@ export default function PlanResults({ input, ladder, pair, last, candles, daily,
                 tickFormatter={(v) => fmtDayMonth(v)} />
               <YAxis {...theme.axis} width={70} tickFormatter={(v) => fmtPrice(v, 0)}
                 domain={[
-                  (min: number) => Math.min(min, chartLow ?? min, ...sendable.map((l) => l.price)) * 0.98,
+                  (min: number) => Math.min(min, chartLow ?? min, ...sendable.map((l) => l.price), ...(showFib ? [showFib.lower] : [])) * 0.98,
                   (max: number) => Math.max(max, chartHigh ?? max, ...sendable.map((l) => l.price)) * 1.02,
                 ]} />
               <Tooltip {...theme.tooltip} labelFormatter={(v) => fmtDateTime(Number(v))}
                 formatter={(v) => [fmtPrice(Number(v), pair?.priceDecimals ?? 2), tr('Kurs', 'Price')]} />
               {zoned && input.zones!.map((z, i) => (
                 <ReferenceArea key={`z${i}`} y1={z.priceStart} y2={zoneEnd(z)} fill={zoneColor(theme.series, i)} fillOpacity={0.1} strokeOpacity={0} ifOverflow="extendDomain" />
+              ))}
+              {showFib && (
+                <ReferenceArea y1={showFib.lower} y2={showFib.upper} fill={fibColor} fillOpacity={0.08} strokeOpacity={0} ifOverflow="extendDomain" />
+              )}
+              {showFib && [showFib.upper, showFib.lower].map((y, i) => (
+                <ReferenceLine key={`fib${i}`} y={y} stroke={fibColor} strokeWidth={1.5} ifOverflow="extendDomain"
+                  label={{ value: `${pct2(FIB_FLOOR[i])} · ${fmtPrice(y, y >= 100 ? 0 : pair?.priceDecimals ?? 2)}`, position: i === 0 ? 'insideTopRight' : 'insideBottomRight', fill: fibColor, fontSize: 11 }} />
               ))}
               {extreme !== null && (
                 <ReferenceLine y={extreme} stroke={theme.status.neutral} strokeDasharray="1 3" ifOverflow="extendDomain"
@@ -84,6 +109,34 @@ export default function PlanResults({ input, ladder, pair, last, candles, daily,
           </ResponsiveContainer>
         </div>
         <p className="mt-2 text-xs text-ink-muted">{tr('Gestrichelte Linien sind deine Stufen. Je kräftiger die Linie, desto größer die Stufe.', 'Dashed lines are your levels. The stronger the line, the bigger the level.')}{extreme !== null && tr(` Die gepunktete Linie ist der ${input.side === 'buy' ? 'Tiefstkurs' : 'Höchstkurs'} im gezeigten Zeitraum.`, ` The dotted line is the ${input.side === 'buy' ? 'lowest' : 'highest'} price in the period shown.`)}{zoned && tr(' Farbige Flächen sind deine Preiszonen.', ' Coloured areas are your price zones.')}{partial && tr(' Blasse Linien sind die Stufen für später.', ' Faint lines are the levels for later.')}</p>
+        {fib && (
+          <div className="mt-3 rounded-lg border border-line p-3 text-xs text-ink-muted">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-medium text-ink">{tr('Fibonacci-Bodenzone', 'Fibonacci floor zone')}</span>
+              <span className="tabular-nums text-ink">{fmtPrice(fib.upper, fib.upper >= 100 ? 0 : pair?.priceDecimals ?? 2)} – {fmtPrice(fib.lower, fib.lower >= 100 ? 0 : pair?.priceDecimals ?? 2)}</span>
+              <Segmented<number> className="ml-auto" value={fibOn ? 1 : 0} onChange={(v) => toggleFib(v === 1)} aria-label={tr('Fibonacci-Bodenzone im Chart', 'Fibonacci floor zone in the chart')}
+                options={[{ id: 1, label: tr('Zeigen', 'Show') }, { id: 0, label: tr('Aus', 'Off') }]} />
+            </div>
+            {fibOn && (
+              <p className="mt-1.5">
+                {tr(
+                  `Rückgang um ${pct2(FIB_FLOOR[0])} bis ${pct2(FIB_FLOOR[1])} des letzten großen Anstiegs von ${fmtPrice(fib.low, pair?.priceDecimals ?? 2)} (${fmtDate(fib.lowAt * 1000)}) auf ${fmtPrice(fib.high, pair?.priceDecimals ?? 2)} (${fmtDate(fib.highAt * 1000)}). Die zwei lila Linien im Chart zeigen das. Nach der Elliott-Wellen-Lesart bilden Kryptowährungen dort oft ihren Boden. `,
+                  `A drop of ${pct2(FIB_FLOOR[0])} to ${pct2(FIB_FLOOR[1])} of the last big rise from ${fmtPrice(fib.low, pair?.priceDecimals ?? 2)} (${fmtDate(fib.lowAt * 1000)}) to ${fmtPrice(fib.high, pair?.priceDecimals ?? 2)} (${fmtDate(fib.highAt * 1000)}). The two purple lines in the chart show it. In the Elliott wave reading, cryptocurrencies often form their floor there. `,
+                )}
+                {fib.deepestAt > fib.highAt && tr(
+                  `Tiefster Kurs seit dem Hoch: ${fmtPrice(fib.deepest, pair?.priceDecimals ?? 2)} (${pct(fib.deepestRatio)} Rückgang). `,
+                  `Lowest price since the high: ${fmtPrice(fib.deepest, pair?.priceDecimals ?? 2)} (${pct(fib.deepestRatio)} drop). `,
+                )}
+                <span className="font-medium text-ink">
+                  {fib.position === 'above' ? tr('Der Kurs liegt heute über der Zone.', 'The price is above the zone today.')
+                    : fib.position === 'inside' ? tr('Der Kurs liegt heute in der Zone.', 'The price is inside the zone today.')
+                    : tr('Der Kurs liegt heute unter der Zone.', 'The price is below the zone today.')}
+                </span>
+                {tr(' Nur zur Orientierung, keine Vorhersage. Die App legt dafür keine Orders an.', ' For orientation only, not a forecast. The app places no orders for it.')}
+              </p>
+            )}
+          </div>
+        )}
       </SectionCard>
     )}
 

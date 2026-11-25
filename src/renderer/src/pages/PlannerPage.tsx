@@ -202,7 +202,7 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
   }, [prefill])
 
   const selling = input.side === 'sell'
-  const { fees, available, balances, holdPrices, holdLoading, candles, daily } = useMarketData({ hasKey, pairId, pairs, selling, range, result })
+  const { fees, available, balances, holdPrices, holdLoading, candles, daily, weekly } = useMarketData({ hasKey, pairId, pairs, selling, range, result })
 
   // Vorlagen: laden, speichern, löschen. Beim Anwenden übernimmt der Planer Paar, Eingaben und Post-only.
   const tpl = useTemplates({
@@ -384,7 +384,7 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
       need={need} have={have} shortfall={shortfall} wrong={wrong} postOnly={postOnly} never={never} range={range} covered={covered} sendError={sendError} result={result} onOpenSettings={onOpenSettings} />
   )
   const resultsEl = (
-    <PlanResults input={input} ladder={ladder} pair={pair} last={last} candles={candles} daily={daily} range={range} setRange={setRange} result={result} held={held} later={later} />
+    <PlanResults input={input} ladder={ladder} pair={pair} last={last} candles={candles} daily={daily} weekly={weekly} range={range} setRange={setRange} result={result} held={held} later={later} />
   )
   const planEl = (
     <div data-guide="plan" className="min-w-0"><SectionCard title={tr('Plan', 'Plan')} action={<button type="button" className="btn btn-ghost btn-sm" onClick={tpl.openSave} title={tr('Diesen Plan als Vorlage speichern', 'Save this plan as a template')}><BookmarkPlus size={14} /> {tr('Als Vorlage', 'Save as template')}</button>}>

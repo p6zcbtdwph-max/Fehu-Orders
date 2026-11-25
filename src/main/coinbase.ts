@@ -2,7 +2,8 @@
 // Doku: https://docs.cdp.coinbase.com/coinbase-app/advanced-trade-apis/rest-api
 // Anmeldung per JWT (ES256), für jede Anfrage neu signiert und 2 Minuten gültig.
 // Test über /orders/preview, Rechte über /key_permissions (inklusive „darf auszahlen?“).
-import type { OhlcRow } from '../shared/history'
+import { toCandles, type OhlcRow } from '../shared/history'
+import { toWeekly } from '../shared/fib'
 import { createPrivateKey, randomBytes, sign as cryptoSign } from 'node:crypto'
 import type { LadderLevel, Side } from '../shared/ladder'
 import type { KeyCheck } from '../shared/ipc'
@@ -323,6 +324,19 @@ export class Coinbase implements Exchange {
   }
 
   async ohlc(pairId: string, interval: number): Promise<OhlcRow[]> {
+    // Coinbase kennt keine Wochenkerzen: Tageskerzen in mehreren Abschnitten holen (gut 4 Jahre) und zu Wochen zusammenfassen
+    if (interval === 10080) {
+      const now = Math.floor(Date.now() / 1000)
+      const rows: OhlcRow[] = []
+      for (let page = 0; page < 5; page++) {
+        const end = now - page * 300 * 86400
+        const r = await this.request('GET', `${API}/market/products/${encodeURIComponent(pairId)}/candles`, [['start', end - 300 * 86400], ['end', end], ['granularity', 'ONE_DAY'], ['limit', 300]])
+        const cs = r?.candles ?? []
+        rows.push(...cs.map((c: any) => [Number(c.start), Number(c.close), Number(c.low), Number(c.high)] as OhlcRow))
+        if (cs.length < 300) break
+      }
+      return toWeekly(toCandles(rows)).map((c) => [c.t, c.close, c.low, c.high] as OhlcRow)
+    }
     const end = Math.floor(Date.now() / 1000)
     const start = end - 300 * interval * 60
     const r = await this.request('GET', `${API}/market/products/${encodeURIComponent(pairId)}/candles`, [['start', start], ['end', end], ['granularity', GRANULARITY[interval] ?? 'ONE_HOUR'], ['limit', 300]])

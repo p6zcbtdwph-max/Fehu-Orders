@@ -1,7 +1,8 @@
 // Daten von der Börse für den Planer: Gebühren, Guthaben, Bestand beim Verkaufen, Kurse für Chart und Rückblick.
 // Lädt neu, wenn sich Paar, Richtung, Zeitraum ändern oder gerade gesendet wurde.
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { toCandles, type Candle, type OhlcRow } from '@shared/history'
+import { toWeekly } from '@shared/fib'
 import { holdingsFor } from '@shared/holdings'
 import type { PairDto, SendResult } from '@shared/ipc'
 import { api } from '../../api'
@@ -11,6 +12,8 @@ export function useMarketData({ hasKey, pairId, pairs, selling, range, result }:
   const [candles, setCandles] = useState<OhlcRow[]>([])
   // Tageskerzen für den Rückblick (wie oft der Kurs eine Stufe erreicht hat)
   const [daily, setDaily] = useState<Candle[]>([])
+  // Wochenkerzen über mehrere Jahre für die Fibonacci-Bodenzone (letzter großer Anstieg)
+  const [weekly, setWeekly] = useState<Candle[]>([])
   const [fees, setFees] = useState<{ maker: number; taker: number } | null>(null)
   const [available, setAvailable] = useState<Record<string, number> | null>(null)
   /** Gesamtguthaben (frei + gesperrt, bei Kraken auch Earn) und Kurse für die Bestandsliste beim Verkaufen */
@@ -52,6 +55,15 @@ export function useMarketData({ hasKey, pairId, pairs, selling, range, result }:
     setDaily([])
     api().ohlc(pairId, 1440).then((c) => setDaily(toCandles(c))).catch(() => setDaily([]))
   }, [pairId])
+  useEffect(() => {
+    if (!pairId) return
+    let gone = false
+    setWeekly([])
+    // Ohne Wochenkerzen reichen zur Not die Tageskerzen (dann nur rund 2 Jahre)
+    api().ohlc(pairId, 10080).then((c) => { if (!gone) setWeekly(toCandles(c)) }).catch(() => undefined)
+    return () => { gone = true }
+  }, [pairId])
 
-  return { fees, available, balances, holdPrices, holdLoading, candles, daily }
+  const weeks = useMemo(() => (weekly.length > 1 ? weekly : toWeekly(daily)), [weekly, daily])
+  return { fees, available, balances, holdPrices, holdLoading, candles, daily, weekly: weeks }
 }
