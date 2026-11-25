@@ -61,7 +61,7 @@ export default function PlanResults({ input, ladder, pair, last, candles, daily,
   const extreme = input.side === 'buy' ? chartLow : chartHigh
   // Blasse Linien: Stufen, die später oder gar nicht rausgehen
   const partial = later.size > 0
-  // Fibonacci-Bodenzone (67,97 % bis 88,70 % Rückgang des letzten großen Anstiegs): nur Anzeige, nie eine Order
+  // Fibonacci-Bodenzone (78,60 % bis 88,70 % Rückgang des letzten großen Anstiegs): nur Anzeige, nie eine Order
   const [fibOn, setFibOn] = useState(readFibOn)
   const toggleFib = (on: boolean) => {
     setFibOn(on)

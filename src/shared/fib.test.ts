@@ -20,7 +20,7 @@ describe('Fibonacci-Bodenzone', () => {
     const s = { low: 100, high: 200 }
     expect(retracePrice(s, 0.5)).toBe(150)
     expect(retraceOf(s, 150)).toBe(0.5)
-    expect(FIB_FLOOR).toEqual([0.6797, 0.887])
+    expect(FIB_FLOOR).toEqual([0.786, 0.887])
   })
 
   it('findet den letzten großen Anstieg: Hoch der letzten 3 Jahre, Tief in den 3 Jahren davor', () => {
@@ -29,10 +29,10 @@ describe('Fibonacci-Bodenzone', () => {
     expect(s.low).toBe(15105)
   })
 
-  it('BTC heute: Zone 44.673 € bis 25.537 €, Kurs noch darüber', () => {
+  it('BTC heute: Zone 34.860 € bis 25.537 €, Kurs noch darüber', () => {
     const z = floorZone(btc, now, 54237)!
-    expect(z.upper).toBeCloseTo(107420 - 0.6797 * (107420 - 15105), 6)
-    expect(Math.round(z.upper)).toBe(44673)
+    expect(z.upper).toBeCloseTo(107420 - 0.786 * (107420 - 15105), 6)
+    expect(Math.round(z.upper)).toBe(34860)
     expect(Math.round(z.lower)).toBe(25537)
     expect(z.position).toBe('above')
     expect(z.deepest).toBe(50344)

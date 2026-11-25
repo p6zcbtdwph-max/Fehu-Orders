@@ -1,11 +1,11 @@
 // Fibonacci-Bodenzone als Orientierung im Kursbild: Nach einem großen Anstieg (Tief → Hoch) bilden
-// Kryptowährungen laut Elliott-Wellen-Lesart ihren Boden oft zwischen 67,97 % und 88,70 % Rückgang
+// Kryptowährungen laut Elliott-Wellen-Lesart ihren Boden oft zwischen 78,60 % und 88,70 % Rückgang
 // des Anstiegs. Reine Rechnung ohne Netz, damit sie testbar ist.
 // Wichtig: Das ist ein Blick zurück, keine Vorhersage. Die App legt dafür nie selbst Orders an.
 import { DAY, type Candle } from './history'
 
 /** Die beiden Rückgangs-Stufen der Bodenzone (Anteil des Anstiegs) */
-export const FIB_FLOOR = [0.6797, 0.887] as const
+export const FIB_FLOOR = [0.786, 0.887] as const
 
 export const WEEK = 7 * DAY
 /** So weit schaut die App zurück: das Hoch der letzten 3 Jahre, das Tief in den 3 Jahren davor */
@@ -59,7 +59,7 @@ export const retracePrice = (s: Pick<Swing, 'low' | 'high'>, ratio: number): num
 export const retraceOf = (s: Pick<Swing, 'low' | 'high'>, price: number): number => (s.high - price) / (s.high - s.low)
 
 export interface FloorZone extends Swing {
-  /** Obere Linie (67,97 %) und untere Linie (88,70 %) */
+  /** Obere Linie (78,60 %) und untere Linie (88,70 %) */
   upper: number
   lower: number
   /** Tiefster Kurs seit dem Hoch und wie tief das in Prozent des Anstiegs war */
