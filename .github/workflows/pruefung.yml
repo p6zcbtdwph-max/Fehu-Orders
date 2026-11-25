@@ -22,7 +22,9 @@ permissions:
 jobs:
   pruefung:
     if: github.event_name != 'push' || github.event.head_commit.committer.email != 'noreply@github.com'
-    runs-on: ubuntu-latest
+    # Eigener Mac als Prüfrechner (25.11.2026): Repo-Variable FEHU_RUNNER=self-hosted schickt den Job
+    # auf den Mac, ohne Variable läuft er bei GitHub (ubuntu-latest).
+    runs-on: ${{ vars.FEHU_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 15
     env:
       # Electron selbst wird für Tests nicht gebraucht (wird in den Tests nachgebildet)
