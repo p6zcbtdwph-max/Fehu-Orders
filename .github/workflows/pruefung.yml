@@ -2,16 +2,26 @@
 # Tests, Typprüfung und Lint. Ein roter Haken heißt: nicht mergen, erst reparieren.
 name: Prüfung
 
+# Sparsam prüfen (25.11.2026): Ein gemergter PR (Committer GitHub) wird auf main nicht noch einmal
+# geprüft, direkte Pushes auf main schon. Reine Doku-Änderungen (*.md, docs/) lösen nichts aus.
 on:
   pull_request:
+    paths-ignore: ["**/*.md", "docs/**"]
   push:
     branches: [main]
+    paths-ignore: ["**/*.md", "docs/**"]
+
+# Sparsam prüfen (25.11.2026): ein neuer Push bricht den alten Lauf derselben Branch ab.
+concurrency:
+  group: pruefung-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
   pruefung:
+    if: github.event_name != 'push' || github.event.head_commit.committer.email != 'noreply@github.com'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
