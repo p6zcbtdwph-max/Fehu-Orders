@@ -4,6 +4,8 @@ import type { Holding } from '@shared/holdings'
 import { tr } from '@shared/i18n'
 import { exName } from '@shared/exchanges'
 import { num } from '../format'
+import LinkKnopf from './bausteine/LinkKnopf'
+import Haken from './bausteine/Haken'
 
 export default function HoldingsCard({ holdings, pairId, showAll, onShowAll, onPick, eur, hasKey, loading }: {
   holdings: Holding[]
@@ -24,7 +26,7 @@ export default function HoldingsCard({ holdings, pairId, showAll, onShowAll, onP
         <span className="flex items-center gap-2 text-sm font-semibold"><Wallet size={16} /> {tr('Dein Bestand', 'Your holdings')}</span>
         {hasKey && holdings.length > 0 && (
           <label className="flex items-center gap-2 text-xs text-ink-muted">
-            <input type="checkbox" className="checkbox" checked={showAll} onChange={(e) => onShowAll(e.target.checked)} />
+            <Haken checked={showAll} onChange={(e) => onShowAll(e.target.checked)} />
             {tr('Alle Paare zeigen', 'Show all pairs')}
           </label>
         )}
@@ -57,7 +59,7 @@ export default function HoldingsCard({ holdings, pairId, showAll, onShowAll, onP
                       title={h.dust ? tr('Zu wenig frei für eine Order', 'Too little free for an order') : tr(`${h.pair.name} im Planer wählen`, `Choose ${h.pair.name} in the planner`)}>
                       <td>
                         {h.dust ? <span className="font-medium">{h.coin}</span> : (
-                          <button type="button" className="btn-link font-medium" onClick={(e) => { e.stopPropagation(); onPick(h.pair.id) }}>{h.coin}</button>
+                          <LinkKnopf className="font-medium" onClick={(e) => { e.stopPropagation(); onPick(h.pair.id) }}>{h.coin}</LinkKnopf>
                         )}
                       </td>
                       <td className="num tabular-nums">{h.available > 0 ? num(h.available, h.pair.volumeDecimals) : '–'}</td>

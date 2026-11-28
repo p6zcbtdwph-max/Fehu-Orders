@@ -4,13 +4,15 @@ import { api } from '../api'
 import { buildLadder, DEFAULT_MIN_ORDER_EUR, zoneTrigger, type LadderLevel } from '@shared/ladder'
 import { triggerMet, type ZoneProgress } from '@shared/plan-status'
 import type { PairDto, PlanDto, SendResult } from '@shared/ipc'
-import Modal from './ui/Modal'
+import Modal from './bausteine/Modal'
 import { NumberField } from './NumberField'
 import { num, pct } from '../format'
 import { tr } from '@shared/i18n'
 import { useMoney } from '../money'
 import { exchangeOf, exName, probeOk } from '@shared/exchanges'
 import TradeKeyGate, { canTest, useTradeKey } from './TradeKeyGate'
+import Knopf from './bausteine/Knopf'
+import LinkKnopf from './bausteine/LinkKnopf'
 
 /** Noch nicht gesendete Stufen einer Zone */
 export const zoneLevels = (p: PlanDto, zone: number): LadderLevel[] => {
@@ -90,10 +92,9 @@ export default function ArmZoneModal({ plan, zone, progress, pair, onClose, onSe
   return (
     <Modal title={tr(`Zone ${zone + 1} aktivieren?`, `Arm zone ${zone + 1}?`)} size="sm" onClose={() => !busy && onClose()}
       footer={<>
-        <button type="button" className="btn btn-secondary" disabled={!!busy || blocked || !levels.length || !canTest(tk, ex)} onClick={() => go(true)}>{busy === 'validate' ? tr('Prüfe …', 'Checking …') : tr('Testen', 'Test')}</button>
-        <button type="button" className="btn btn-primary" disabled={!!busy || blocked || !levels.length || tk.has === false} onClick={() => go(false)}>
-          <Shield size={16} /> {busy === 'send' ? tr('Sende …', 'Sending …') : tr(`${levels.length} Orders senden`, `Send ${levels.length} orders`)}
-        </button>
+        <Knopf disabled={!!busy || blocked || !levels.length || !canTest(tk, ex)} onClick={() => go(true)}>{busy === 'validate' ? tr('Prüfe …', 'Checking …') : tr('Testen', 'Test')}</Knopf>
+        <Knopf symbol={Shield} art="primaer" disabled={!!busy || blocked || !levels.length || tk.has === false} onClick={() => go(false)}>{busy === 'send' ? tr('Sende …', 'Sending …') : tr(`${levels.length} Orders senden`, `Send ${levels.length} orders`)}
+        </Knopf>
       </>}>
       <div className="space-y-3 text-sm">
         <p className={`notice ${cond.met ? 'notice-success' : 'notice-info'} text-xs`}>{cond.text}</p>
@@ -104,7 +105,7 @@ export default function ArmZoneModal({ plan, zone, progress, pair, onClose, onSe
         </p>
         <p>{tr('Gegenwert', 'Value')}: <strong>{eur(cost)}</strong>{!buy && <> · {num(levels.reduce((a, l) => a + l.volume, 0), pair?.volumeDecimals ?? 8)} {plan.pairName.split('/')[0]}</>}</p>
         {!editing ? (
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing(true)} disabled={!pair}><Pencil size={14} /> {tr('Vorher bearbeiten', 'Edit first')}</button>
+          <Knopf symbol={Pencil} art="leise" groesse="klein" onClick={() => setEditing(true)} disabled={!pair}>{tr('Vorher bearbeiten', 'Edit first')}</Knopf>
         ) : (
           <div className="rounded-lg border border-line p-3">
             <p className="mb-2 text-xs text-ink-muted">{tr(
@@ -122,7 +123,7 @@ export default function ArmZoneModal({ plan, zone, progress, pair, onClose, onSe
                 {edited.levels.map((l) => <li key={l.index}>{fmtPrice(l.price, dec)} {sym} · {eur(l.cost)} · {pct(l.share)}</li>)}
               </ul>
             )}
-            <button type="button" className="btn-link mt-2 text-xs" onClick={() => setEditing(false)}>{tr('Wie geplant senden', 'Send as planned')}</button>
+            <LinkKnopf className="mt-2 text-xs" onClick={() => setEditing(false)}>{tr('Wie geplant senden', 'Send as planned')}</LinkKnopf>
           </div>
         )}
         <p className="text-ink-muted">{tr(`Die Orders werden echt bei ${exName()} angelegt, mit derselben Plan-Nummer. Liegt der Kurs inzwischen woanders, prüfe sie vorher mit dem Test.`, `The orders are really placed at ${exName()}, with the same plan number. If the price has moved since, check them first with a test run.`)}</p>

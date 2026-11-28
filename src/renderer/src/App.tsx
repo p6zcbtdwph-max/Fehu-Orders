@@ -2,7 +2,7 @@ import { api, isDemo, setDemo } from './api'
 import { DISPLAY_SCALES, applyDisplayScale, readDisplayScale, type DisplayScale } from './displayScale'
 import Guide, { guideSteps } from './components/Guide'
 import { useEffect, useState } from 'react'
-import Segmented from './components/ui/Segmented'
+import Segmented from './components/bausteine/Segmented'
 import { MoneyProvider, type Currency } from './money'
 import { num, setNumberFormat } from './format'
 import { NUMBER_FORMATS, type NumberFormat } from '@shared/number-format'
@@ -15,7 +15,7 @@ import PlansPage, { type PlansView, type PlanFilter } from './pages/PlansPage'
 import OverviewPage, { DEMO_TRIED } from './pages/OverviewPage'
 import { usePlanData } from './plan-data'
 import SettingsPage, { type SettingsSection } from './pages/SettingsPage'
-import SectionCard from './components/ui/SectionCard'
+import SectionCard from './components/bausteine/SectionCard'
 import TopBar from './components/TopBar'
 import KeyPage from './pages/KeyPage'
 import LogPage from './pages/LogPage'
@@ -77,6 +77,7 @@ const noDrag = { WebkitAppRegion: 'no-drag' } as React.CSSProperties
 function NavButton({ on, icon: Icon, label, onClick, tone }: { on: boolean; icon: typeof ListOrdered; label: string; onClick: () => void; tone?: 'warning' }) {
   const active = tone === 'warning' ? 'bg-warning-soft font-medium text-warning-fg' : 'bg-accent-soft font-medium text-accent-fg'
   return (
+    // @fehu-ausnahme: Eintrag der Seitenleiste mit aktivem Zustand (Baustein Seitenleiste fehlt noch)
     <button type="button" onClick={onClick} aria-current={on && !tone ? 'page' : undefined} aria-pressed={tone ? on : undefined}
       className={`group flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-sm transition-colors ${on ? active : 'text-ink-muted hover:bg-sunken-soft hover:text-ink'}`}>
       <Icon size={16} className={on ? (tone ? '' : 'text-accent-fg') : 'text-ink-muted group-hover:text-ink'} />

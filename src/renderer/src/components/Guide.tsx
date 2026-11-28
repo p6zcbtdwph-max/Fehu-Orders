@@ -3,6 +3,8 @@ import { ArrowLeft, ArrowRight, GraduationCap, PlayCircle, X } from 'lucide-reac
 import { tr } from '@shared/i18n'
 import RiskNotice from './RiskNotice'
 import { exName } from '@shared/exchanges'
+import Knopf from './bausteine/Knopf'
+import Haken from './bausteine/Haken'
 
 export type GuidePage = 'planner' | 'drafts' | 'orders' | 'key' | 'settings'
 
@@ -222,13 +224,13 @@ export default function Guide({ step, onStep, onClose, onPage, demo, onStartDemo
       <div className="mb-3 flex items-center gap-2">
         <GraduationCap size={18} className="text-accent-fg" />
         <span className="eyebrow flex-1">{tr('Einführung', 'Introduction')} · {tr(`${step + 1} von ${steps.length}`, `${step + 1} of ${steps.length}`)}</span>
-        <button type="button" className="btn-mini" onClick={onClose} aria-label={tr('Einführung schließen', 'Close introduction')} title={tr('Schließen (Esc)', 'Close (Esc)')}><X size={16} /></button>
+        <Knopf art="leise" groesse="klein" nurSymbol symbol={X} onClick={onClose} aria-label={tr('Einführung schließen', 'Close introduction')} title={tr('Schließen (Esc)', 'Close (Esc)')} />
       </div>
       <h2 className="mb-2 text-base font-semibold text-ink">{s.title}</h2>
       <div className="space-y-2 text-sm text-ink-muted [&_strong]:text-ink">{s.body}</div>
       {s.risk && (
         <label className="mt-3 flex cursor-pointer items-start gap-2 rounded-lg border border-line p-2.5 text-sm font-medium text-ink">
-          <input type="checkbox" className="mt-0.5" checked={riskOk} onChange={(e) => acceptRisk(e.target.checked)} />
+          <Haken className="mt-0.5" checked={riskOk} onChange={(e) => acceptRisk(e.target.checked)} />
           <span>{tr('Ich habe den Risiko-Hinweis gelesen und verstanden.', 'I have read and understood the risk notice.')}</span>
         </label>
       )}
@@ -236,15 +238,15 @@ export default function Guide({ step, onStep, onClose, onPage, demo, onStartDemo
         {steps.map((_, i) => <span key={i} className={`h-1.5 flex-1 rounded-full ${i <= step ? 'bg-accent' : 'bg-track'}`} />)}
       </div>
       <div className="mt-4 flex items-center gap-2">
-        {step > 0 && <button type="button" className="btn btn-ghost" onClick={() => onStep(step - 1)}><ArrowLeft size={16} /> {tr('Zurück', 'Back')}</button>}
+        {step > 0 && <Knopf symbol={ArrowLeft} art="leise" onClick={() => onStep(step - 1)}>{tr('Zurück', 'Back')}</Knopf>}
         <span className="flex-1" />
         {last ? (
           <>
-            {!demo && <button type="button" className="btn btn-primary" onClick={onStartDemo}><PlayCircle size={16} /> {tr('Demo starten', 'Start demo')}</button>}
-            <button type="button" className={`btn ${demo ? 'btn-primary' : 'btn-secondary'}`} onClick={onClose}>{tr('Fertig', 'Done')}</button>
+            {!demo && <Knopf symbol={PlayCircle} art="primaer" onClick={onStartDemo}>{tr('Demo starten', 'Start demo')}</Knopf>}
+            <Knopf art={demo ? 'primaer' : 'sekundaer'} onClick={onClose}>{tr('Fertig', 'Done')}</Knopf>
           </>
         ) : (
-          <button type="button" className="btn btn-primary" disabled={blocked} title={blocked ? tr('Bitte zuerst das Häkchen setzen', 'Please tick the box first') : undefined} onClick={() => onStep(step + 1)}>{step === 0 ? tr('Los geht’s', 'Let’s go') : tr('Weiter', 'Next')} <ArrowRight size={16} /></button>
+          <Knopf art="primaer" disabled={blocked} title={blocked ? tr('Bitte zuerst das Häkchen setzen', 'Please tick the box first') : undefined} onClick={() => onStep(step + 1)}>{step === 0 ? tr('Los geht’s', 'Let’s go') : tr('Weiter', 'Next')} <ArrowRight size={16} /></Knopf>
         )}
       </div>
     </div>

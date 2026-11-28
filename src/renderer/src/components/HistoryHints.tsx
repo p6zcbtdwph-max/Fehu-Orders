@@ -3,6 +3,7 @@ import { HISTORY_WINDOWS, windowStats, type Candle } from '@shared/history'
 import type { Side } from '@shared/ladder'
 import { pct, fmtDate } from '../format'
 import { tr } from '@shared/i18n'
+import LinkKnopf from './bausteine/LinkKnopf'
 
 /** Wie viele Tage ein Zeitraum heißt: „30 Tage“, „1 Jahr“ oder die Tage, die es wirklich gibt */
 export const windowLabel = (days: number, covered = days): string =>
@@ -46,7 +47,7 @@ export default function HistoryHints({ side, daily, last, current, fmtPrice, onU
               <span className="w-20 flex-shrink-0 text-xs text-ink-muted">{windowLabel(w.days, w.covered)}</span>
               <span className="tabular-nums font-medium" title={tr(`am ${fmtDate(at * 1000)}`, `on ${fmtDate(at * 1000)}`)}>{fmtPrice(p)}</span>
               {last && <span className="text-xs text-ink-muted tabular-nums">{pct(p / last - 1)}</span>}
-              {usable && <button type="button" className="btn-link ml-auto text-xs" title={useLabel} onClick={() => onUse(+p.toPrecision(6))}>{tr('übernehmen', 'use')}</button>}
+              {usable && <LinkKnopf className="ml-auto text-xs" title={useLabel} onClick={() => onUse(+p.toPrecision(6))}>{tr('übernehmen', 'use')}</LinkKnopf>}
             </li>
           )
         })}

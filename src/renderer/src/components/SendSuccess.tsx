@@ -5,7 +5,8 @@ import type { SendResult } from '@shared/ipc'
 import { exName } from '@shared/exchanges'
 import { tr } from '@shared/i18n'
 import { useMoney } from '../money'
-import Modal from './ui/Modal'
+import Modal from './bausteine/Modal'
+import Knopf from './bausteine/Knopf'
 
 interface Props {
   result: SendResult
@@ -104,8 +105,8 @@ export function SendSuccessModal({ onClose, onOpenOrders, ...props }: Props & { 
   return (
     <Modal title={tr('Gesendet', 'Sent')} size="sm" onClose={onClose}
       footer={<>
-        {onOpenOrders && <button type="button" className="btn btn-secondary" onClick={() => { onClose(); onOpenOrders() }}>{tr('Meine Pläne ansehen', 'View my plans')}</button>}
-        <button type="button" className="btn btn-primary" onClick={onClose}>{tr('Fertig', 'Done')}</button>
+        {onOpenOrders && <Knopf onClick={() => { onClose(); onOpenOrders() }}>{tr('Meine Pläne ansehen', 'View my plans')}</Knopf>}
+        <Knopf art="primaer" onClick={onClose}>{tr('Fertig', 'Done')}</Knopf>
       </>}>
       <SendSummary {...props} />
     </Modal>

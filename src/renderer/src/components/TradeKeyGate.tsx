@@ -9,6 +9,10 @@ import { exchangeMeta, type ExchangeId } from '@shared/exchanges'
 import { checkKeyFormat, normalizeCoinbase } from '@shared/safety'
 import type { KeyCheck } from '@shared/ipc'
 import type { TradeKeyMode } from '@shared/key-roles'
+import Knopf from './bausteine/Knopf'
+import Feld from './bausteine/Feld'
+import Textfeld from './bausteine/Textfeld'
+import Haken from './bausteine/Haken'
 
 export interface TradeKeyState {
   /** null = wird noch geladen */
@@ -80,14 +84,14 @@ export default function TradeKeyGate({ exchange, state }: { exchange: ExchangeId
         <span><strong>{tr(`Handels-Schlüssel für ${ex.name} einfügen`, `Paste the ${ex.name} trading key`)}</strong>{' '}
           {tr(`Zum Senden braucht die App ihn. ${keepText}`, `The app needs it to send. ${keepText}`)}</span>
       </p>
-      <input className="input w-full font-mono text-xs" value={key} onChange={(e) => setKey(e.target.value)} autoComplete="off" spellCheck={false}
+      <Feld className="w-full font-mono text-xs" value={key} onChange={(e) => setKey(e.target.value)} autoComplete="off" spellCheck={false}
         placeholder={ex.keyLabel} aria-label={ex.keyLabel} />
       {ex.secretMultiline
-        ? <textarea className="input h-16 w-full font-mono text-xs [-webkit-text-security:disc]" value={secret} onChange={(e) => setSecret(e.target.value)} autoComplete="off" spellCheck={false} placeholder={ex.secretLabel} aria-label={ex.secretLabel} />
-        : <input className="input w-full font-mono text-xs" type="password" value={secret} onChange={(e) => setSecret(e.target.value)} autoComplete="off" spellCheck={false} placeholder={ex.secretLabel} aria-label={ex.secretLabel} />}
+        ? <Textfeld className="h-16 w-full font-mono text-xs [-webkit-text-security:disc]" value={secret} onChange={(e) => setSecret(e.target.value)} autoComplete="off" spellCheck={false} placeholder={ex.secretLabel} aria-label={ex.secretLabel} />
+        : <Feld className="w-full font-mono text-xs" type="password" value={secret} onChange={(e) => setSecret(e.target.value)} autoComplete="off" spellCheck={false} placeholder={ex.secretLabel} aria-label={ex.secretLabel} />}
       {needsConfirm && (
         <label className="flex cursor-pointer items-start gap-2 text-xs">
-          <input type="checkbox" className="mt-0.5" checked={noWithdraw} onChange={(e) => setNoWithdraw(e.target.checked)} />
+          <Haken className="mt-0.5" checked={noWithdraw} onChange={(e) => setNoWithdraw(e.target.checked)} />
           <span>{tr(`Bei diesem Schlüssel ist „${ex.withdrawLabel}“ (Auszahlen) aus.`, `“${ex.withdrawLabel}” (withdraw) is off for this key.`)}</span>
         </label>
       )}
@@ -100,9 +104,8 @@ export default function TradeKeyGate({ exchange, state }: { exchange: ExchangeId
           ))}
         </ul>
       )}
-      <button type="button" className="btn btn-secondary btn-sm" disabled={busy || !filled.key || !filled.secret || issues.length > 0 || (needsConfirm && !noWithdraw)} onClick={save}>
-        <Check size={14} /> {busy ? tr('Prüfe Rechte …', 'Checking permissions …') : tr('Prüfen und übernehmen', 'Check and use')}
-      </button>
+      <Knopf symbol={Check} groesse="klein" disabled={busy || !filled.key || !filled.secret || issues.length> 0 || (needsConfirm && !noWithdraw)} onClick={save}>{busy ? tr('Prüfe Rechte …', 'Checking permissions …') : tr('Prüfen und übernehmen', 'Check and use')}
+      </Knopf>
     </div>
   )
 }

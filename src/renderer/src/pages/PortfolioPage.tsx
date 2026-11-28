@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
 import { ChevronDown, ChevronRight, Eye, EyeOff, Plus, Target, Trash2 } from 'lucide-react'
 import { api, isDemo } from '../api'
-import SectionCard from '../components/ui/SectionCard'
-import Segmented from '../components/ui/Segmented'
+import SectionCard from '../components/bausteine/SectionCard'
+import Segmented from '../components/bausteine/Segmented'
 import { tr } from '@shared/i18n'
 import { activeExchange, exchangeName } from '@shared/exchanges'
 import { buildPortfolio, buildWhole, cleanManual, MAX_MANUAL, type ManualHolding, type WholePortfolio, type WholeSource, cleanTargets, MAX_CASH_POTS, MAX_TARGETS, shares, TARGET_HINT_POINTS, targetGaps, targetSum, type CashPot, type CoinRow, type PortfolioSlice, type PortfolioSource, type PortfolioTargets, type TargetGap } from '@shared/portfolio'
@@ -13,6 +13,9 @@ import { useMoney } from '../money'
 import { categoryColor, cssColor, useChartTheme } from '../utils/chartTheme'
 import { Kpi } from './PlansPage'
 import type { Prefill } from './PlannerPage'
+import Knopf from '../components/bausteine/Knopf'
+import Feld from '../components/bausteine/Feld'
+import Haken from '../components/bausteine/Haken'
 
 const HIDE_KEY = 'fehu-orders-portfolio-hidden'
 const MODE_KEY = 'fehu-orders-portfolio-mode'
@@ -154,9 +157,9 @@ export default function PortfolioPage({ reload, onOpenPlan, onNewPlan }: Props):
         </div>
         <Segmented<Mode> className="ml-auto" size="md" value={mode} onChange={setMode} aria-label={tr('Ansicht', 'View')}
           options={[{ id: 'plans', label: tr('Nur App-Pläne', 'App plans only') }, { id: 'whole', label: tr('Gesamtes Portfolio', 'Whole portfolio') }]} />
-        <button type="button" className="btn btn-secondary" onClick={toggleHidden} aria-pressed={hidden}>
+        <Knopf onClick={toggleHidden} aria-pressed={hidden}>
           {hidden ? <Eye size={16} /> : <EyeOff size={16} />} {hidden ? tr('Beträge zeigen', 'Show amounts') : tr('Beträge verbergen', 'Hide amounts')}
-        </button>
+        </Knopf>
       </header>
       {error && <p className="notice notice-danger mb-4">{error}</p>}
       {errors.map((s) => <p key={s.exchange} className="notice notice-warning mb-4">{tr(`Nicht alles geladen. ${s.error} Die übrigen Börsen werden trotzdem gezeigt.`, `Not everything loaded. ${s.error} The other exchanges are still shown.`)}</p>)}
@@ -196,7 +199,7 @@ export default function PortfolioPage({ reload, onOpenPlan, onNewPlan }: Props):
             <div className="notice notice-warning flex flex-wrap items-center gap-3">
               <Target size={16} className="flex-shrink-0" />
               <span className="min-w-0 flex-1">{gapText(hint, hidden ? null : eur)} {tr('Nur ein Hinweis, es wird nichts automatisch gesendet.', 'Just a hint, nothing is sent automatically.')}</span>
-              {<button type="button" className="btn btn-secondary btn-sm" onClick={() => planFor(hint)}>{hint.eur > 0 ? tr('Kaufplan dafür anlegen', 'Create buy plan') : tr('Verkaufsplan dafür anlegen', 'Create sell plan')}</button>}
+              {<Knopf groesse="klein" onClick={() => planFor(hint)}>{hint.eur > 0 ? tr('Kaufplan dafür anlegen', 'Create buy plan') : tr('Verkaufsplan dafür anlegen', 'Create sell plan')}</Knopf>}
             </div>
           )}
 
@@ -216,7 +219,7 @@ export default function PortfolioPage({ reload, onOpenPlan, onNewPlan }: Props):
             {whole ? <WholeTable w={w} color={color} money={money} signed={signed} hidden={hidden} fmtPrice={(n, d) => `${fmtPrice(n, d)} ${sym}`} targets={targets} afterShares={shares(afterSlices.filter((x) => x.key !== 'reserve'))} /> : (
             <SectionCard title={tr('Je Coin', 'By coin')} action={
               <label className="flex items-center gap-2 text-xs text-ink-muted">
-                <input type="checkbox" className="checkbox" checked={includeDrafts} onChange={(e) => saveDrafts(e.target.checked)} />
+                <Haken checked={includeDrafts} onChange={(e) => saveDrafts(e.target.checked)} />
                 {tr('Entwürfe mitzählen', 'Count drafts')}
               </label>}>
               {p.rows.length === 0 ? <p className="text-sm text-ink-muted">{tr('Noch keine Pläne oder Entwürfe. Sobald du einen Plan anlegst, erscheint er hier.', 'No plans or drafts yet. As soon as you create a plan, it shows up here.')}</p> : (
@@ -403,7 +406,7 @@ function PlanList({ coin, sources, onOpenPlan, money }: { coin: string; sources:
           <span className="text-xs text-ink-muted">{exchangeName(it.ex)}</span>
           <span className="text-xs text-ink-muted">{it.info}{it.amount > 0 ? ` · ${money(it.amount)}` : ''}</span>
           {it.ex === active
-            ? <button type="button" className="btn btn-ghost btn-sm" onClick={() => onOpenPlan(it.id)}>{tr('Öffnen', 'Open')} <ChevronRight size={14} /></button>
+            ? <Knopf art="leise" groesse="klein" onClick={() => onOpenPlan(it.id)}>{tr('Öffnen', 'Open')} <ChevronRight size={14} /></Knopf>
             : <span className="text-xs text-ink-faint" title={tr(`Zum Öffnen oben auf ${exchangeName(it.ex)} wechseln`, `Switch to ${exchangeName(it.ex)} at the top to open it`)}>{tr(`auf ${exchangeName(it.ex)}`, `on ${exchangeName(it.ex)}`)}</span>}
         </li>
       ))}
@@ -415,7 +418,7 @@ function CashCard({ sources, pots, onChange, money }: { sources: PortfolioSource
   const add = () => onChange([...pots, { id: `pot-${Date.now().toString(36)}`, name: pots.length ? tr('Neuer Topf', 'New pot') : tr('Tagesgeld', 'Savings account'), amount: 0 }])
   const update = (id: string, patch: Partial<CashPot>) => onChange(pots.map((p) => (p.id === id ? { ...p, ...patch } : p)))
   return (
-    <SectionCard title="Cash" action={pots.length < MAX_CASH_POTS && <button type="button" className="btn btn-secondary btn-sm" onClick={add}><Plus size={14} /> {tr('Topf hinzufügen', 'Add pot')}</button>}>
+    <SectionCard title="Cash" action={pots.length < MAX_CASH_POTS && <Knopf symbol={Plus} groesse="klein" onClick={add}>{tr('Topf hinzufügen', 'Add pot')}</Knopf>}>
       <p className="mb-3 text-xs text-ink-muted">{tr('Euro bei den Börsen liest die App selbst. Geld anderswo (Tagesgeld, Girokonto) trägst du hier ein. Ein Topf als „Reserve“ zählt in der Torte extra und nicht für Käufe. Alles bleibt nur auf deinem Mac.', 'The app reads euro at the exchanges itself. Money elsewhere (savings, current account) you enter here. A pot marked “reserve” shows separately in the chart and does not count for buys. Everything stays on your Mac.')}</p>
       <ul className="divide-y divide-line text-sm">
         {sources.filter((s) => s.hasKey || s.eurTotal !== null).map((s) => (
@@ -428,12 +431,12 @@ function CashCard({ sources, pots, onChange, money }: { sources: PortfolioSource
         ))}
         {pots.map((pot) => (
           <li key={pot.id} className="flex flex-wrap items-center gap-3 py-2">
-            <input className="input input-sm min-w-0 flex-1 basis-40" value={pot.name} maxLength={60} aria-label={tr('Name des Topfs', 'Pot name')} onChange={(e) => update(pot.id, { name: e.target.value })} />
+            <Feld className="input-sm min-w-0 flex-1 basis-40" value={pot.name} maxLength={60} aria-label={tr('Name des Topfs', 'Pot name')} onChange={(e) => update(pot.id, { name: e.target.value })} />
             <label className="flex items-center gap-1.5 text-xs text-ink-muted" title={tr('Notgroschen: zählt nicht für Käufe', 'Emergency fund: does not count for buys')}>
-              <input type="checkbox" className="checkbox" checked={!!pot.reserve} onChange={(e) => update(pot.id, { reserve: e.target.checked || undefined })} /> {tr('Reserve', 'Reserve')}
+              <Haken checked={!!pot.reserve} onChange={(e) => update(pot.id, { reserve: e.target.checked || undefined })} /> {tr('Reserve', 'Reserve')}
             </label>
             <AmountField value={pot.amount} onChange={(amount) => update(pot.id, { amount })} />
-            <button type="button" className="btn-mini" aria-label={tr('Topf löschen', 'Delete pot')} title={tr('Löschen', 'Delete')} onClick={() => onChange(pots.filter((p) => p.id !== pot.id))}><Trash2 size={14} /></button>
+            <Knopf art="leise" groesse="klein" nurSymbol symbol={Trash2} aria-label={tr('Topf löschen', 'Delete pot')} title={tr('Löschen', 'Delete')} onClick={() => onChange(pots.filter((p) => p.id !== pot.id))} />
           </li>
         ))}
       </ul>
@@ -455,7 +458,7 @@ function AmountField({ value, onChange }: { value: number; onChange: (n: number)
   }
   return (
     <span className="flex items-center gap-1">
-      <input className={`input input-sm w-36 text-right tabular-nums ${invalid ? 'border-danger' : ''}`} inputMode="decimal" value={text} aria-label={tr('Betrag in Euro', 'Amount in euro')} aria-invalid={invalid}
+      <Feld className={`input-sm w-36 text-right tabular-nums ${invalid ? 'border-danger' : ''}`} inputMode="decimal" value={text} aria-label={tr('Betrag in Euro', 'Amount in euro')} aria-invalid={invalid}
         onChange={(e) => setText(e.target.value)} onBlur={commit} onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }} />
       <span className="text-ink-muted">€</span>
     </span>
@@ -508,7 +511,7 @@ function TargetEditor({ gaps, targets, coins, onChange, color, hidden, eur, onPl
                     {g ? `${g.points > 0 ? '+' : g.points < 0 ? '−' : ''}${num(Math.abs(g.points), 1)} ${tr('Punkte', 'pts')}` : '–'}
                     {g && !hidden && Math.abs(g.eur) >= 1 && <span className="block text-xs text-ink-muted">{g.eur > 0 ? tr(`${eur(g.eur)} fehlen`, `${eur(g.eur)} short`) : tr(`${eur(-g.eur)} zu viel`, `${eur(-g.eur)} too much`)}</span>}
                   </td>
-                  <td className="num">{off && key !== 'cash' && <button type="button" className="btn btn-ghost btn-sm" onClick={() => onPlan(g!)}>{g!.eur > 0 ? tr('Kaufplan', 'Buy plan') : tr('Verkaufsplan', 'Sell plan')} <ChevronRight size={14} /></button>}</td>
+                  <td className="num">{off && key !== 'cash' && <Knopf art="leise" groesse="klein" onClick={() => onPlan(g!)}>{g!.eur > 0 ? tr('Kaufplan', 'Buy plan') : tr('Verkaufsplan', 'Sell plan')} <ChevronRight size={14} /></Knopf>}</td>
                 </tr>
               )
             })}
@@ -518,9 +521,9 @@ function TargetEditor({ gaps, targets, coins, onChange, color, hidden, eur, onPl
       <div className="flex flex-wrap items-center gap-3 text-sm">
         {Object.keys(targets).length < MAX_TARGETS && (
           <span className="flex items-center gap-2">
-            <input className="input input-sm w-28" placeholder={tr('Coin, z. B. ADA', 'Coin, e.g. ADA')} value={add} maxLength={12} aria-label={tr('Coin hinzufügen', 'Add coin')}
+            <Feld className="input-sm w-28" placeholder={tr('Coin, z. B. ADA', 'Coin, e.g. ADA')} value={add} maxLength={12} aria-label={tr('Coin hinzufügen', 'Add coin')}
               onChange={(e) => setAdd(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') addCoin() }} />
-            <button type="button" className="btn btn-secondary btn-sm" onClick={addCoin}><Plus size={14} /> {tr('Coin', 'Coin')}</button>
+            <Knopf symbol={Plus} groesse="klein" onClick={addCoin}>{tr('Coin', 'Coin')}</Knopf>
           </span>
         )}
         <span className={`ml-auto tabular-nums ${Math.abs(total - 100) < 0.05 || total === 0 ? 'text-ink-muted' : 'text-warning-fg'}`}>
@@ -544,7 +547,7 @@ function PercentField({ value, onChange, label }: { value: number; onChange: (n:
   }
   return (
     <span className="inline-flex items-center gap-1">
-      <input className={`input input-sm w-20 text-right tabular-nums ${invalid ? 'border-danger' : ''}`} inputMode="decimal" value={text} placeholder="0" aria-label={tr(`Ziel für ${label} in Prozent`, `Target for ${label} in percent`)} aria-invalid={invalid}
+      <Feld className={`input-sm w-20 text-right tabular-nums ${invalid ? 'border-danger' : ''}`} inputMode="decimal" value={text} placeholder="0" aria-label={tr(`Ziel für ${label} in Prozent`, `Target for ${label} in percent`)} aria-invalid={invalid}
         onChange={(e) => setText(e.target.value)} onBlur={commit} onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }} />
       <span className="text-ink-muted">%</span>
     </span>
@@ -629,17 +632,17 @@ function ManualCard({ manual, onChange }: { manual: ManualHolding[]; onChange: (
   const add = () => onChange([...manual, { id: `m-${Date.now().toString(36)}`, place: tr('Wallet', 'Wallet'), coin: 'BTC', amount: 0, at: new Date().toISOString() }])
   const update = (id: string, patch: Partial<ManualHolding>) => onChange(manual.map((m) => (m.id === id ? { ...m, ...patch, at: new Date().toISOString() } : m)))
   return (
-    <SectionCard title={tr('Eigene Einträge', 'Own entries')} action={manual.length < MAX_MANUAL && <button type="button" className="btn btn-secondary btn-sm" onClick={add}><Plus size={14} /> {tr('Eintrag hinzufügen', 'Add entry')}</button>}>
+    <SectionCard title={tr('Eigene Einträge', 'Own entries')} action={manual.length < MAX_MANUAL && <Knopf symbol={Plus} groesse="klein" onClick={add}>{tr('Eintrag hinzufügen', 'Add entry')}</Knopf>}>
       <p className="mb-3 text-xs text-ink-muted">{tr('Für Coins an Orten ohne Schnittstelle, zum Beispiel eine Hardware-Wallet oder ein Broker. Du trägst die Menge ein, den Euro-Kurs holt die App von der oben gewählten Börse. Alles bleibt nur auf deinem Mac.', 'For coins in places without an interface, for example a hardware wallet or a broker. You enter the amount, the app takes the euro price from the exchange selected at the top. Everything stays on your Mac.')}</p>
       {manual.length === 0 ? <p className="text-xs text-ink-muted">{tr('Noch kein eigener Eintrag.', 'No own entry yet.')}</p> : (
         <ul className="divide-y divide-line text-sm">
           {manual.map((m) => (
             <li key={m.id} className="flex flex-wrap items-center gap-3 py-2">
-              <input className="input input-sm min-w-0 flex-1 basis-40" value={m.place} maxLength={40} aria-label={tr('Ort', 'Place')} placeholder={tr('Ort, z. B. Ledger', 'Place, e.g. Ledger')} onChange={(e) => update(m.id, { place: e.target.value })} />
-              <input className="input input-sm w-24 uppercase" value={m.coin} maxLength={12} aria-label="Coin" placeholder="BTC" onChange={(e) => update(m.id, { coin: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '') })} />
+              <Feld className="input-sm min-w-0 flex-1 basis-40" value={m.place} maxLength={40} aria-label={tr('Ort', 'Place')} placeholder={tr('Ort, z. B. Ledger', 'Place, e.g. Ledger')} onChange={(e) => update(m.id, { place: e.target.value })} />
+              <Feld className="input-sm w-24 uppercase" value={m.coin} maxLength={12} aria-label="Coin" placeholder="BTC" onChange={(e) => update(m.id, { coin: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '') })} />
               <QtyField value={m.amount} onChange={(amount) => update(m.id, { amount })} />
               {m.at && <span className="text-xs text-ink-faint" title={tr('Zuletzt geändert', 'Last changed')}>{fmtDate(m.at)}</span>}
-              <button type="button" className="btn-mini" aria-label={tr('Eintrag löschen', 'Delete entry')} title={tr('Löschen', 'Delete')} onClick={() => onChange(manual.filter((x) => x.id !== m.id))}><Trash2 size={14} /></button>
+              <Knopf art="leise" groesse="klein" nurSymbol symbol={Trash2} aria-label={tr('Eintrag löschen', 'Delete entry')} title={tr('Löschen', 'Delete')} onClick={() => onChange(manual.filter((x) => x.id !== m.id))} />
             </li>
           ))}
         </ul>
@@ -656,7 +659,7 @@ function QtyField({ value, onChange }: { value: number; onChange: (n: number) =>
   const parsed = parseNumber(text, fmt)
   const invalid = text.trim() !== '' && (Number.isNaN(parsed) || parsed < 0)
   return (
-    <input className={`input input-sm w-36 text-right tabular-nums ${invalid ? 'border-danger' : ''}`} inputMode="decimal" value={text} placeholder="0" aria-label={tr('Menge', 'Amount')} aria-invalid={invalid}
+    <Feld className={`input-sm w-36 text-right tabular-nums ${invalid ? 'border-danger' : ''}`} inputMode="decimal" value={text} placeholder="0" aria-label={tr('Menge', 'Amount')} aria-invalid={invalid}
       onChange={(e) => setText(e.target.value)} onBlur={() => { const n = text.trim() === '' ? 0 : parsed; if (!invalid && n !== value) onChange(n) }}
       onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }} />
   )

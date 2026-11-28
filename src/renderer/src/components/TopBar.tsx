@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { Check, ChevronDown, KeyRound, OctagonX, PlayCircle } from 'lucide-react'
 import { api } from '../api'
-import Modal from './ui/Modal'
+import Modal from './bausteine/Modal'
 import { tr } from '@shared/i18n'
 import { EXCHANGE_IDS, exchangeName, exName, type ExchangeId } from '@shared/exchanges'
+import Knopf from './bausteine/Knopf'
+import LinkKnopf from './bausteine/LinkKnopf'
 
 const drag = { WebkitAppRegion: 'drag' } as React.CSSProperties
 const noDrag = { WebkitAppRegion: 'no-drag' } as React.CSSProperties
@@ -36,7 +38,7 @@ export default function TopBar({ exchange, keys, hasKey, demo, onExchange, onMan
         <span className="flex items-center gap-2 rounded-full bg-warning-soft px-3 py-1 text-xs font-medium text-warning-fg" style={noDrag}
           title={tr(`Beispielkurse und erfundenes Guthaben. Es wird nichts an ${exName()} gesendet, probier ruhig alles aus.`, `Sample prices and made-up balances. Nothing is sent to ${exName()}, so feel free to try everything.`)}>
           <PlayCircle size={14} /> {tr(`Demo: nichts geht an ${exName()}`, `Demo: nothing goes to ${exName()}`)}
-          <button type="button" className="btn-link text-xs" onClick={onEndDemo}>{tr('Beenden', 'End')}</button>
+          <LinkKnopf className="text-xs" onClick={onEndDemo}>{tr('Beenden', 'End')}</LinkKnopf>
         </span>
       )}
       <div className="ml-auto" style={noDrag}>
@@ -65,6 +67,7 @@ function ExchangeMenu({ exchange, keys, hasKey, demo, onExchange, onManageKeys }
 
   return (
     <div ref={ref} className="relative" style={noDrag}>
+      {/* @fehu-ausnahme: Börsen-Umschalter in der Kopfleiste, Pille mit Statuspunkt, öffnet ein Menü */}
       <button type="button" onClick={() => setOpen(!open)} aria-haspopup="menu" aria-expanded={open}
         title={tr('Mit welcher Börse die App gerade arbeitet. Pläne, Entwürfe und Orders gelten je Börse.', 'Which exchange the app is working with. Plans, drafts and orders belong to one exchange each.')}
         className="flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1 text-sm font-medium text-ink transition-colors hover:border-accent-edge">
@@ -79,6 +82,7 @@ function ExchangeMenu({ exchange, keys, hasKey, demo, onExchange, onManageKeys }
           {EXCHANGE_IDS.map((id) => {
             const on = id === exchange
             return (
+              // @fehu-ausnahme: Menüeintrag als ganze Zeile (Baustein Menü fehlt noch)
               <button key={id} type="button" role="menuitemradio" aria-checked={on} onClick={() => { setOpen(false); onExchange(id) }}
                 className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors ${on ? 'bg-accent-soft font-medium' : 'hover:bg-sunken-soft'}`}>
                 <span className="w-4">{on && <Check size={14} className="text-accent-fg" />}</span>
@@ -88,6 +92,7 @@ function ExchangeMenu({ exchange, keys, hasKey, demo, onExchange, onManageKeys }
             )
           })}
           <div className="my-1 border-t border-line" />
+          {/* @fehu-ausnahme: Menüeintrag als ganze Zeile (Baustein Menü fehlt noch) */}
           <button type="button" role="menuitem" onClick={() => { setOpen(false); onManageKeys() }}
             className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-ink-muted transition-colors hover:bg-sunken-soft hover:text-ink">
             <KeyRound size={14} /> {tr('Schlüssel anlegen und verwalten', 'Add and manage keys')}
@@ -120,17 +125,16 @@ function EmergencyStop({ onDone }: { onDone: () => void }) {
 
   return (
     <>
-      <button type="button" className="btn btn-outline btn-sm text-danger-fg" onClick={() => { setMsg(null); setOpen(true) }}
-        title={tr('Alle offenen Orders auf allen verbundenen Börsen auf einmal stornieren', 'Cancel all open orders on all connected exchanges at once')}>
-        <OctagonX size={14} /> {tr('Notbremse', 'Emergency stop')}
-      </button>
+      <Knopf symbol={OctagonX} groesse="klein" className="text-danger-fg" onClick={() => { setMsg(null); setOpen(true) }}
+        title={tr('Alle offenen Orders auf allen verbundenen Börsen auf einmal stornieren', 'Cancel all open orders on all connected exchanges at once')}>{tr('Notbremse', 'Emergency stop')}
+      </Knopf>
       {open && (
         <Modal title={tr('Notbremse: alle Orders stornieren?', 'Emergency stop: cancel all orders?')} size="sm" onClose={close}
           footer={msg?.ok ? (
-            <button type="button" className="btn btn-primary" onClick={close}>{tr('Fertig', 'Done')}</button>
+            <Knopf art="primaer" onClick={close}>{tr('Fertig', 'Done')}</Knopf>
           ) : <>
-            <button type="button" className="btn btn-secondary" disabled={busy} onClick={close}>{tr('Abbrechen', 'Cancel')}</button>
-            <button type="button" className="btn btn-danger" disabled={busy} onClick={run}>{busy ? tr('Storniere …', 'Cancelling …') : tr('Alle stornieren', 'Cancel all')}</button>
+            <Knopf disabled={busy} onClick={close}>{tr('Abbrechen', 'Cancel')}</Knopf>
+            <Knopf art="gefahr" disabled={busy} onClick={run}>{busy ? tr('Storniere …', 'Cancelling …') : tr('Alle stornieren', 'Cancel all')}</Knopf>
           </>}>
           <div className="space-y-2 text-sm">
             <p>{tr(

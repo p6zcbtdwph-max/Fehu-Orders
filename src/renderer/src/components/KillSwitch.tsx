@@ -1,12 +1,14 @@
 import { useState } from 'react'
 import { ExternalLink, ShieldOff, Trash2 } from 'lucide-react'
 import { api } from '../api'
-import Modal from './ui/Modal'
-import SectionCard from './ui/SectionCard'
+import Modal from './bausteine/Modal'
+import SectionCard from './bausteine/SectionCard'
 import { tr } from '@shared/i18n'
 import { exchangeMeta, exchangeName, type ExchangeId } from '@shared/exchanges'
 import { roleName } from '@shared/key-roles'
 import type { ClearAllResult } from '@shared/ipc'
+import Knopf from './bausteine/Knopf'
+import Haken from './bausteine/Haken'
 
 /**
  * Notfall-Knopf: alle Schlüssel sofort aus der App löschen. Ehrlich erklärt: Das löscht nur auf diesem Mac.
@@ -44,23 +46,23 @@ export default function KillSwitch({ onDone }: { onDone?: () => void }): JSX.Ele
           <>Wichtig: Das löscht die Schlüssel <strong>nur auf diesem Mac</strong>. Bei der Börse sind sie danach noch gültig. Wirklich unbrauchbar wird ein Schlüssel erst, wenn du ihn bei der Börse löschst (widerrufst). Die Links dazu bekommst du direkt danach.</>,
           <>Important: this deletes the keys <strong>on this Mac only</strong>. At the exchange they are still valid. A key only becomes useless once you delete (revoke) it at the exchange. You get the links for that right afterwards.</>,
         )}</p>
-        <button type="button" className="btn btn-danger" onClick={() => setOpen(true)}><ShieldOff size={16} /> {tr('Alle Schlüssel sofort löschen', 'Delete all keys now')}</button>
+        <Knopf symbol={ShieldOff} art="gefahr" onClick={() => setOpen(true)}>{tr('Alle Schlüssel sofort löschen', 'Delete all keys now')}</Knopf>
       </div>
       {open && (
         <Modal size="md" onClose={close} icon={<ShieldOff size={18} className="text-danger-fg" />}
           title={result ? tr('Schlüssel aus der App gelöscht', 'Keys deleted from the app') : tr('Alle Schlüssel aus der App löschen?', 'Delete all keys from the app?')}
           footer={result ? (
-            <button type="button" className="btn btn-primary" onClick={close}>{tr('Fertig', 'Done')}</button>
+            <Knopf art="primaer" onClick={close}>{tr('Fertig', 'Done')}</Knopf>
           ) : <>
-            <button type="button" className="btn btn-secondary" disabled={busy} onClick={close}>{tr('Abbrechen', 'Cancel')}</button>
-            <button type="button" className="btn btn-danger" disabled={busy} onClick={run}><Trash2 size={14} /> {busy ? tr('Lösche …', 'Deleting …') : tr('Ja, alle löschen', 'Yes, delete all')}</button>
+            <Knopf disabled={busy} onClick={close}>{tr('Abbrechen', 'Cancel')}</Knopf>
+            <Knopf symbol={Trash2} art="gefahr" disabled={busy} onClick={run}>{busy ? tr('Lösche …', 'Deleting …') : tr('Ja, alle löschen', 'Yes, delete all')}</Knopf>
           </>}>
           {result ? <Done result={result} /> : (
             <div className="space-y-3 text-sm">
               <p>{tr('Alle Schlüssel aller Börsen verschwinden aus der App, auch ein Handels-Schlüssel, der nur im Arbeitsspeicher liegt. Pläne, Entwürfe, Protokoll und Einstellungen bleiben.', 'All keys of all exchanges disappear from the app, including a trading key that is only kept in memory. Plans, drafts, log and settings stay.')}</p>
               <p className="text-ink-muted">{tr('Deine offenen Orders bei den Börsen bleiben bestehen und können weiter ausgeführt werden. Die App sieht sie nur nicht mehr, bis du wieder einen Schlüssel einfügst.', 'Your open orders at the exchanges stay and can still be filled. The app just cannot see them until you paste a key again.')}</p>
               <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-line p-3">
-                <input type="checkbox" className="mt-0.5" checked={cancelOrders} onChange={(e) => setCancelOrders(e.target.checked)} />
+                <Haken className="mt-0.5" checked={cancelOrders} onChange={(e) => setCancelOrders(e.target.checked)} />
                 <span>
                   <strong>{tr('Vorher alle offenen Orders stornieren (Notbremse)', 'Cancel all open orders first (emergency stop)')}</strong>
                   <span className="block text-xs text-ink-muted">{tr('Nur nötig, wenn du auch die laufenden Orders sofort stoppen willst. Danach geht das nicht mehr aus der App, weil die Schlüssel weg sind.', 'Only needed if you also want to stop running orders right away. Afterwards the app cannot do that any more, because the keys are gone.')}</span>

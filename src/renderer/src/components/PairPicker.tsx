@@ -4,6 +4,7 @@ import type { PairDto } from '@shared/ipc'
 import { searchPairs } from '@shared/pair-search'
 import { tr } from '@shared/i18n'
 import { exName } from '@shared/exchanges'
+import Feld from './bausteine/Feld'
 
 /** Suchfeld für Handelspaare: Coin-Symbol tippen, mit Pfeiltasten wählen, Enter übernimmt. */
 export default function PairPicker({ pairs, value, watchlist, onChange }: { pairs: PairDto[]; value: string; watchlist: string[]; onChange: (id: string) => void }): JSX.Element {
@@ -35,8 +36,8 @@ export default function PairPicker({ pairs, value, watchlist, onChange }: { pair
   return (
     <div ref={box} className="relative w-full">
       <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted"><Search size={16} /></span>
-      <input
-        className="input w-full pl-9"
+      <Feld
+        className="w-full pl-9"
         role="combobox"
         aria-expanded={open}
         aria-controls="pair-list"

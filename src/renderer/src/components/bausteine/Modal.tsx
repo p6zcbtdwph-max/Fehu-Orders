@@ -2,6 +2,7 @@ import { useId, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { useLanguage } from '../../i18n'
+import Knopf from './Knopf'
 
 export type ModalSize = 'sm' | 'md' | 'lg' | 'xl'
 
@@ -53,10 +54,8 @@ export default function Modal({ title, subtitle, icon, onClose, size = 'md', foo
             </div>
             {headerActions && <div className="-mt-1 flex flex-shrink-0 items-center gap-1">{headerActions}</div>}
             {onClose && (
-              <button type="button" onClick={onClose} data-modal-close aria-label={t('common.close')} title={t('common.close')}
-                className="btn btn-ghost btn-icon -mr-2 -mt-1 h-7 w-7 flex-shrink-0">
-                <X size={16} />
-              </button>
+              <Knopf art="leise" groesse="klein" nurSymbol symbol={X} onClick={onClose} data-modal-close aria-label={t('common.close')}
+                className="-mr-2 -mt-1 flex-shrink-0" />
             )}
           </div>
         )}

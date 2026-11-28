@@ -6,13 +6,15 @@ import { buildLadder } from '@shared/ladder'
 import { RaisedNotice } from './MinOrder'
 import type { DraftDto, PairDto, SendResult } from '@shared/ipc'
 import { wrongSide } from '@shared/safety'
-import Modal from './ui/Modal'
+import Modal from './bausteine/Modal'
 import { SendSummary } from './SendSuccess'
 import { num, pct } from '../format'
 import { tr } from '@shared/i18n'
 import { useMoney } from '../money'
 import { activeExchange, exName, probeOk } from '@shared/exchanges'
 import TradeKeyGate, { canTest, useTradeKey } from './TradeKeyGate'
+import Knopf from './bausteine/Knopf'
+import LinkKnopf from './bausteine/LinkKnopf'
 
 /** Was ein Entwurf jetzt bedeuten würde: Stufen nach den aktuellen Regeln des Paars */
 export function evaluate(d: DraftDto, pair: PairDto | undefined, last: number | undefined, minCost: number) {
@@ -80,11 +82,11 @@ export function ReleaseModal({ draft, pair, last, minOrder, hasKey, onNeedKey, o
   return (
     <Modal title={tr('Entwurf senden?', 'Send draft?')} size="md" onClose={() => !busy && onClose(sentOk ? result : null)}
       footer={sentOk ? (
-        <button type="button" className="btn btn-primary" onClick={() => onClose(result)}>{tr('Fertig', 'Done')}</button>
+        <Knopf art="primaer" onClick={() => onClose(result)}>{tr('Fertig', 'Done')}</Knopf>
       ) : <>
-        <button type="button" className="btn btn-secondary" disabled={!!busy} onClick={() => onClose(null)}>{tr('Abbrechen', 'Cancel')}</button>
-        <button type="button" className="btn btn-secondary" disabled={blocked || !canTest(tk, activeExchange())} onClick={() => run(true)}><FlaskConical size={16} /> {busy === 'validate' ? tr('Prüfe …', 'Checking …') : tr('Testen', 'Test')}</button>
-        <button type="button" className="btn btn-primary" disabled={blocked || tk.has === false} onClick={() => run(false)}><Rocket size={16} /> {busy === 'send' ? tr('Sende …', 'Sending …') : tr(`${ev?.count ?? 0} Orders senden`, `Send ${ev?.count ?? 0} orders`)}</button>
+        <Knopf disabled={!!busy} onClick={() => onClose(null)}>{tr('Abbrechen', 'Cancel')}</Knopf>
+        <Knopf symbol={FlaskConical} disabled={blocked || !canTest(tk, activeExchange())} onClick={() => run(true)}>{busy === 'validate' ? tr('Prüfe …', 'Checking …') : tr('Testen', 'Test')}</Knopf>
+        <Knopf symbol={Rocket} art="primaer" disabled={blocked || tk.has === false} onClick={() => run(false)}>{busy === 'send' ? tr('Sende …', 'Sending …') : tr(`${ev?.count ?? 0} Orders senden`, `Send ${ev?.count ?? 0} orders`)}</Knopf>
       </>}>
       {sentOk && result ? <SendSummary result={result} pairName={draft.pairName} side={draft.side} priceDecimals={dec} /> : (
       <div className="space-y-2 text-sm">
@@ -114,7 +116,7 @@ export function ReleaseModal({ draft, pair, last, minOrder, hasKey, onNeedKey, o
           </>
         )}
         {hasKey && <TradeKeyGate exchange={activeExchange()} state={tk} />}
-        {!hasKey && <p className="notice notice-info">{tr(`Zum Senden brauchst du einen ${exName()}-API-Schlüssel.`, `To release you need a ${exName()} API key.`)} <button type="button" className="btn-link" onClick={onNeedKey}>{tr('Schlüssel anlegen', 'Create key')}</button></p>}
+        {!hasKey && <p className="notice notice-info">{tr(`Zum Senden brauchst du einen ${exName()}-API-Schlüssel.`, `To release you need a ${exName()} API key.`)} <LinkKnopf onClick={onNeedKey}>{tr('Schlüssel anlegen', 'Create key')}</LinkKnopf></p>}
         {err && <p className="notice notice-danger">{err}</p>}
         {result && (
           <div className={`notice ${failed.length ? 'notice-warning' : 'notice-success'}`}>
