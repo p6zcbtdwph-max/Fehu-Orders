@@ -289,6 +289,15 @@
 }
 
 /* Modal fade + scale-in */
+/* Toast (components/bausteine/Toast.tsx): kurz von unten einblenden */
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+.toast-enter {
+  animation: toast-in var(--motion) var(--ease) both;
+}
+
 @keyframes modal-enter {
   from { opacity: 0; transform: scale(0.95) translateY(6px); }
   to   { opacity: 1; transform: scale(1) translateY(0);      }
@@ -500,6 +509,8 @@ p, li, dd, blockquote { hyphens: auto; }
     @apply inline-flex items-center justify-center rounded-md text-track transition-colors hover:text-accent;
     min-height: 24px; min-width: 24px;
   }
+  /* Gefülltes Symbol im Knopf (Stern auf der Watchlist) */
+  .symbol-gefuellt svg { fill: currentColor; }
   .btn-star[aria-pressed="true"] { @apply text-accent hover:text-accent-hover; }
   /* Farbwahl (v1.68): runder Farbpunkt, gewählt = Ring */
   .btn-swatch {
