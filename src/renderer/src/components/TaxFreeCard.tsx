@@ -9,6 +9,9 @@ import { dateToSec, holdingPeriods, sellTaxNote, type LotEvent, type ManualLot }
 import { localDate } from '@shared/dates'
 import { num, fmtDate } from '../format'
 import { NumberField } from './NumberField'
+import Knopf from './bausteine/Knopf'
+import LinkKnopf from './bausteine/LinkKnopf'
+import Feld from './bausteine/Feld'
 
 export default function TaxFreeCard({ coin, held, sellVolume, decimals }: {
   coin: string
@@ -78,7 +81,7 @@ export default function TaxFreeCard({ coin, held, sellVolume, decimals }: {
 
           {hp && hp.lots.length > 0 && (
             <div>
-              <button type="button" className="btn-link text-xs" onClick={() => setShowLots(!showLots)}>{showLots ? tr('Käufe ausblenden', 'Hide purchases') : tr(`Gehaltene Käufe zeigen (${hp.lots.length})`, `Show held purchases (${hp.lots.length})`)}</button>
+              <LinkKnopf className="text-xs" onClick={() => setShowLots(!showLots)}>{showLots ? tr('Käufe ausblenden', 'Hide purchases') : tr(`Gehaltene Käufe zeigen (${hp.lots.length})`, `Show held purchases (${hp.lots.length})`)}</LinkKnopf>
               {showLots && (
                 <div className="mt-2 overflow-x-auto">
                   <table className="data-table">
@@ -104,7 +107,7 @@ export default function TaxFreeCard({ coin, held, sellVolume, decimals }: {
               {mine.map((l) => (
                 <li key={l.id} className="flex items-center gap-2">
                   <span>{tr('Eingetragen', 'Entered')}: {fmt(l.volume)} {coin}, {tr('gekauft am', 'bought on')} {day(dateToSec(l.date) ?? 0)}</span>
-                  <button type="button" className="btn btn-ghost btn-sm" aria-label={tr('Eintrag löschen', 'Delete entry')} onClick={() => saveManual(manual.filter((x) => x.id !== l.id))}><Trash2 size={14} /></button>
+                  <Knopf symbol={Trash2} art="leise" groesse="klein" aria-label={tr('Eintrag löschen', 'Delete entry')} onClick={() => saveManual(manual.filter((x) => x.id !== l.id))}></Knopf>
                 </li>
               ))}
             </ul>
@@ -115,15 +118,15 @@ export default function TaxFreeCard({ coin, held, sellVolume, decimals }: {
                 <div className="w-40"><NumberField label={tr(`Menge ${coin}`, `Amount ${coin}`)} value={vol} onChange={setVol} /></div>
                 <label className="block">
                   <span className="label">{tr('Kaufdatum', 'Purchase date')}</span>
-                  <input type="date" className="input" value={date} max={localDate()} onChange={(e) => setDate(e.target.value)} />
+                  <Feld type="date" value={date} max={localDate()} onChange={(e) => setDate(e.target.value)} />
                 </label>
-                <button type="button" className="btn btn-primary btn-sm mb-1" onClick={add}>{tr('Eintragen', 'Add')}</button>
-                <button type="button" className="btn btn-ghost btn-sm mb-1" onClick={() => { setAdding(false); setErr(null) }}>{tr('Abbrechen', 'Cancel')}</button>
+                <Knopf art="primaer" groesse="klein" className="mb-1" onClick={add}>{tr('Eintragen', 'Add')}</Knopf>
+                <Knopf art="leise" groesse="klein" className="mb-1" onClick={() => { setAdding(false); setErr(null) }}>{tr('Abbrechen', 'Cancel')}</Knopf>
               </div>
               {err && <p className="notice notice-danger mt-2">{err}</p>}
             </div>
           ) : (
-            <button type="button" className="btn btn-secondary btn-sm" onClick={() => setAdding(true)}><Plus size={14} /> {tr('Älteren Kauf eintragen', 'Add an older purchase')}</button>
+            <Knopf symbol={Plus} groesse="klein" onClick={() => setAdding(true)}>{tr('Älteren Kauf eintragen', 'Add an older purchase')}</Knopf>
           )}
           <p className="text-xs text-ink-muted">{tr(
             'Rechenhilfe, keine Steuerberatung. In Deutschland ist ein Verkauf steuerfrei, wenn der Kauf länger als ein Jahr her ist. Verkauft wird nach „zuerst gekauft, zuerst verkauft“, je Börse. Die App kennt nur Käufe, die über sie liefen oder die du einträgst. Ist dein Bestand kleiner, zieht sie den Unterschied von den ältesten Käufen ab, zeigt also eher zu wenig als zu viel steuerfrei.',

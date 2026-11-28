@@ -19,6 +19,8 @@ import { useMoney } from '../money'
 import { exchangeOf, exName, probeOk } from '@shared/exchanges'
 import TradeKeyGate, { canTest, useTradeKey } from '../components/TradeKeyGate'
 import type { PlanData } from '../plan-data'
+import Knopf from '../components/bausteine/Knopf'
+import LinkKnopf from '../components/bausteine/LinkKnopf'
 
 export type PlanFilter = 'all' | 'drafts' | 'running' | 'done' | 'orders'
 
@@ -101,10 +103,10 @@ export default function PlansPage({ hasKey, data, view, onView, onEditDraft, onP
           <p className="page-subtitle">{tr(`Entwürfe und gesendete Pläne bei ${exName()} an einem Ort.`, `Drafts and plans sent to ${exName()} in one place.`)}</p>
         </div>
         <div className="ml-auto flex flex-shrink-0 gap-2">
-          <button type="button" className="btn btn-secondary" onClick={load}><RefreshCw size={16} /> {tr('Aktualisieren', 'Refresh')}</button>
+          <Knopf symbol={RefreshCw} onClick={load}>{tr('Aktualisieren', 'Refresh')}</Knopf>
         </div>
       </header>
-      {!hasKey && <p className="notice notice-info mb-4">{tr(`Ohne ${exName()}-Schlüssel siehst du nur deine Entwürfe und gespeicherten Pläne, aber nicht, was bei ${exName()} offen oder ausgeführt ist.`, `Without a ${exName()} key you only see your drafts and saved plans, not what is open or filled at ${exName()}.`)} <button type="button" className="btn-link" onClick={onNeedKey}>{tr('Schlüssel hinterlegen', 'Add key')}</button></p>}
+      {!hasKey && <p className="notice notice-info mb-4">{tr(`Ohne ${exName()}-Schlüssel siehst du nur deine Entwürfe und gespeicherten Pläne, aber nicht, was bei ${exName()} offen oder ausgeführt ist.`, `Without a ${exName()} key you only see your drafts and saved plans, not what is open or filled at ${exName()}.`)} <LinkKnopf onClick={onNeedKey}>{tr('Schlüssel hinterlegen', 'Add key')}</LinkKnopf></p>}
       {error && <p className="notice notice-danger mb-4">{error}</p>}
       {notice && <p className="notice notice-success mb-4">{notice}</p>}
 
@@ -194,7 +196,7 @@ function PlanDetail({ e, data, hasKey, onBack, onEditDraft, onPlanSell, onNeedKe
 }) {
   return (
     <div className="space-y-4">
-      <button type="button" className="btn-link inline-flex items-center gap-1 text-sm" onClick={onBack}><ArrowLeft size={14} /> {tr('Alle Pläne', 'All plans')}</button>
+      <LinkKnopf className="inline-flex items-center gap-1 text-sm" onClick={onBack}><ArrowLeft size={14} /> {tr('Alle Pläne', 'All plans')}</LinkKnopf>
       <div className="flex flex-wrap items-center gap-3">
         <h2 className="text-xl font-semibold text-ink">{entryTitle(e)}</h2>
         <StatusPill e={e} />
@@ -245,9 +247,9 @@ function DraftDetail({ d, entry, data, hasKey, onEdit, onNeedKey, onNotice }: {
       </SectionCard>
       <SectionCard title={tr('Was du jetzt tun kannst', 'What you can do now')}>
         <span className="inline-flex flex-wrap gap-2">
-          <button type="button" className="btn btn-primary" onClick={() => setRelease(true)}><Rocket size={16} /> {tr('Senden', 'Send')}</button>
-          <button type="button" className="btn btn-secondary" onClick={() => onEdit(d)}><Pencil size={16} /> {tr('Im Planer bearbeiten', 'Edit in planner')}</button>
-          <button type="button" className="btn btn-outline" onClick={() => setRemove(true)}><Trash2 size={16} /> {tr('Löschen', 'Delete')}</button>
+          <Knopf symbol={Rocket} art="primaer" onClick={() => setRelease(true)}>{tr('Senden', 'Send')}</Knopf>
+          <Knopf symbol={Pencil} onClick={() => onEdit(d)}>{tr('Im Planer bearbeiten', 'Edit in planner')}</Knopf>
+          <Knopf symbol={Trash2} onClick={() => setRemove(true)}>{tr('Löschen', 'Delete')}</Knopf>
         </span>
       </SectionCard>
 
@@ -264,8 +266,8 @@ function DraftDetail({ d, entry, data, hasKey, onEdit, onNeedKey, onNotice }: {
       {remove && (
         <Modal title={tr('Entwurf löschen?', 'Delete draft?')} size="sm" onClose={() => setRemove(false)}
           footer={<>
-            <button type="button" className="btn btn-secondary" onClick={() => setRemove(false)}>{tr('Abbrechen', 'Cancel')}</button>
-            <button type="button" className="btn btn-danger" onClick={async () => { await api().deleteDraft(d.id); setRemove(false); onNotice(tr(`„${d.name}“ wurde gelöscht.`, `“${d.name}” was deleted.`)); data.load() }}>{tr('Löschen', 'Delete')}</button>
+            <Knopf onClick={() => setRemove(false)}>{tr('Abbrechen', 'Cancel')}</Knopf>
+            <Knopf art="gefahr" onClick={async () => { await api().deleteDraft(d.id); setRemove(false); onNotice(tr(`„${d.name}“ wurde gelöscht.`, `“${d.name}” was deleted.`)); data.load() }}>{tr('Löschen', 'Delete')}</Knopf>
           </>}>
           <p className="text-sm">{tr(`„${d.name}“ wird aus der App gelöscht. Bei ${exName()} ändert sich nichts.`, `“${d.name}” will be deleted from the app. Nothing changes at ${exName()}.`)}</p>
         </Modal>
@@ -353,14 +355,14 @@ function SentDetail({ p, st, data, onPlanSell, onCancelOrder }: {
         {held.length || left.length || (p.side === 'buy' && st && st.filledVolume > 0) || (myOrders?.length ?? 0) > 0 ? (
           <span className="inline-flex flex-wrap gap-2">
             {held.map((z) => (
-              <button key={z} type="button" className={`btn whitespace-nowrap btn-outline ${ready.has(z) ? 'border-accent-edge bg-accent-soft text-accent-fg' : ''}`} title={triggerText(p, z, st?.zones).text}
+              <Knopf key={z} symbol={Shield} className={`whitespace-nowrap ${ready.has(z) ? 'border-accent-edge bg-accent-soft text-accent-fg' : ''}`} title={triggerText(p, z, st?.zones).text}
                 onClick={() => { setMsg(null); setArm(z) }}>
-                <Shield size={16} /> {tr(`Zone ${z + 1} aktivieren`, `Activate zone ${z + 1}`)}
-              </button>
+                {tr(`Zone ${z + 1} aktivieren`, `Activate zone ${z + 1}`)}
+              </Knopf>
             ))}
-            {left.length > 0 && <button type="button" className="btn btn-secondary" onClick={() => { setMsg(null); setRest(true) }}><Send size={16} /> {tr(`Restliche ${left.length} Stufen senden`, `Send remaining ${left.length} levels`)}</button>}
-            {p.side === 'buy' && st && st.filledVolume > 0 && <button type="button" className="btn btn-secondary" onClick={sellPlan} title={tr('Verkaufsstaffel 10–50 % über deinem Kaufpreis vorschlagen', 'Suggest a sell ladder 10–50 % above your buy price')}><TrendingUp size={16} /> {tr('Verkaufsplan für diesen Kauf', 'Sell plan for this buy')}</button>}
-            {(myOrders?.length ?? 0) > 0 && <button type="button" className="btn btn-outline text-danger-fg" onClick={() => setCancel(true)}>{tr('Plan stornieren', 'Cancel plan')}</button>}
+            {left.length > 0 && <Knopf symbol={Send} onClick={() => { setMsg(null); setRest(true) }}>{tr(`Restliche ${left.length} Stufen senden`, `Send remaining ${left.length} levels`)}</Knopf>}
+            {p.side === 'buy' && st && st.filledVolume > 0 && <Knopf symbol={TrendingUp} onClick={sellPlan} title={tr('Verkaufsstaffel 10–50 % über deinem Kaufpreis vorschlagen', 'Suggest a sell ladder 10–50 % above your buy price')}>{tr('Verkaufsplan für diesen Kauf', 'Sell plan for this buy')}</Knopf>}
+            {(myOrders?.length ?? 0) > 0 && <Knopf className="text-danger-fg" onClick={() => setCancel(true)}>{tr('Plan stornieren', 'Cancel plan')}</Knopf>}
           </span>
         ) : <p className="text-sm text-ink-muted">{tr('Bei diesem Plan gibt es gerade nichts zu tun.', 'There is nothing to do for this plan right now.')}</p>}
       </SectionCard>
@@ -376,8 +378,8 @@ function SentDetail({ p, st, data, onPlanSell, onCancelOrder }: {
       {rest && left.length > 0 && (
         <Modal title={tr('Restliche Stufen senden?', 'Send the remaining levels?')} size="sm" onClose={() => !busy && setRest(false)}
           footer={<>
-            <button type="button" className="btn btn-secondary" disabled={busy || !canTest(tk, exchangeOf(p))} onClick={() => sendRest(true)}>{tr('Testen', 'Test')}</button>
-            <button type="button" className="btn btn-primary" disabled={busy || tk.has === false} onClick={() => sendRest(false)}>{busy ? tr('Sende …', 'Sending …') : tr(`${left.length} Orders senden`, `Send ${left.length} orders`)}</button>
+            <Knopf disabled={busy || !canTest(tk, exchangeOf(p))} onClick={() => sendRest(true)}>{tr('Testen', 'Test')}</Knopf>
+            <Knopf art="primaer" disabled={busy || tk.has === false} onClick={() => sendRest(false)}>{busy ? tr('Sende …', 'Sending …') : tr(`${left.length} Orders senden`, `Send ${left.length} orders`)}</Knopf>
           </>}>
           <div className="space-y-2 text-sm">
             <TradeKeyGate exchange={exchangeOf(p)} state={tk} />
@@ -392,8 +394,8 @@ function SentDetail({ p, st, data, onPlanSell, onCancelOrder }: {
       {cancel && (
         <Modal title={tr('Plan stornieren?', 'Cancel plan?')} size="sm" onClose={() => !busy && setCancel(false)}
           footer={<>
-            <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => setCancel(false)}>{tr('Abbrechen', 'Back')}</button>
-            <button type="button" className="btn btn-danger" disabled={busy} onClick={cancelPlan}>{busy ? tr('Storniere …', 'Cancelling …') : tr('Stornieren', 'Cancel plan')}</button>
+            <Knopf disabled={busy} onClick={() => setCancel(false)}>{tr('Abbrechen', 'Back')}</Knopf>
+            <Knopf art="gefahr" disabled={busy} onClick={cancelPlan}>{busy ? tr('Storniere …', 'Cancelling …') : tr('Stornieren', 'Cancel plan')}</Knopf>
           </>}>
           <p className="text-sm">{tr(
             `Alle noch offenen Orders dieses Plans (${p.pairName}, ${myOrders?.length ?? 0} Stück) werden bei ${exName()} storniert. Bereits ausgeführte Käufe oder Verkäufe bleiben bestehen.`,

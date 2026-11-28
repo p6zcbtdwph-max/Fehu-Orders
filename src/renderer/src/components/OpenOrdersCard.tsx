@@ -10,6 +10,7 @@ import SectionCard from './bausteine/SectionCard'
 import Segmented from './bausteine/Segmented'
 import { num } from '../format'
 import { useMoney } from '../money'
+import Knopf from './bausteine/Knopf'
 
 type View = 'grouped' | 'single'
 const VIEW_KEY = 'fehu-orders-open-view'
@@ -47,7 +48,7 @@ export default function OpenOrdersCard({ orders, pairs, onCancel }: { orders: Op
       <td className="num">{num(o.volume, 8)}</td>
       <td className="num">{num(o.filled, 8)}</td>
       <td className="tabular-nums text-ink-muted">{o.userref || '–'}</td>
-      <td className="text-right"><button type="button" className="btn-mini" aria-label={tr('Order stornieren', 'Cancel order')} title={tr('Order stornieren', 'Cancel order')} onClick={() => onCancel(o.txid)}><X size={14} /></button></td>
+      <td className="text-right"><Knopf art="leise" groesse="klein" nurSymbol symbol={X} aria-label={tr('Order stornieren', 'Cancel order')} title={tr('Order stornieren', 'Cancel order')} onClick={() => onCancel(o.txid)} /></td>
     </tr>
   )
 
@@ -58,11 +59,9 @@ export default function OpenOrdersCard({ orders, pairs, onCancel }: { orders: Op
       <Fragment key={g.key}>
         <tr className="cursor-pointer hover:bg-sunken-soft" onClick={() => toggle(g.key)}>
           <td className="whitespace-nowrap">
-            <button type="button" className="mr-1 inline-flex align-middle text-ink-muted" aria-expanded={isOpen}
+            <Knopf art="leise" groesse="klein" nurSymbol symbol={isOpen ? ChevronDown : ChevronRight} className="mr-1 align-middle" aria-expanded={isOpen}
               aria-label={isOpen ? tr('Einzelne Orders zuklappen', 'Hide single orders') : tr('Einzelne Orders zeigen', 'Show single orders')}
-              onClick={(e) => { e.stopPropagation(); toggle(g.key) }}>
-              {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-            </button>
+              onClick={(e) => { e.stopPropagation(); toggle(g.key) }} />
             {label(g.pair)} <span className="text-xs text-ink-muted">· {g.orders.length} Orders</span>
           </td>
           <td>{side(g.side)}</td>

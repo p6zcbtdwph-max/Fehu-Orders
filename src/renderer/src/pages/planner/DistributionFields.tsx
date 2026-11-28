@@ -8,6 +8,8 @@ import CenterSliders from '../../components/CenterSliders'
 import Segmented from '../../components/bausteine/Segmented'
 import { num, numberFormat } from '../../format'
 import { useMoney } from '../../money'
+import Feld from '../../components/bausteine/Feld'
+import Auswahl from '../../components/bausteine/Auswahl'
 
 const curves = (): { id: SizeCurve; label: string; title: string }[] => [
   { id: 'flat', label: tr('Gleich', 'Equal'), title: tr('Jede Stufe gleich groß', 'Every level the same size') },
@@ -42,9 +44,9 @@ export default function DistributionFields({ input, set, zoned, ladder, pair, cu
       </div>
       <div>
         <span className="label">{tr('Mengenverteilung', 'Size distribution')}</span>
-        <select className="select w-full" value={input.curve} disabled={!!input.perLevel} onChange={(e) => set('curve', e.target.value as SizeCurve)}>
+        <Auswahl className="w-full" value={input.curve} disabled={!!input.perLevel} onChange={(e) => set('curve', e.target.value as SizeCurve)}>
           {curves().filter((c) => !zoned || c.id !== 'custom').map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
-        </select>
+        </Auswahl>
         <span className="mt-1 block text-xs text-ink-muted">{input.perLevel
           ? tr(`Bei „Pro Stufe“ ist jede Stufe gleich groß. Die Verteilung gilt erst wieder mit „Gesamt“.${zoned ? ' Die Anteile der Zonen zählen dann auch nicht, jede Stufe bekommt denselben Wert.' : ''}`, `With “Per level” every level is the same size. The distribution applies again with “Total”.${zoned ? ' Zone shares do not count either, every level gets the same value.' : ''}`)
           : <>{curves().find((c) => c.id === input.curve)?.title}{zoned && tr('. Gilt innerhalb jeder Zone.', '. Applies within each zone.')}</>}</span>
@@ -52,7 +54,7 @@ export default function DistributionFields({ input, set, zoned, ladder, pair, cu
       {input.curve === 'custom' && !zoned && !input.perLevel && (
         <label className="block">
           <span className="label">{tr('Anteil je Stufe in %', 'Share per level in %')}</span>
-          <input className="input w-full tabular-nums" value={customText} placeholder={numberFormat() === 'de' ? tr('z. B. 12,5; 12,5; 25; 50', 'e.g. 12,5; 12,5; 25; 50') : tr('z. B. 12.5, 12.5, 25, 50', 'e.g. 12.5, 12.5, 25, 50')}
+          <Feld className="w-full tabular-nums" value={customText} placeholder={numberFormat() === 'de' ? tr('z. B. 12,5; 12,5; 25; 50', 'e.g. 12,5; 12,5; 25; 50') : tr('z. B. 12.5, 12.5, 25, 50', 'e.g. 12.5, 12.5, 25, 50')}
             onChange={(e) => { setCustomText(e.target.value); set('customWeights', parseWeightList(e.target.value, numberFormat())) }} />
           <span className="mt-1 block text-xs text-ink-muted">
             {tr(

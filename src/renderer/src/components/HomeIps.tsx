@@ -6,6 +6,8 @@ import { Check, Copy, Eye, EyeOff, Lock, Plus, Trash2 } from 'lucide-react'
 import type { HomeIpView } from '@shared/ip'
 import { ipProblem, MAX_IPS } from '@shared/ip'
 import { tr } from '@shared/i18n'
+import Knopf from './bausteine/Knopf'
+import Feld from './bausteine/Feld'
 
 export default function HomeIps(): JSX.Element {
   const [list, setList] = useState<HomeIpView[]>([])
@@ -93,18 +95,14 @@ export default function HomeIps(): JSX.Element {
                 <span className="ml-2 text-xs text-ink-muted">{x.label ? `${x.label} · ` : ''}{x.kind}</span>
               </span>
               <span className="inline-flex gap-1">
-                <button type="button" className="btn btn-ghost btn-icon" onClick={() => toggle(i)} aria-label={shown[i] !== undefined ? tr('Verdecken', 'Hide') : tr('Anzeigen', 'Show')} title={shown[i] !== undefined ? tr('Verdecken', 'Hide') : tr('Anzeigen', 'Show')}>
-                  {shown[i] !== undefined ? <EyeOff size={15} /> : <Eye size={15} />}
-                </button>
-                <button type="button" className="btn btn-ghost btn-icon" onClick={() => copy(i)} aria-label={tr('Kopieren', 'Copy')} title={copied === i ? tr('Kopiert', 'Copied') : tr('Kopieren', 'Copy')}>
-                  {copied === i ? <Check size={15} className="text-success-fg" /> : <Copy size={15} />}
-                </button>
+                <Knopf art="leise" nurSymbol symbol={shown[i] !== undefined ? EyeOff : Eye} onClick={() => toggle(i)} aria-label={shown[i] !== undefined ? tr('Verdecken', 'Hide') : tr('Anzeigen', 'Show')} />
+                <Knopf art="leise" nurSymbol symbol={copied === i ? Check : Copy} className={copied === i ? 'text-success-fg' : ''} onClick={() => copy(i)} aria-label={tr('Kopieren', 'Copy')} title={copied === i ? tr('Kopiert', 'Copied') : tr('Kopieren', 'Copy')} />
                 {remove === i
                   ? <>
-                    <button type="button" className="btn btn-danger btn-sm" onClick={() => doRemove(i)}>{tr('Löschen', 'Delete')}</button>
-                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => setRemove(null)}>{tr('Abbrechen', 'Cancel')}</button>
+                    <Knopf art="gefahr" groesse="klein" onClick={() => doRemove(i)}>{tr('Löschen', 'Delete')}</Knopf>
+                    <Knopf art="leise" groesse="klein" onClick={() => setRemove(null)}>{tr('Abbrechen', 'Cancel')}</Knopf>
                   </>
-                  : <button type="button" className="btn btn-ghost btn-icon" onClick={() => setRemove(i)} aria-label={tr('Adresse löschen', 'Delete address')} title={tr('Adresse löschen', 'Delete address')}><Trash2 size={15} /></button>}
+                  : <Knopf art="leise" nurSymbol symbol={Trash2} onClick={() => setRemove(i)} aria-label={tr('Adresse löschen', 'Delete address')} title={tr('Adresse löschen', 'Delete address')} />}
               </span>
             </li>
           ))}
@@ -116,22 +114,22 @@ export default function HomeIps(): JSX.Element {
           <div className="grid grid-cols-1 gap-2 @md:grid-cols-[1fr_12rem]">
             <label className="block">
               <span className="label">{tr('IP-Adresse', 'IP address')}</span>
-              <input className={`input w-full font-mono ${touched && problem ? 'border-danger' : ''}`} autoFocus value={ip} placeholder={tr('z. B. 84.123.45.67', 'e.g. 84.123.45.67')}
+              <Feld className={`w-full font-mono ${touched && problem ? 'border-danger' : ''}`} autoFocus value={ip} placeholder={tr('z. B. 84.123.45.67', 'e.g. 84.123.45.67')}
                 spellCheck={false} autoComplete="off" onChange={(e) => { setIp(e.target.value); setError(null) }} onBlur={() => setTouched(true)} onKeyDown={(e) => e.key === 'Enter' && add()} />
             </label>
             <label className="block">
               <span className="label">{tr('Bezeichnung (optional)', 'Label (optional)')}</span>
-              <input className="input w-full" value={label} maxLength={40} placeholder={tr('z. B. Zuhause', 'e.g. Home')} onChange={(e) => setLabel(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} />
+              <Feld className="w-full" value={label} maxLength={40} placeholder={tr('z. B. Zuhause', 'e.g. Home')} onChange={(e) => setLabel(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} />
             </label>
           </div>
           {touched && problem && <p className="text-xs text-danger-fg">{problem}</p>}
           <div className="flex gap-2">
-            <button type="button" className="btn btn-primary btn-sm" disabled={!ip.trim()} onClick={add}>{tr('Im Schlüsselbund speichern', 'Save to keychain')}</button>
-            <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setAdding(false); setIp(''); setLabel(''); setTouched(false) }}>{tr('Abbrechen', 'Cancel')}</button>
+            <Knopf art="primaer" groesse="klein" disabled={!ip.trim()} onClick={add}>{tr('Im Schlüsselbund speichern', 'Save to keychain')}</Knopf>
+            <Knopf art="leise" groesse="klein" onClick={() => { setAdding(false); setIp(''); setLabel(''); setTouched(false) }}>{tr('Abbrechen', 'Cancel')}</Knopf>
           </div>
         </div>
       ) : list.length < MAX_IPS && (
-        <button type="button" className="btn btn-secondary btn-sm" onClick={() => setAdding(true)}><Plus size={14} /> {list.length ? tr('Weitere Adresse', 'Add another address') : tr('IP-Adresse speichern', 'Save IP address')}</button>
+        <Knopf symbol={Plus} groesse="klein" onClick={() => setAdding(true)}>{list.length ? tr('Weitere Adresse', 'Add another address') : tr('IP-Adresse speichern', 'Save IP address')}</Knopf>
       )}
       {error && <p className="notice notice-danger">{error}</p>}
     </div>

@@ -10,6 +10,8 @@ import { num, pct } from '../format'
 import { tr } from '@shared/i18n'
 import { NumberField } from './NumberField'
 import { useChartTheme } from '../utils/chartTheme'
+import Knopf from './bausteine/Knopf'
+import Auswahl from './bausteine/Auswahl'
 
 /** Farbe einer Zone, gleich im Editor, im Chart und in der Stufentabelle (Farbe 1 ist die Kurslinie, darum ab 2) */
 export const zoneColor = (series: string[], i: number): string => series[(i + 1) % series.length]
@@ -80,7 +82,7 @@ export default function ZoneEditor({ side, zones, ladder, last, daily, days, quo
               <span className="flex items-center gap-2 text-xs text-ink-muted tabular-nums">
                 {pct(part)} · {side === 'buy' ? eur(valueOf(i) || total * part) : `≈ ${eur(valueOf(i))}`}
                 {zones.length > 1 && (
-                  <button type="button" className="btn-mini" onClick={() => remove(i)} aria-label={tr(`Zone ${i + 1} entfernen`, `Remove zone ${i + 1}`)} title={tr(`Zone ${i + 1} entfernen`, `Remove zone ${i + 1}`)}><Trash2 size={14} /></button>
+                  <Knopf art="leise" groesse="klein" nurSymbol symbol={Trash2} onClick={() => remove(i)} aria-label={tr(`Zone ${i + 1} entfernen`, `Remove zone ${i + 1}`)} title={tr(`Zone ${i + 1} entfernen`, `Remove zone ${i + 1}`)} />
                 )}
               </span>
             </div>
@@ -107,9 +109,9 @@ export default function ZoneEditor({ side, zones, ladder, last, daily, days, quo
                     <div className="mt-1 grid grid-cols-2 gap-2">
                       <label className="block">
                         <span className="label">{tr('Zone', 'Zone')}</span>
-                        <select className="select w-full" value={trig.zone} onChange={(e) => update(i, { trigger: { ...trig, zone: Number(e.target.value) } })}>
+                        <Auswahl className="w-full" value={trig.zone} onChange={(e) => update(i, { trigger: { ...trig, zone: Number(e.target.value) } })}>
                           {zones.map((_, k) => k !== i && <option key={k} value={k}>{tr(`Zone ${k + 1}`, `Zone ${k + 1}`)}</option>)}
-                        </select>
+                        </Auswahl>
                       </label>
                       <NumberField label={tr('Ausgeführt zu %', 'Filled %')} value={trig.percent} onChange={(v) => update(i, { trigger: { ...trig, percent: Number.isFinite(v) ? Math.min(100, Math.max(1, Math.round(v))) : trig.percent } })} />
                     </div>
@@ -126,10 +128,9 @@ export default function ZoneEditor({ side, zones, ladder, last, daily, days, quo
         )
       })}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <button type="button" className="btn btn-ghost btn-sm" disabled={zones.length >= MAX_ZONES} onClick={() => onChange(normalizeShares(appendZone(zones, side)))}
-          title={zones.length >= MAX_ZONES ? tr(`Höchstens ${MAX_ZONES} Zonen`, `At most ${MAX_ZONES} zones`) : tr(`Weitere Zone ${side === 'buy' ? 'unterhalb' : 'oberhalb'} der letzten anlegen`, `Add another zone ${side === 'buy' ? 'below' : 'above'} the last one`)}>
-          <Plus size={14} /> {tr('Zone hinzufügen', 'Add zone')}
-        </button>
+        <Knopf symbol={Plus} art="leise" groesse="klein" disabled={zones.length>= MAX_ZONES} onClick={() => onChange(normalizeShares(appendZone(zones, side)))}
+          title={zones.length>= MAX_ZONES ? tr(`Höchstens ${MAX_ZONES} Zonen`, `At most ${MAX_ZONES} zones`) : tr(`Weitere Zone ${side === 'buy' ? 'unterhalb' : 'oberhalb'} der letzten anlegen`, `Add another zone ${side === 'buy' ? 'below' : 'above'} the last one`)}>{tr('Zone hinzufügen', 'Add zone')}
+        </Knopf>
         <span className={`text-xs tabular-nums ${stepSum > MAX_STEPS ? 'text-warning-fg' : 'text-ink-muted'}`}>
           {tr(`${num(stepSum, 0)} Stufen gesamt`, `${num(stepSum, 0)} levels in total`)}
         </span>

@@ -12,6 +12,7 @@ import { RaisedNotice } from '../../components/MinOrder'
 import { windowPhrase } from '../../components/HistoryHints'
 import { num, pct } from '../../format'
 import { useMoney } from '../../money'
+import LinkKnopf from '../../components/bausteine/LinkKnopf'
 
 export interface PlanChecksProps {
   input: LadderInput
@@ -91,7 +92,7 @@ export default function PlanChecks(p: PlanChecksProps): JSX.Element {
             <><strong>Über deiner Obergrenze von {eur(limit)} pro Sendung.</strong> Aus Sicherheitsgründen steht sie am Anfang auf 50 €, damit dein erster echter Test klein bleibt. So wird nichts gesendet. Verkleinere den Betrag, sende mit „Davon jetzt senden“ erst einen Teil, oder hebe die Grenze in den Einstellungen an.</>,
             <><strong>Above your limit of {eur(limit)} per send.</strong> For safety it starts at 50 € so your first real test stays small. Nothing will be sent like this. Lower the amount, send only part of it with “Send now”, or raise the limit in Settings.</>,
           )}</span>
-          {onOpenSettings && <button type="button" className="btn-link" onClick={onOpenSettings}>{tr('Zu den Einstellungen', 'Open settings')}</button>}
+          {onOpenSettings && <LinkKnopf onClick={onOpenSettings}>{tr('Zu den Einstellungen', 'Open settings')}</LinkKnopf>}
         </p>
       )}
       {shortfall && (

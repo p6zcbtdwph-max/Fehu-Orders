@@ -2,6 +2,7 @@ import { RotateCcw } from 'lucide-react'
 import { CENTER_MAX, CENTER_MIN, type LadderCenters, type Side } from '@shared/ladder'
 import { num } from '../format'
 import { tr } from '@shared/i18n'
+import Knopf from './bausteine/Knopf'
 
 // Alle Texte an einer Stelle, auf Deutsch und Englisch. Als Funktion, damit ein Sprachwechsel sofort greift.
 export const centerText = () => ({
@@ -51,6 +52,7 @@ function CenterSlider({ label, hint, value, formulaValue, custom, disabledText, 
         </span>
         <span className="text-sm font-semibold tabular-nums">{percent(value)}</span>
       </div>
+      {/* @fehu-ausnahme: Schieberegler, dafür gibt es keinen Baustein im Standard */}
       <input type="range" className="range mt-1" min={CENTER_MIN * 100} max={CENTER_MAX * 100} step={1} disabled={disabled}
         value={Math.round(value * 100)} aria-label={label} aria-valuetext={`${percent(value)}, ${T.atPrice} ${priceAt(value)}`}
         onChange={(e) => {
@@ -63,7 +65,7 @@ function CenterSlider({ label, hint, value, formulaValue, custom, disabledText, 
           {disabled ? disabledText : <>{T.atPrice} {priceAt(value)} · {custom ? `${T.formula} ${percent(formulaValue)}` : T.isFormula}</>}
         </span>
         {custom && !disabled && (
-          <button type="button" className="btn-mini" onClick={() => onChange(undefined)} aria-label={T.reset} title={T.reset}><RotateCcw size={13} /></button>
+          <Knopf art="leise" groesse="klein" nurSymbol symbol={RotateCcw} onClick={() => onChange(undefined)} aria-label={T.reset} title={T.reset} />
         )}
       </div>
       {!disabled && <span className="mt-0.5 block text-xs text-ink-faint">{hint}</span>}

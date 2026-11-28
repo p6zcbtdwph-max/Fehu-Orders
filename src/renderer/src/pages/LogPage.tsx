@@ -9,6 +9,8 @@ import Segmented from '../components/bausteine/Segmented'
 import { localDate, num, fmtDateTimeSeconds } from '../format'
 import { tr } from '@shared/i18n'
 import { useMoney } from '../money'
+import Knopf from '../components/bausteine/Knopf'
+import { useToast } from '../components/bausteine/Toast'
 
 /** Name einer Aktion im Protokoll, in der gewählten Sprache */
 export const actionLabel = (a: string): string => ({
@@ -54,6 +56,7 @@ export default function LogPage({ board = [], onOpenPlan }: { board?: BoardEntry
   const cancelled = cancelledPlans(board)
   const [entries, setEntries] = useState<LogEntry[]>([])
   const [filter, setFilter] = useState<Filter>('all')
+  const toast = useToast()
   const load = () => api().log().then(setEntries).catch(() => setEntries([]))
   useEffect(() => { load() }, [])
 
@@ -68,6 +71,7 @@ export default function LogPage({ board = [], onOpenPlan }: { board?: BoardEntry
     a.download = `fehu-orders-${tr('protokoll', 'log')}-${localDate()}.csv`
     a.click()
     setTimeout(() => URL.revokeObjectURL(a.href), 1000)
+    toast(tr('Export fertig', 'Export done'))
   }
 
   return (
@@ -78,8 +82,8 @@ export default function LogPage({ board = [], onOpenPlan }: { board?: BoardEntry
           <p className="page-subtitle">{tr('Jedes Senden, Stornieren und jeder Fehler mit Uhrzeit. Bleibt nur auf diesem Mac.', 'Every send, cancel and error with its time. Stays on this Mac only.')}</p>
         </div>
         <div className="ml-auto flex flex-shrink-0 gap-2">
-          <button type="button" className="btn btn-secondary" onClick={load}><RefreshCw size={16} /> {tr('Aktualisieren', 'Refresh')}</button>
-          <button type="button" className="btn btn-secondary" disabled={!shown.length} onClick={exportCsv} title={tr('Als CSV-Datei', 'As CSV file')}><Download size={16} /> {tr('Exportieren', 'Export')}</button>
+          <Knopf symbol={RefreshCw} onClick={load}>{tr('Aktualisieren', 'Refresh')}</Knopf>
+          <Knopf symbol={Download} disabled={!shown.length} onClick={exportCsv} title={tr('Als CSV-Datei', 'As CSV file')}>{tr('Exportieren', 'Export')}</Knopf>
         </div>
       </header>
 

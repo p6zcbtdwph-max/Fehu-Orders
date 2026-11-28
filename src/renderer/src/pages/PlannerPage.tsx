@@ -29,6 +29,9 @@ import { tr } from '@shared/i18n'
 import { currencySign, toInputText } from '@shared/number-format'
 import { useMoney } from '../money'
 import { activeExchange, exName, FIRST_TEST_MAX_EUR, probeHint } from '@shared/exchanges'
+import Knopf from '../components/bausteine/Knopf'
+import LinkKnopf from '../components/bausteine/LinkKnopf'
+import Haken from '../components/bausteine/Haken'
 
 
 
@@ -370,7 +373,7 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
   )
   const postOnlyField = (
   <label className="flex items-start gap-2 text-sm">
-    <input type="checkbox" className="checkbox mt-0.5" checked={postOnly} onChange={(e) => setPostOnly(e.target.checked)} />
+    <Haken className="mt-0.5" checked={postOnly} onChange={(e) => setPostOnly(e.target.checked)} />
     <span>
       {tr('Nur als Limit-Order ins Orderbuch (Post-only)', 'Only as limit order into the order book (post-only)')}
       <span className="block text-xs text-ink-muted">{tr('Verhindert, dass eine Stufe sofort zum Marktpreis ausgeführt wird, wenn der Preis falsch eingegeben ist.', 'Prevents a level from being filled immediately at market price if the price was entered wrongly.')}</span>
@@ -387,7 +390,7 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
     <PlanResults input={input} ladder={ladder} pair={pair} last={last} candles={candles} daily={daily} weekly={weekly} range={range} setRange={setRange} result={result} held={held} later={later} />
   )
   const planEl = (
-    <div data-guide="plan" className="min-w-0"><SectionCard title={tr('Plan', 'Plan')} action={<button type="button" className="btn btn-ghost btn-sm" onClick={tpl.openSave} title={tr('Diesen Plan als Vorlage speichern', 'Save this plan as a template')}><BookmarkPlus size={14} /> {tr('Als Vorlage', 'Save as template')}</button>}>
+    <div data-guide="plan" className="min-w-0"><SectionCard title={tr('Plan', 'Plan')} action={<Knopf symbol={BookmarkPlus} art="leise" groesse="klein" onClick={tpl.openSave} title={tr('Diesen Plan als Vorlage speichern', 'Save this plan as a template')}>{tr('Als Vorlage', 'Save as template')}</Knopf>}>
       <div className="space-y-4">
         <TemplatePicker {...tpl} />
         <div>
@@ -434,18 +437,14 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
           options={[{ id: 'steps', label: tr('In Schritten', 'Step by step'), title: tr('Der Planer führt dich in vier Schritten durch einen Plan', 'The planner guides you through a plan in four steps') }, { id: 'all', label: tr('Alles auf einer Seite', 'All on one page'), title: tr('Alle Felder auf einmal, für Geübte', 'All fields at once, for experienced users') }]} />
         {!wizard && (
         <div className="ml-auto flex flex-shrink-0 items-center gap-2" data-guide="actions">
-          <button type="button" className="btn btn-ghost" onClick={openFirstTest} title={tr('Einen kleinen, sicheren Plan für den ersten echten Test laden (bis 50 €)', 'Load a small, safe plan for your first real test (up to 50 €)')}>
-            <GraduationCap size={16} /> {tr('Erster Test', 'First test')}
-          </button>
-          <button type="button" className="btn btn-secondary" disabled={!ladder?.valid || !!busy} onClick={openDraftForm} title={tr('Zwischenspeichern und später unter „Meine Pläne“ senden', 'Save for now and send later under “My plans”')}>
-            <ClipboardList size={16} /> {tr('Als Entwurf', 'Save as draft')}
-          </button>
-          <button type="button" className="btn btn-secondary" disabled={!hasKey || !ladder?.valid || !!busy} onClick={() => run(true)} title={probeHint()}>
-            <FlaskConical size={16} /> {busy === 'validate' ? tr('Prüfe …', 'Checking …') : tr('Testen', 'Test')}
-          </button>
-          <button type="button" data-primary-action className="btn btn-primary" disabled={!hasKey || !ladder?.valid || !!busy || !!shortfall} onClick={() => { setConfirm(true); api().settings().then((s) => setLimit(s.maxPlanEur)).catch(() => undefined) }}>
-            <Send size={16} /> {tr(`An ${exName()} senden`, `Send to ${exName()}`)}
-          </button>
+          <Knopf symbol={GraduationCap} art="leise" onClick={openFirstTest} title={tr('Einen kleinen, sicheren Plan für den ersten echten Test laden (bis 50 €)', 'Load a small, safe plan for your first real test (up to 50 €)')}>{tr('Erster Test', 'First test')}
+          </Knopf>
+          <Knopf symbol={ClipboardList} disabled={!ladder?.valid || !!busy} onClick={openDraftForm} title={tr('Zwischenspeichern und später unter „Meine Pläne“ senden', 'Save for now and send later under “My plans”')}>{tr('Als Entwurf', 'Save as draft')}
+          </Knopf>
+          <Knopf symbol={FlaskConical} disabled={!hasKey || !ladder?.valid || !!busy} onClick={() => run(true)} title={probeHint()}>{busy === 'validate' ? tr('Prüfe …', 'Checking …') : tr('Testen', 'Test')}
+          </Knopf>
+          <Knopf symbol={Send} art="primaer" data-primary-action disabled={!hasKey || !ladder?.valid || !!busy || !!shortfall} onClick={() => { setConfirm(true); api().settings().then((s) => setLimit(s.maxPlanEur)).catch(() => undefined) }}>{tr(`An ${exName()} senden`, `Send to ${exName()}`)}
+          </Knopf>
         </div>
         )}
       </header>
@@ -455,19 +454,19 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
         <p className="notice notice-accent mb-4 flex flex-wrap items-center gap-x-3 gap-y-1">
           <ClipboardList size={16} className="flex-shrink-0" />
           <span className="flex-1">{tr(<>Du bearbeitest den Entwurf <strong>{draft.name}</strong>. Änderungen speicherst du mit „Als Entwurf“.</>, <>You are editing the draft <strong>{draft.name}</strong>. Save changes with “Save as draft”.</>)}</span>
-          <button type="button" className="btn-link" onClick={() => { setDraft(null); setDraftMsg(null) }}>{tr('Bearbeiten beenden', 'Stop editing')}</button>
+          <LinkKnopf onClick={() => { setDraft(null); setDraftMsg(null) }}>{tr('Bearbeiten beenden', 'Stop editing')}</LinkKnopf>
         </p>
       )}
       {draftMsg && (
         <p className="notice notice-success mb-4 flex flex-wrap items-center gap-x-3 gap-y-1">
           <span className="flex-1">{draftMsg}</span>
-          {onOpenDrafts && <button type="button" className="btn-link" onClick={onOpenDrafts}>{tr('Zu den Entwürfen', 'Go to drafts')}</button>}
+          {onOpenDrafts && <LinkKnopf onClick={onOpenDrafts}>{tr('Zu den Entwürfen', 'Go to drafts')}</LinkKnopf>}
         </p>
       )}
       {!hasKey && (
         <p className="notice notice-info mb-4">
           {tr(`Planen geht auch ohne Schlüssel. Zum Prüfen und Senden brauchst du einen ${exName()}-API-Schlüssel.`, `You can plan without a key. To check and send you need a ${exName()} API key.`)}{' '}
-          <button type="button" className="btn-link" onClick={onNeedKey}>{tr('Schlüssel hinterlegen', 'Add key')}</button>
+          <LinkKnopf onClick={onNeedKey}>{tr('Schlüssel hinterlegen', 'Add key')}</LinkKnopf>
         </p>
       )}
 
@@ -475,6 +474,7 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
         <>
           <nav className="mb-4 flex flex-wrap gap-2" aria-label={tr('Schritte', 'Steps')}>
             {STEPS.map((label, i) => (
+              // @fehu-ausnahme: Schrittanzeige des Planers, Pille mit erledigt/aktuell/offen
               <button key={i} type="button" onClick={() => goStep(i + 1)} aria-current={step === i + 1 ? 'step' : undefined} disabled={i > 0 && !pair}
                 className={`rounded-full px-3 py-1 text-sm transition-colors ${step === i + 1 ? 'bg-accent font-semibold text-accent-on' : step > i + 1 ? 'bg-success-soft text-success-fg' : 'bg-sunken text-ink-muted hover:text-ink'}`}>
                 {i + 1} {label}
@@ -510,9 +510,8 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
               <SectionCard title={tr('Bei der Börse testen', 'Test at the exchange')}>
                 <div className="flex flex-wrap items-center gap-3 text-sm">
                   <p className="min-w-0 flex-1 text-ink-muted">{probeHint()}. {tr('Es wird nichts angelegt und kein Geld gesperrt.', 'Nothing is placed and no funds are locked.')}</p>
-                  <button type="button" className="btn btn-secondary" disabled={!hasKey || !ladder?.valid || !!busy} onClick={() => run(true)}>
-                    <FlaskConical size={16} /> {busy === 'validate' ? tr('Prüfe …', 'Checking …') : tr('Testen', 'Test')}
-                  </button>
+                  <Knopf symbol={FlaskConical} disabled={!hasKey || !ladder?.valid || !!busy} onClick={() => run(true)}>{busy === 'validate' ? tr('Prüfe …', 'Checking …') : tr('Testen', 'Test')}
+                  </Knopf>
                 </div>
               </SectionCard>
               {resultsEl}
@@ -530,17 +529,19 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
                   <div className="grid grid-cols-1 gap-3 @md:grid-cols-2">{sendCountField}</div>
                   {postOnlyField}
                   {(!!shortfall || overLimit || wrong.length > 0 || !ladder?.valid) && (
-                    <p className="notice notice-warning">{tr('Es gibt noch Warnungen. Schau sie dir im Schritt „Prüfen“ an.', 'There are still warnings. Have a look at them in the “Check” step.')} <button type="button" className="btn-link" onClick={() => goStep(3)}>{tr('Zu Prüfen', 'Go to Check')}</button></p>
+                    <p className="notice notice-warning">{tr('Es gibt noch Warnungen. Schau sie dir im Schritt „Prüfen“ an.', 'There are still warnings. Have a look at them in the “Check” step.')} <LinkKnopf onClick={() => goStep(3)}>{tr('Zu Prüfen', 'Go to Check')}</LinkKnopf></p>
                   )}
                   {sendError && <p className="notice notice-danger">{sendError}</p>}
-                  {!hasKey && <p className="notice notice-info">{tr(`Zum Senden brauchst du einen ${exName()}-API-Schlüssel. Als Entwurf aufheben geht auch ohne.`, `To send you need a ${exName()} API key. Saving as a draft works without one.`)} <button type="button" className="btn-link" onClick={onNeedKey}>{tr('Schlüssel hinterlegen', 'Add key')}</button></p>}
+                  {!hasKey && <p className="notice notice-info">{tr(`Zum Senden brauchst du einen ${exName()}-API-Schlüssel. Als Entwurf aufheben geht auch ohne.`, `To send you need a ${exName()} API key. Saving as a draft works without one.`)} <LinkKnopf onClick={onNeedKey}>{tr('Schlüssel hinterlegen', 'Add key')}</LinkKnopf></p>}
                 </div>
               </SectionCard>
               <div className="grid grid-cols-1 gap-3 @md:grid-cols-2">
+                {/* @fehu-ausnahme: klickbare Karte mit Titel und Erklärung, ganze Fläche ist das Ziel */}
                 <button type="button" className="card flex flex-col items-start gap-1 p-4 text-left transition-colors hover:border-accent-edge disabled:opacity-50" disabled={!ladder?.valid || !!busy} onClick={openDraftForm}>
                   <span className="flex items-center gap-2 font-semibold text-ink"><ClipboardList size={16} /> {draft ? tr('Entwurf speichern', 'Save draft') : tr('Als Entwurf aufheben', 'Save as draft')}</span>
                   <span className="text-sm text-ink-muted">{tr('Geht noch nicht an die Börse und sperrt kein Geld. Du findest ihn unter „Meine Pläne“ und kannst ihn später senden, auch mit Kursalarm.', 'Does not go to the exchange yet and locks no funds. You find it under “My plans” and can send it later, also with a price alert.')}</span>
                 </button>
+                {/* @fehu-ausnahme: klickbare Karte mit Titel und Erklärung, ganze Fläche ist das Ziel */}
                 <button type="button" data-primary-action className="card flex flex-col items-start gap-1 border-accent-edge bg-accent-soft p-4 text-left transition-colors hover:border-accent-edge disabled:opacity-50" disabled={!canSend} onClick={openConfirm}>
                   <span className="flex items-center gap-2 font-semibold text-ink"><Send size={16} /> {tr(`Jetzt an ${exName()} senden`, `Send to ${exName()} now`)}</span>
                   <span className="text-sm text-ink-muted">{tr(`Die Orders werden echt angelegt. ${exName()} sperrt dafür den Betrag, bis sie ausgeführt oder storniert sind. Vorher siehst du noch eine Bestätigung.`, `The orders are really placed. ${exName()} locks the amount until they are filled or cancelled. You see a confirmation first.`)}</span>
@@ -549,11 +550,10 @@ export default function PlannerPage({ hasKey, onNeedKey, prefill, onPrefillUsed,
             </div>
           )}
           <div className="mt-5 flex flex-wrap items-center gap-2">
-            {step > 1 && <button type="button" className="btn btn-secondary" onClick={() => goStep(step - 1)}>{tr('Zurück', 'Back')}</button>}
-            <button type="button" className="btn btn-ghost" onClick={openFirstTest} title={tr('Einen kleinen, sicheren Plan für den ersten echten Test laden (bis 50 €)', 'Load a small, safe plan for your first real test (up to 50 €)')}>
-              <GraduationCap size={16} /> {tr('Erster Test', 'First test')}
-            </button>
-            {step < 4 && <button type="button" className="btn btn-primary ml-auto" disabled={!pair} onClick={() => goStep(step + 1)}>{tr(`Weiter: ${STEPS[step]}`, `Next: ${STEPS[step]}`)}</button>}
+            {step > 1 && <Knopf onClick={() => goStep(step - 1)}>{tr('Zurück', 'Back')}</Knopf>}
+            <Knopf symbol={GraduationCap} art="leise" onClick={openFirstTest} title={tr('Einen kleinen, sicheren Plan für den ersten echten Test laden (bis 50 €)', 'Load a small, safe plan for your first real test (up to 50 €)')}>{tr('Erster Test', 'First test')}
+            </Knopf>
+            {step < 4 && <Knopf art="primaer" className="ml-auto" disabled={!pair} onClick={() => goStep(step + 1)}>{tr(`Weiter: ${STEPS[step]}`, `Next: ${STEPS[step]}`)}</Knopf>}
           </div>
         </>
       ) : (

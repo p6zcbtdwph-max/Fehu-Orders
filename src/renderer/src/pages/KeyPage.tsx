@@ -10,6 +10,10 @@ import { tr } from '@shared/i18n'
 import SectionCard from '../components/bausteine/SectionCard'
 import Segmented from '../components/bausteine/Segmented'
 import HomeIps from '../components/HomeIps'
+import Knopf from '../components/bausteine/Knopf'
+import Feld from '../components/bausteine/Feld'
+import Textfeld from '../components/bausteine/Textfeld'
+import Haken from '../components/bausteine/Haken'
 
 function CheckList({ checks, exchange }: { checks: KeyCheck[]; exchange: string }) {
   return (
@@ -65,7 +69,7 @@ export default function KeyPage({ active, keys, onKeyChanged, onUse }: Props): J
         ) : (
           <div className="notice notice-info flex flex-wrap items-center gap-2 text-sm">
             <span className="min-w-0 flex-1">{tr(`Die App arbeitet gerade mit ${exchangeName(active)}. Einen Schlüssel für ${name} kannst du trotzdem hier anlegen, die App wechselt dabei nicht.`, `The app is working with ${exchangeName(active)} right now. You can still set up a ${name} key here, the app does not switch.`)}</span>
-            {keys[sel] && <button type="button" className="btn btn-secondary btn-sm" onClick={() => onUse(sel)}><ArrowRightLeft size={14} /> {tr(`${name} jetzt benutzen`, `Use ${name} now`)}</button>}
+            {keys[sel] && <Knopf symbol={ArrowRightLeft} groesse="klein" onClick={() => onUse(sel)}>{tr(`${name} jetzt benutzen`, `Use ${name} now`)}</Knopf>}
           </div>
         )}
       </div>
@@ -93,6 +97,7 @@ function TwoKeys({ exchange, roles, onPick }: { exchange: ExchangeId; roles: Key
   const tile = (role: KeyRole, Icon: typeof Eye, text: string) => {
     const has = roles[role]
     return (
+      // @fehu-ausnahme: klickbare Karte, ganze Fläche ist das Ziel
       <button type="button" onClick={() => onPick(role)} className="flex min-w-0 flex-1 items-start gap-3 rounded-xl border border-line bg-surface p-3 text-left transition-colors hover:border-accent-edge">
         <Icon size={18} className={`mt-0.5 flex-shrink-0 ${has ? 'text-success-fg' : 'text-ink-muted'}`} />
         <span className="min-w-0 space-y-1">
@@ -249,13 +254,13 @@ function KeyPanel({ exchange, role, roles, mode, onKeyChanged }: { exchange: Exc
             {touchId === false && <p className="flex items-start gap-2 text-ink-muted"><Fingerprint size={16} className="mt-0.5 flex-shrink-0 text-warning-fg" /> <span>{tr('Dieser Mac hat kein Touch ID oder es ist kein Finger eingerichtet. Vor dem Senden fragt die App dann nur mit dem Bestätigungsfenster. Einrichten kannst du Touch ID in den Systemeinstellungen unter „Touch ID & Passwort“.', 'This Mac has no Touch ID or no finger is set up. The app then only asks with the confirmation window before sending. You can set up Touch ID in System Settings under “Touch ID & Password”.')}</span></p>}
             {hasKey && (
               <div className="flex flex-wrap gap-2">
-                <button type="button" className="btn btn-secondary" disabled={!!busy} onClick={verify}>{busy === 'verify' ? tr('Prüfe …', 'Checking …') : tr('Rechte erneut prüfen', 'Check permissions again')}</button>
+                <Knopf disabled={!!busy} onClick={verify}>{busy === 'verify' ? tr('Prüfe …', 'Checking …') : tr('Rechte erneut prüfen', 'Check permissions again')}</Knopf>
                 {confirmClear ? (
                   <>
-                    <button type="button" className="btn btn-danger" onClick={clear}>{tr('Ja, löschen', 'Yes, delete')}</button>
-                    <button type="button" className="btn btn-ghost" onClick={() => setConfirmClear(false)}>{tr('Abbrechen', 'Cancel')}</button>
+                    <Knopf art="gefahr" onClick={clear}>{tr('Ja, löschen', 'Yes, delete')}</Knopf>
+                    <Knopf art="leise" onClick={() => setConfirmClear(false)}>{tr('Abbrechen', 'Cancel')}</Knopf>
                   </>
-                ) : <button type="button" className="btn btn-outline" onClick={() => setConfirmClear(true)}>{tr(`${rName} löschen`, `Delete ${rName.toLowerCase()}`)}</button>}
+                ) : <Knopf onClick={() => setConfirmClear(true)}>{tr(`${rName} löschen`, `Delete ${rName.toLowerCase()}`)}</Knopf>}
               </div>
             )}
             {source === 'status' && msg && <p className={`notice ${msg.ok ? 'notice-success' : 'notice-danger'}`}>{msg.text}</p>}
@@ -301,27 +306,27 @@ function KeyPanel({ exchange, role, roles, mode, onKeyChanged }: { exchange: Exc
           <div className="space-y-3 text-sm">
             <label className="block">
               <span className="label">{ex.keyLabel}</span>
-              <input className="input w-full font-mono" value={key} onChange={(e) => setKey(e.target.value)} autoComplete="off" spellCheck={false} placeholder={ex.keyPlaceholder} />
+              <Feld className="w-full font-mono" value={key} onChange={(e) => setKey(e.target.value)} autoComplete="off" spellCheck={false} placeholder={ex.keyPlaceholder} />
             </label>
             <label className="block">
               <span className="label">{ex.secretLabel}</span>
               {ex.secretMultiline
                 // Ein PEM-Block ist mehrzeilig. Das Feld ist absichtlich klein und unscharf dargestellt, damit niemand mitliest.
-                ? <textarea className="input h-24 w-full font-mono text-xs [-webkit-text-security:disc]" value={secret} onChange={(e) => setSecret(e.target.value)} autoComplete="off" spellCheck={false} placeholder={ex.secretPlaceholder} />
-                : <input className="input w-full font-mono" type="password" value={secret} onChange={(e) => setSecret(e.target.value)} autoComplete="off" spellCheck={false} placeholder={ex.secretPlaceholder} />}
+                ? <Textfeld className="h-24 w-full font-mono text-xs [-webkit-text-security:disc]" value={secret} onChange={(e) => setSecret(e.target.value)} autoComplete="off" spellCheck={false} placeholder={ex.secretPlaceholder} />
+                : <Feld className="w-full font-mono" type="password" value={secret} onChange={(e) => setSecret(e.target.value)} autoComplete="off" spellCheck={false} placeholder={ex.secretPlaceholder} />}
             </label>
             {needsConfirm && (
               <label className="notice notice-warning flex cursor-pointer items-start gap-2">
-                <input type="checkbox" className="mt-0.5" checked={noWithdraw} onChange={(e) => setNoWithdraw(e.target.checked)} />
+                <Haken className="mt-0.5" checked={noWithdraw} onChange={(e) => setNoWithdraw(e.target.checked)} />
                 <span>{tr(`Ich habe bei ${ex.name} geprüft: Das Recht „${ex.withdrawLabel}“ (Auszahlen) ist bei diesem Schlüssel aus. ${ex.name} lässt das nicht automatisch prüfen, deshalb ist diese Bestätigung Pflicht.`, `I checked at ${ex.name}: the “${ex.withdrawLabel}” permission is off for this key. ${ex.name} does not let apps check this, so this confirmation is required.`)}</span>
               </label>
             )}
             {formatIssues.length > 0 && <div className="notice notice-warning space-y-1">{formatIssues.map((t) => <p key={t}>{t}</p>)}</div>}
             {source === 'form' && msg && <p className={`notice ${msg.ok ? 'notice-success' : 'notice-danger'}`}>{msg.text}</p>}
             {source === 'form' && checks && <CheckList checks={checks} exchange={ex.name} />}
-            <button type="button" className="btn btn-primary" disabled={!!busy || !filled.key || !filled.secret || formatIssues.length > 0 || (needsConfirm && !noWithdraw)} onClick={save}>
+            <Knopf art="primaer" disabled={!!busy || !filled.key || !filled.secret || formatIssues.length> 0 || (needsConfirm && !noWithdraw)} onClick={save}>
               {busy === 'save' ? tr('Prüfe alle Rechte …', 'Checking all permissions …') : tr('Prüfen und speichern', 'Check and save')}
-            </button>
+            </Knopf>
           </div>
         </SectionCard></div>
 

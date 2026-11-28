@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { numberFormat } from '../format'
 import { tr } from '@shared/i18n'
 import { parseNumber, toInputText } from '@shared/number-format'
+import Feld from './bausteine/Feld'
 
 /**
  * Zahlenfeld im gewählten Format (Deutsch 1.234,56 oder Amerikanisch 1,234.56).
@@ -31,7 +32,7 @@ export function NumberField({ label, value, onChange, hint, step = 'any', emptyV
   return (
     <label className="block">
       <span className="label">{label}</span>
-      <input className={`input w-full tabular-nums ${invalid ? 'border-danger' : ''}`} inputMode="decimal" step={step} value={text} aria-invalid={invalid}
+      <Feld className={`w-full tabular-nums ${invalid ? 'border-danger' : ''}`} inputMode="decimal" step={step} value={text} aria-invalid={invalid}
         onChange={(e) => {
           setText(e.target.value)
           const n = parseNumber(e.target.value, fmt)

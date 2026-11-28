@@ -4,6 +4,8 @@ import { Trash2 } from 'lucide-react'
 import { tr } from '@shared/i18n'
 import type { TemplateDto } from '@shared/ipc'
 import { api } from '../../api'
+import Knopf from '../../components/bausteine/Knopf'
+import Auswahl from '../../components/bausteine/Auswahl'
 
 export function useTemplates({ current, onApply }: { current: () => Omit<TemplateDto, 'id' | 'name'> | null; onApply: (t: TemplateDto) => void }) {
   const [templates, setTemplates] = useState<TemplateDto[]>([])
@@ -45,11 +47,11 @@ export function TemplatePicker({ templates, templateId, apply, remove }: Pick<Re
     <label className="block">
       <span className="label">{tr('Vorlage', 'Template')}</span>
       <span className="flex gap-2">
-        <select className="select w-full" value={templateId} onChange={(e) => apply(e.target.value)}>
+        <Auswahl className="w-full" value={templateId} onChange={(e) => apply(e.target.value)}>
           <option value="">{tr('Keine Vorlage', 'No template')}</option>
           {templates.map((t) => <option key={t.id} value={t.id}>{t.name} · {t.pairName}</option>)}
-        </select>
-        {templateId && <button type="button" className="btn btn-ghost btn-icon flex-shrink-0" onClick={remove} aria-label={tr('Vorlage löschen', 'Delete template')} title={tr('Vorlage löschen', 'Delete template')}><Trash2 size={16} /></button>}
+        </Auswahl>
+        {templateId && <Knopf art="leise" nurSymbol symbol={Trash2} className="flex-shrink-0" onClick={remove} aria-label={tr('Vorlage löschen', 'Delete template')} title={tr('Vorlage löschen', 'Delete template')} />}
       </span>
     </label>
   )

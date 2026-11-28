@@ -11,6 +11,10 @@ import { api } from '../../api'
 import Modal from '../../components/bausteine/Modal'
 import { num } from '../../format'
 import { useMoney } from '../../money'
+import Knopf from '../../components/bausteine/Knopf'
+import LinkKnopf from '../../components/bausteine/LinkKnopf'
+import Feld from '../../components/bausteine/Feld'
+import Haken from '../../components/bausteine/Haken'
 
 export function FirstTestDialog({ limit, setLimit, minOrder, hasKey, onNeedKey, onOpenOrders, onLoad, onClose }: {
   limit: number | null
@@ -26,8 +30,8 @@ export function FirstTestDialog({ limit, setLimit, minOrder, hasKey, onNeedKey, 
   return (
     <Modal title={tr('Ersten echten Test vorbereiten', 'Prepare your first real test')} size="md" onClose={() => onClose()}
       footer={<>
-        <button type="button" className="btn btn-secondary" onClick={() => onClose()}>{tr('Abbrechen', 'Cancel')}</button>
-        <button type="button" className="btn btn-primary" onClick={onLoad}>{tr('Mini-Plan laden', 'Load mini plan')}</button>
+        <Knopf onClick={() => onClose()}>{tr('Abbrechen', 'Cancel')}</Knopf>
+        <Knopf art="primaer" onClick={onLoad}>{tr('Mini-Plan laden', 'Load mini plan')}</Knopf>
       </>}>
       <div className="space-y-3 text-sm">
         <p className="notice notice-warning">{tr(
@@ -39,7 +43,7 @@ export function FirstTestDialog({ limit, setLimit, minOrder, hasKey, onNeedKey, 
           <li>
             <strong>{tr('Obergrenze klein halten.', 'Keep the limit small.')}</strong>{' '}
             {limit !== null && limit > 50
-              ? <>{tr('Die Obergrenze steht bei', 'It is set to')} {eur(limit)}. <button type="button" className="btn-link" onClick={() => api().saveSettings({ maxPlanEur: 50 }).then((s) => setLimit(s.maxPlanEur))}>{tr('Auf 50 € senken', 'Lower to 50 €')}</button></>
+              ? <>{tr('Die Obergrenze steht bei', 'It is set to')} {eur(limit)}. <LinkKnopf onClick={() => api().saveSettings({ maxPlanEur: 50 }).then((s) => setLimit(s.maxPlanEur))}>{tr('Auf 50 € senken', 'Lower to 50 €')}</LinkKnopf></>
               : limit !== null ? <>{tr('Die Obergrenze steht bei', 'It is set to')} {eur(limit)}. {tr('Passt.', 'Fine.')}</> : null}
           </li>
           {tr(
@@ -63,7 +67,7 @@ export function FirstTestDialog({ limit, setLimit, minOrder, hasKey, onNeedKey, 
           `Dein Mindest-Orderwert steht bei ${eur(minOrder)}. Schon eine einzige Order wäre damit größer als die 50-€-Grenze beim ersten Test, die App würde nichts senden. Senke ihn für den Test in den Einstellungen, zum Beispiel auf 10 €.`,
           `Your minimum order value is ${eur(minOrder)}. Even a single order would then be larger than the 50 € first-test limit, so the app would send nothing. Lower it in Settings for the test, for example to 10 €.`,
         )}</p>}
-        {!hasKey && <p className="notice notice-info">{tr('Für Schritt 3 bis 5 brauchst du einen Schlüssel.', 'For steps 3 to 5 you need a key.')} <button type="button" className="btn-link" onClick={() => { onClose(); onNeedKey() }}>{tr('Schlüssel anlegen', 'Create key')}</button></p>}
+        {!hasKey && <p className="notice notice-info">{tr('Für Schritt 3 bis 5 brauchst du einen Schlüssel.', 'For steps 3 to 5 you need a key.')} <LinkKnopf onClick={() => { onClose(); onNeedKey() }}>{tr('Schlüssel anlegen', 'Create key')}</LinkKnopf></p>}
         {onOpenOrders && <p className="text-xs text-ink-muted">{tr(<>Geht etwas schief, stoppt die <strong>Notbremse</strong> oben rechts alle offenen Orders auf einmal.</>, <>If something goes wrong, the <strong>emergency stop</strong> at the top right stops all open orders at once.</>)}</p>}
       </div>
     </Modal>
@@ -97,8 +101,8 @@ export function ConfirmSendDialog({ input, pair, last, busy, limit, overLimit, t
   return (
     <Modal title={tr('Orders wirklich senden?', 'Really send the orders?')} size="sm" onClose={() => !busy && onClose()}
       footer={<>
-        <button type="button" className="btn btn-secondary" disabled={!!busy} onClick={() => onClose()}>{tr('Abbrechen', 'Cancel')}</button>
-        <button type="button" className="btn btn-primary" disabled={!!busy || overLimit || tk.has === false} onClick={() => onSend()}>{busy ? tr('Sende …', 'Sending …') : tr(`${nowCount} Orders senden`, `Send ${nowCount} orders`)}</button>
+        <Knopf disabled={!!busy} onClick={() => onClose()}>{tr('Abbrechen', 'Cancel')}</Knopf>
+        <Knopf art="primaer" disabled={!!busy || overLimit || tk.has === false} onClick={() => onSend()}>{busy ? tr('Sende …', 'Sending …') : tr(`${nowCount} Orders senden`, `Send ${nowCount} orders`)}</Knopf>
       </>}>
       <div className="space-y-2 text-sm">
         <TradeKeyGate exchange={activeExchange()} state={tk} />
@@ -133,12 +137,12 @@ export function SaveTemplateDialog({ initial, onSave, onClose }: { initial: stri
   return (
     <Modal title={tr('Als Vorlage speichern', 'Save as template')} size="sm" onClose={() => onClose()}
       footer={<>
-        <button type="button" className="btn btn-secondary" onClick={() => onClose()}>{tr('Abbrechen', 'Cancel')}</button>
-        <button type="button" className="btn btn-primary" disabled={!name.trim()} onClick={() => onSave(name)}>{tr('Speichern', 'Save')}</button>
+        <Knopf onClick={() => onClose()}>{tr('Abbrechen', 'Cancel')}</Knopf>
+        <Knopf art="primaer" disabled={!name.trim()} onClick={() => onSave(name)}>{tr('Speichern', 'Save')}</Knopf>
       </>}>
       <label className="block">
         <span className="label">{tr('Name', 'Name')}</span>
-        <input className="input w-full" autoFocus value={name} placeholder={tr('z. B. BTC Dip 10 Stufen log', 'e.g. BTC dip 10 levels log')} onChange={(e) => setName(e.target.value)}
+        <Feld className="w-full" autoFocus value={name} placeholder={tr('z. B. BTC Dip 10 Stufen log', 'e.g. BTC dip 10 levels log')} onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && onSave(name)} />
       </label>
       <p className="mt-2 text-xs text-ink-muted">{tr('Gespeichert werden Paar, Richtung, Preise, Stufen, Betrag und Verteilung. Ein gleichnamiger Plan wird ersetzt.', 'Saved are pair, side, prices, levels, amount and distribution. A template with the same name is replaced.')}</p>
@@ -166,23 +170,23 @@ export function DraftDialog({ form, setForm, editing, scenarios, input, pair, sp
   return (
     <Modal title={draft ? tr('Entwurf speichern', 'Save draft') : tr('Als Entwurf speichern', 'Save as draft')} size="sm" onClose={() => onClose()}
       footer={<>
-        <button type="button" className="btn btn-secondary" onClick={() => onClose()}>{tr('Abbrechen', 'Cancel')}</button>
-        {draft && <button type="button" className="btn btn-secondary" onClick={() => onSave(true)}>{tr('Als neuen Entwurf', 'As new draft')}</button>}
-        <button type="button" className="btn btn-primary" onClick={() => onSave(false)}>{draft ? tr('Entwurf aktualisieren', 'Update draft') : tr('Speichern', 'Save')}</button>
+        <Knopf onClick={() => onClose()}>{tr('Abbrechen', 'Cancel')}</Knopf>
+        {draft && <Knopf onClick={() => onSave(true)}>{tr('Als neuen Entwurf', 'As new draft')}</Knopf>}
+        <Knopf art="primaer" onClick={() => onSave(false)}>{draft ? tr('Entwurf aktualisieren', 'Update draft') : tr('Speichern', 'Save')}</Knopf>
       </>}>
       <div className="space-y-3 text-sm">
         <label className="block">
           <span className="label">{tr('Name', 'Name')}</span>
-          <input className="input w-full" autoFocus value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          <Feld className="w-full" autoFocus value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
         </label>
         <label className="block">
           <span className="label">{tr('Gruppe (optional)', 'Group (optional)')}</span>
-          <input className="input w-full" list="draft-scenarios" value={form.scenario} placeholder={tr('z. B. Crash, Bullrun, Nach dem Halving', 'e.g. Crash, Bull run, After the halving')} onChange={(e) => setForm({ ...form, scenario: e.target.value })} />
+          <Feld className="w-full" list="draft-scenarios" value={form.scenario} placeholder={tr('z. B. Crash, Bullrun, Nach dem Halving', 'e.g. Crash, Bull run, After the halving')} onChange={(e) => setForm({ ...form, scenario: e.target.value })} />
           <datalist id="draft-scenarios">{scenarios.map((x) => <option key={x} value={x} />)}</datalist>
           <span className="mt-1 block text-xs text-ink-muted">{tr('Steht unter „Meine Pläne“ beim Entwurf und hilft beim Wiederfinden.', 'Shown with the draft under “My plans” and helps you find it again.')}</span>
         </label>
         <label className="flex items-start gap-2">
-          <input type="checkbox" className="checkbox mt-0.5" checked={form.alarm} onChange={(e) => setForm({ ...form, alarm: e.target.checked })} />
+          <Haken className="mt-0.5" checked={form.alarm} onChange={(e) => setForm({ ...form, alarm: e.target.checked })} />
           <span>
             <span className="inline-flex items-center gap-1"><Bell size={14} /> {tr('Kursalarm', 'Price alert')}</span>
             <span className="block text-xs text-ink-muted">{tr(
@@ -193,7 +197,7 @@ export function DraftDialog({ form, setForm, editing, scenarios, input, pair, sp
         </label>
         <label className="block">
           <span className="label">{tr('Notiz (optional)', 'Note (optional)')}</span>
-          <input className="input w-full" value={form.note} placeholder={tr('z. B. nur senden, wenn BTC unter 60.000 € fällt', 'e.g. only send if BTC falls below 60,000 €')} onChange={(e) => setForm({ ...form, note: e.target.value })} />
+          <Feld className="w-full" value={form.note} placeholder={tr('z. B. nur senden, wenn BTC unter 60.000 € fällt', 'e.g. only send if BTC falls below 60,000 €')} onChange={(e) => setForm({ ...form, note: e.target.value })} />
         </label>
         <p className="text-xs text-ink-muted">{tr(
           `${input.side === 'buy' ? 'Kauf' : 'Verkauf'} ${pair.name}, ${nowCount} ${partial || heldLevels.length ? `von ${sendable.length} ` : ''}Stufen, ${eur(nowCost)}. Es geht nichts an ${exName()}. Senden kannst du den Entwurf später unter „Meine Pläne“.`,

@@ -4,6 +4,7 @@
 import { useState, useSyncExternalStore, type ReactNode } from 'react'
 import { ChevronDown, ChevronUp, Info, type LucideIcon } from 'lucide-react'
 import { tr } from '@shared/i18n'
+import LinkKnopf from './bausteine/LinkKnopf'
 
 const KEY = 'fehu-orders-hints-seen'
 const listeners = new Set<() => void>()
@@ -46,6 +47,7 @@ export default function Hint({ id, title, children, tone = 'info', icon: Icon = 
   const [open, setOpen] = useState(false)
   if (isSeen && !open) {
     return (
+      // @fehu-ausnahme: zugeklappter Hinweis, die ganze Zeile klappt ihn auf
       <button type="button" className={`flex w-full items-center gap-2 text-left text-xs text-ink-muted hover:text-ink ${className}`} onClick={() => setOpen(true)} aria-expanded={false}>
         <Icon size={14} className="flex-shrink-0" />
         <span className="min-w-0 flex-1 truncate">{title}</span>
@@ -61,8 +63,8 @@ export default function Hint({ id, title, children, tone = 'info', icon: Icon = 
         <strong>{title}</strong> {children}
       </div>
       {isSeen
-        ? <button type="button" className="btn-link flex-shrink-0 text-xs" onClick={() => setOpen(false)} aria-expanded>{tr('Einklappen', 'Collapse')} <ChevronUp size={12} className="inline" aria-hidden /></button>
-        : <button type="button" className="btn-link flex-shrink-0 text-xs" onClick={() => write([...seen, id])}>{tr('Verstanden', 'Got it')}</button>}
+        ? <LinkKnopf className="flex-shrink-0 text-xs" onClick={() => setOpen(false)} aria-expanded>{tr('Einklappen', 'Collapse')} <ChevronUp size={12} className="inline" aria-hidden /></LinkKnopf>
+        : <LinkKnopf className="flex-shrink-0 text-xs" onClick={() => write([...seen, id])}>{tr('Verstanden', 'Got it')}</LinkKnopf>}
     </div>
   )
 }

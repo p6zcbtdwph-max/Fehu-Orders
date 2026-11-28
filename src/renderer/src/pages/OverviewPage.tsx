@@ -9,6 +9,7 @@ import { num } from '../format'
 import { useMoney } from '../money'
 import type { PlanData } from '../plan-data'
 import { Kpi, StatusPill, entryTitle, progressText } from './PlansPage'
+import Knopf from '../components/bausteine/Knopf'
 
 export const FIRST_STEPS_HIDDEN = 'fehu-orders-first-steps-hidden'
 export const DEMO_TRIED = 'fehu-orders-demo-tried'
@@ -54,8 +55,8 @@ export default function OverviewPage({ hasKey, demo, data, onOpenPlan, onOpenPla
           <p className="page-subtitle">{tr(`Was gerade bei ${exName()} los ist und was als Nächstes zu tun ist.`, `What is going on at ${exName()} and what to do next.`)}</p>
         </div>
         <div className="ml-auto flex flex-shrink-0 gap-2">
-          <button type="button" className="btn btn-secondary" onClick={() => onNewPlan('sell')}><Plus size={16} /> {tr('Verkaufsplan', 'Sell plan')}</button>
-          <button type="button" className="btn btn-primary" onClick={() => onNewPlan('buy')}><Plus size={16} /> {tr('Kaufplan', 'Buy plan')}</button>
+          <Knopf symbol={Plus} onClick={() => onNewPlan('sell')}>{tr('Verkaufsplan', 'Sell plan')}</Knopf>
+          <Knopf symbol={Plus} art="primaer" onClick={() => onNewPlan('buy')}>{tr('Kaufplan', 'Buy plan')}</Knopf>
         </div>
       </header>
       {error && <p className="notice notice-danger mb-4">{error}</p>}
@@ -79,10 +80,11 @@ export default function OverviewPage({ hasKey, demo, data, onOpenPlan, onOpenPla
         </div>
 
         {running.length > 0 && (
-          <SectionCard title={tr('Laufende Pläne', 'Running plans')} action={<button type="button" className="btn btn-ghost btn-sm" onClick={onOpenPlans}>{tr('Alle Pläne', 'All plans')} <ChevronRight size={14} /></button>}>
+          <SectionCard title={tr('Laufende Pläne', 'Running plans')} action={<Knopf art="leise" groesse="klein" onClick={onOpenPlans}>{tr('Alle Pläne', 'All plans')} <ChevronRight size={14} /></Knopf>}>
             <ul className="divide-y divide-line">
               {running.map((e) => (
                 <li key={e.id}>
+                  {/* @fehu-ausnahme: Listenzeile, ganze Zeile öffnet den Plan */}
                   <button type="button" className="flex w-full items-center gap-3 py-2 text-left text-sm hover:bg-sunken-soft" onClick={() => onOpenPlan(e.id)}>
                     <span className="min-w-0 flex-1 truncate font-medium">{entryTitle(e)}</span>
                     <span className="hidden text-ink-muted @md:inline">{progressText(e)}</span>
@@ -110,9 +112,9 @@ function TodoRow({ e, onOpen }: { e: BoardEntry; onOpen: () => void }) {
     <li className="flex flex-wrap items-center gap-3 py-2 text-sm">
       {alarm ? <BellRing size={16} className="text-warning-fg" /> : <Shield size={16} className="text-accent-fg" />}
       <span className="min-w-0 flex-1">{text}</span>
-      <button type="button" className="btn btn-secondary btn-sm" onClick={onOpen}>
+      <Knopf groesse="klein" onClick={onOpen}>
         {alarm ? tr('Ansehen und senden', 'Review and send') : tr(`Zone ${(e.wait?.kind === 'zone' ? e.wait.zone : 0) + 1} aktivieren`, `Activate zone ${(e.wait?.kind === 'zone' ? e.wait.zone : 0) + 1}`)}
-      </button>
+      </Knopf>
     </li>
   )
 }
@@ -131,14 +133,14 @@ function FirstSteps({ hasKey, demo, sentAny, onGuide, onDemo, onNeedKey, onFirst
   if (hidden || steps.every((s) => s.done)) return null
   return (
     <SectionCard title={tr('Erste Schritte', 'First steps')} action={
-      <button type="button" className="btn-mini" aria-label={tr('Erste Schritte ausblenden', 'Hide first steps')} title={tr('Ausblenden', 'Hide')}
-        onClick={() => { setHidden(true); try { localStorage.setItem(FIRST_STEPS_HIDDEN, '1') } catch { /* egal */ } }}><X size={14} /></button>}>
+      <Knopf art="leise" groesse="klein" nurSymbol symbol={X} aria-label={tr('Erste Schritte ausblenden', 'Hide first steps')} title={tr('Ausblenden', 'Hide')}
+        onClick={() => { setHidden(true); try { localStorage.setItem(FIRST_STEPS_HIDDEN, '1') } catch { /* egal */ } }} />}>
       <ol className="space-y-2 text-sm">
         {steps.map((s, i) => (
           <li key={i} className="flex flex-wrap items-center gap-3">
             {s.done ? <Check size={16} className="text-success-fg" /> : <Circle size={16} className="text-ink-faint" />}
             <span className={`min-w-0 flex-1 ${s.done ? 'text-ink-muted line-through' : ''}`}>{i + 1}. {s.label}</span>
-            {!s.done && <button type="button" className="btn btn-sm btn-secondary" onClick={s.action}>{s.button}</button>}
+            {!s.done && <Knopf groesse="klein" onClick={s.action}>{s.button}</Knopf>}
           </li>
         ))}
       </ol>

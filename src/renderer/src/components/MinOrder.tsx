@@ -4,6 +4,7 @@ import { amountUnit, effectiveMinCost, planAmount, type Ladder, type LadderInput
 import { tr } from '@shared/i18n'
 import { exName } from '@shared/exchanges'
 import { num } from '../format'
+import LinkKnopf from './bausteine/LinkKnopf'
 
 type Fmt = (n: number) => string
 
@@ -19,7 +20,7 @@ export function MinOrderLine({ userMin, price, rules, pairName, eur, onOpenSetti
           <>Jede Order mindestens <strong className="text-ink">{eur(m.effective)}</strong>. Dein Mindest-Orderwert: {eur(m.user)}. {exName()} verlangt bei {pairName} mindestens {eur(m.exchange)}{m.exchangeHigher ? ', darum gilt dieser Wert' : ''}. Kleinere Stufen hebt der Planer automatisch an.</>,
           <>Every order at least <strong className="text-ink">{eur(m.effective)}</strong>. Your minimum order value: {eur(m.user)}. {exName()} requires at least {eur(m.exchange)} for {pairName}{m.exchangeHigher ? ', so that value applies' : ''}. The planner raises smaller levels automatically.</>,
         )}
-        {onOpenSettings && <> <button type="button" className="btn-link" onClick={onOpenSettings}>{tr('Ändern', 'Change')}</button></>}
+        {onOpenSettings && <> <LinkKnopf onClick={onOpenSettings}>{tr('Ändern', 'Change')}</LinkKnopf></>}
       </span>
     </p>
   )

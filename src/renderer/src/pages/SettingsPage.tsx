@@ -15,6 +15,7 @@ import { exName, FIRST_TEST_MAX_EUR } from '@shared/exchanges'
 import { DEFAULT_MIN_ORDER_EUR, effectiveMinCost, MAX_MIN_ORDER_EUR } from '@shared/ladder'
 import type { PairDto } from '@shared/ipc'
 import { useMoney } from '../money'
+import Knopf from '../components/bausteine/Knopf'
 
 /** Mindestwerte der aktiven Börse für die Paare auf der Watchlist (beim aktuellen Kurs) */
 function ExchangeMinimums({ userMin }: { userMin: number }) {
@@ -165,7 +166,7 @@ export default function SettingsPage({ section, onSection, keys, display, onKeys
               <NumberField label={tr('Obergrenze pro Sendung (€)', 'Limit per send (€)')} value={maxPlan} onChange={(v) => { setMaxPlan(v); setSavedMax(false) }}
                 hint={tr('Gilt für jede einzelne Sendung: Senden, „Rest senden“ und „Zone aktivieren“ werden je für sich geprüft, jede mit Touch ID. Schützt vor Tippfehlern.', 'Applies to every single send: Send, “Send rest” and “Arm zone” are each checked on their own, each with Touch ID. Protects against typos.')} />
             </div>
-            <button type="button" className="btn btn-secondary" disabled={!(maxPlan >= 1)} onClick={() => api().saveSettings({ maxPlanEur: maxPlan }).then(() => setSavedMax(true))}>{savedMax ? tr('Gespeichert', 'Saved') : tr('Speichern', 'Save')}</button>
+            <Knopf disabled={!(maxPlan>= 1)} onClick={() => api().saveSettings({ maxPlanEur: maxPlan }).then(() => setSavedMax(true))}>{savedMax ? tr('Gespeichert', 'Saved') : tr('Speichern', 'Save')}</Knopf>
           </div>
         </SectionCard></div>
 
@@ -180,7 +181,7 @@ export default function SettingsPage({ section, onSection, keys, display, onKeys
                 <NumberField label={tr('Mindest-Orderwert (€)', 'Minimum order value (€)')} value={minOrder} onChange={(v) => { setMinOrder(v); setMinMsg(null) }}
                   hint={tr(`Standard ${DEFAULT_MIN_ORDER_EUR} €, erlaubt 1 bis ${num(MAX_MIN_ORDER_EUR)} €`, `Default ${DEFAULT_MIN_ORDER_EUR} €, allowed 1 to ${MAX_MIN_ORDER_EUR.toLocaleString('en-US')} €`)} />
               </div>
-              <button type="button" className="btn btn-secondary mb-5" disabled={!minValid || minOrder === savedMinOrder} onClick={saveMin}>{tr('Speichern', 'Save')}</button>
+              <Knopf className="mb-5" disabled={!minValid || minOrder === savedMinOrder} onClick={saveMin}>{tr('Speichern', 'Save')}</Knopf>
             </div>
             {minValid && minOrder > maxPlan && <p className="notice notice-warning">{tr(`Der Mindest-Orderwert ist höher als deine Obergrenze pro Sendung (${maxPlan} €). Dann passt keine einzige Order in eine Sendung.`, `The minimum order value is higher than your limit per send (${maxPlan} €). Then not a single order fits into a send.`)}</p>}
             {minValid && minOrder <= maxPlan && minOrder * 1.02 > FIRST_TEST_MAX_EUR && <p className="notice notice-warning">{tr(`Beim ersten echten Test auf einer Börse gilt höchstens ${FIRST_TEST_MAX_EUR} € pro Plan. Mit diesem Mindest-Orderwert passt dort keine Order hinein.`, `The first real test on an exchange is capped at ${FIRST_TEST_MAX_EUR} € per plan. With this minimum order value no order fits.`)}</p>}
@@ -200,8 +201,8 @@ export default function SettingsPage({ section, onSection, keys, display, onKeys
               <>Plans, fills, drafts, templates, settings and log are stored only on this Mac. Back them up to a file now and then, for example to iCloud Drive. The API key is deliberately <strong className="text-ink">not</strong> included. On a new Mac you add it again under “Exchanges and keys”.</>,
             )}</p>
             <div className="flex flex-wrap gap-2">
-              <button type="button" className="btn btn-secondary" onClick={doExport}><Download size={16} /> {tr('Exportieren', 'Export')}</button>
-              <button type="button" className="btn btn-outline" onClick={pick}><Upload size={16} /> {tr('Importieren', 'Import')}</button>
+              <Knopf symbol={Download} onClick={doExport}>{tr('Exportieren', 'Export')}</Knopf>
+              <Knopf symbol={Upload} onClick={pick}>{tr('Importieren', 'Import')}</Knopf>
             </div>
             {backupMsg && <p className={`notice break-all ${backupMsg.ok ? 'notice-success' : 'notice-danger'}`}>{backupMsg.text}</p>}
           </div>
@@ -222,8 +223,8 @@ export default function SettingsPage({ section, onSection, keys, display, onKeys
       {restore && (
         <Modal title={tr('Sicherung wiederherstellen?', 'Restore backup?')} size="sm" onClose={() => !busy && setRestore(null)}
           footer={<>
-            <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => setRestore(null)}>{tr('Abbrechen', 'Cancel')}</button>
-            <button type="button" className="btn btn-primary" disabled={busy} onClick={doRestore}><DatabaseBackup size={16} /> {busy ? tr('Spiele ein …', 'Restoring …') : tr('Wiederherstellen', 'Restore')}</button>
+            <Knopf disabled={busy} onClick={() => setRestore(null)}>{tr('Abbrechen', 'Cancel')}</Knopf>
+            <Knopf symbol={DatabaseBackup} art="primaer" disabled={busy} onClick={doRestore}>{busy ? tr('Spiele ein …', 'Restoring …') : tr('Wiederherstellen', 'Restore')}</Knopf>
           </>}>
           <div className="space-y-2 text-sm">
             {tr(
@@ -245,9 +246,9 @@ function HintsReset(): JSX.Element {
   return (
     <div className="space-y-2 text-sm">
       <p className="text-ink-muted">{tr('Erklärungen im Planer lassen sich mit „Verstanden“ auf eine Zeile einklappen. Warnungen bleiben immer sichtbar.', 'Explanations in the planner can be collapsed to one line with “Got it”. Warnings always stay visible.')}</p>
-      <button type="button" className="btn btn-secondary" disabled={count === 0} onClick={() => { resetHints(); setCount(0) }}>
+      <Knopf disabled={count === 0} onClick={() => { resetHints(); setCount(0) }}>
         {count === 0 ? tr('Alle Erklärungen werden ganz gezeigt', 'All explanations are shown in full') : count === 1 ? tr('1 eingeklappte Erklärung wieder zeigen', 'Show 1 collapsed explanation again') : tr(`${count} eingeklappte Erklärungen wieder zeigen`, `Show ${count} collapsed explanations again`)}
-      </button>
+      </Knopf>
     </div>
   )
 }

@@ -6,6 +6,8 @@ import type { PairDto } from '@shared/ipc'
 import { api } from '../../api'
 import PairPicker from '../../components/PairPicker'
 import { useMoney } from '../../money'
+import Knopf from '../../components/bausteine/Knopf'
+import Chip from '../../components/bausteine/Chip'
 
 export default function PairField({ pairs, pickable, pairId, pair, last, onPick, onReload }: {
   /** Alle Paare der Börse (für die Schnellauswahl) */
@@ -33,22 +35,20 @@ export default function PairField({ pairs, pickable, pairId, pair, last, onPick,
       <span className="flex gap-2">
         <PairPicker pairs={pickable} value={pairId} watchlist={watchlist} onChange={onPick} />
         {pair && (
-          <button type="button" className="btn btn-ghost btn-icon flex-shrink-0" aria-pressed={watchlist.includes(pair.name)} onClick={() => toggleWatch(pair.name)}
-            aria-label={watchlist.includes(pair.name) ? tr('Von der Watchlist nehmen', 'Remove from watchlist') : tr('Auf die Watchlist', 'Add to watchlist')} title={watchlist.includes(pair.name) ? tr('Von der Watchlist nehmen', 'Remove from watchlist') : tr('Auf die Watchlist', 'Add to watchlist')}>
-            <Star size={16} className={watchlist.includes(pair.name) ? 'fill-current text-accent-fg' : ''} />
-          </button>
+          <Knopf art="leise" nurSymbol symbol={Star} className={`flex-shrink-0 ${watchlist.includes(pair.name) ? 'symbol-gefuellt text-accent-fg' : ''}`} aria-pressed={watchlist.includes(pair.name)} onClick={() => toggleWatch(pair.name)}
+            aria-label={watchlist.includes(pair.name) ? tr('Von der Watchlist nehmen', 'Remove from watchlist') : tr('Auf die Watchlist', 'Add to watchlist')} />
         )}
       </span>
       {watched.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1.5">
           {watched.map((p) => (
-            <button key={p.id} type="button" className={`btn-chip ${p.id === pairId ? 'segmented-on' : ''}`} aria-pressed={p.id === pairId} onClick={() => onPick(p.id)}>{p.name.split('/')[0]}</button>
+            <Chip key={p.id} aktiv={p.id === pairId} onClick={() => onPick(p.id)}>{p.name.split('/')[0]}</Chip>
           ))}
         </div>
       )}
       <span className="mt-1.5 flex items-center gap-2 text-xs text-ink-muted">
         {tr('Aktueller Kurs', 'Current price')}: {last && pair ? `${fmtPrice(last, pair.priceDecimals)} ${sym}` : '…'}
-        <button type="button" className="btn-mini" onClick={onReload} aria-label={tr('Kurs neu laden', 'Reload price')} title={tr('Kurs neu laden', 'Reload price')}><RefreshCw size={14} /></button>
+        <Knopf art="leise" groesse="klein" nurSymbol symbol={RefreshCw} onClick={onReload} aria-label={tr('Kurs neu laden', 'Reload price')} title={tr('Kurs neu laden', 'Reload price')} />
       </span>
     </div>
   )

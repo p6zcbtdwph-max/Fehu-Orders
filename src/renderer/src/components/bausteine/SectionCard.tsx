@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import LinkKnopf from './LinkKnopf'
 
 /** Karte mit Überschrift und optionalem Link oder Knopf rechts. */
 export default function SectionCard({ title, action, children, className = '' }: {
@@ -21,8 +22,8 @@ export default function SectionCard({ title, action, children, className = '' }:
 /** Kleiner Textlink rechts im Kartenkopf. */
 export function SectionLink({ onClick, children }: { onClick: () => void; children: ReactNode }): JSX.Element {
   return (
-    <button type="button" onClick={onClick} className="text-xs font-medium text-accent-fg hover:underline">
+    <LinkKnopf onClick={onClick}>
       {children}
-    </button>
+    </LinkKnopf>
   )
 }

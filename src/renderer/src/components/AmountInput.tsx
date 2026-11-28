@@ -6,6 +6,7 @@ import { tr } from '@shared/i18n'
 import { num } from '../format'
 import { NumberField } from './NumberField'
 import Segmented from './bausteine/Segmented'
+import Chip from './bausteine/Chip'
 
 type Fmt = (n: number) => string
 
@@ -113,10 +114,10 @@ export default function AmountInput({ input, ladder, alt, last, quote, base, vol
           </p>
           <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label={tr('Anteil vom Bestand', 'Share of holdings')}>
             {SHARES.map((f) => (
-              <button key={f} type="button" className="btn-chip" onClick={() => applyShare(f)}
-                title={tr(`${f === 1 ? 'Alles' : `${f * 100} %`} vom freien Bestand${keep > 0 ? `, nach Abzug von ${num(keep, volumeDecimals)} ${base} zum Behalten` : ''}`, `${f === 1 ? 'All' : `${f * 100} %`} of free holdings${keep > 0 ? `, after keeping ${num(keep, volumeDecimals)} ${base}` : ''}`)}>
+              <Chip key={f} onClick={() => applyShare(f)}
+                title={tr(`${f === 1 ? 'Alles' : `${f * 100} %`} vom freien Bestand${keep> 0 ? `, nach Abzug von ${num(keep, volumeDecimals)} ${base} zum Behalten` : ''}`, `${f === 1 ? 'All' : `${f * 100} %`} of free holdings${keep> 0 ? `, after keeping ${num(keep, volumeDecimals)} ${base}` : ''}`)}>
                 {f === 1 ? tr('Alles', 'All') : `${f * 100} %`}
-              </button>
+              </Chip>
             ))}
           </div>
           <NumberField label={tr(`Mindestens behalten (${base})`, `Keep at least (${base})`)} value={keep} emptyValue={0} onChange={(v) => onKeep(Number.isFinite(v) && v > 0 ? v : 0)}

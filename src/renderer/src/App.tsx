@@ -77,6 +77,7 @@ const noDrag = { WebkitAppRegion: 'no-drag' } as React.CSSProperties
 function NavButton({ on, icon: Icon, label, onClick, tone }: { on: boolean; icon: typeof ListOrdered; label: string; onClick: () => void; tone?: 'warning' }) {
   const active = tone === 'warning' ? 'bg-warning-soft font-medium text-warning-fg' : 'bg-accent-soft font-medium text-accent-fg'
   return (
+    // @fehu-ausnahme: Eintrag der Seitenleiste mit aktivem Zustand (Baustein Seitenleiste fehlt noch)
     <button type="button" onClick={onClick} aria-current={on && !tone ? 'page' : undefined} aria-pressed={tone ? on : undefined}
       className={`group flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-sm transition-colors ${on ? active : 'text-ink-muted hover:bg-sunken-soft hover:text-ink'}`}>
       <Icon size={16} className={on ? (tone ? '' : 'text-accent-fg') : 'text-ink-muted group-hover:text-ink'} />
