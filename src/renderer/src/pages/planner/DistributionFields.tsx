@@ -5,7 +5,7 @@ import type { Ladder, LadderInput, PriceSpacing, SizeCurve } from '@shared/ladde
 import type { PairDto } from '@shared/ipc'
 import { NumberField } from '../../components/NumberField'
 import CenterSliders from '../../components/CenterSliders'
-import Segmented from '../../components/ui/Segmented'
+import Segmented from '../../components/bausteine/Segmented'
 import { num, numberFormat } from '../../format'
 import { useMoney } from '../../money'
 

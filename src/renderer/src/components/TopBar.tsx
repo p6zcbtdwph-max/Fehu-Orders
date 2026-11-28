@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Check, ChevronDown, KeyRound, OctagonX, PlayCircle } from 'lucide-react'
 import { api } from '../api'
-import Modal from './ui/Modal'
+import Modal from './bausteine/Modal'
 import { tr } from '@shared/i18n'
 import { EXCHANGE_IDS, exchangeName, exName, type ExchangeId } from '@shared/exchanges'
 

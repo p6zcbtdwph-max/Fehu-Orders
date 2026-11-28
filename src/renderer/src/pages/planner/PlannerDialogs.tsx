@@ -8,7 +8,7 @@ import TradeKeyGate, { useTradeKey } from '../../components/TradeKeyGate'
 import type { LadderInput, LadderLevel } from '@shared/ladder'
 import type { PairDto } from '@shared/ipc'
 import { api } from '../../api'
-import Modal from '../../components/ui/Modal'
+import Modal from '../../components/bausteine/Modal'
 import { num } from '../../format'
 import { useMoney } from '../../money'
 

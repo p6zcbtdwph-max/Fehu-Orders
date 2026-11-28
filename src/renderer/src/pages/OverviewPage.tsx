@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { BellRing, Check, ChevronRight, Circle, Plus, Shield, X } from 'lucide-react'
-import SectionCard from '../components/ui/SectionCard'
+import SectionCard from '../components/bausteine/SectionCard'
 import { assetLabel } from '@shared/safety'
 import { activeExchange, exName } from '@shared/exchanges'
 import { tr } from '@shared/i18n'

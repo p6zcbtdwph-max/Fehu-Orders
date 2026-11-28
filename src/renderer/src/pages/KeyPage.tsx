@@ -7,8 +7,8 @@ import { EXCHANGE_IDS, exchangeMeta, exchangeName, readPermissionRows, type Exch
 import { modeLabel, modeText, readKeyCanCancel, roleName, TRADE_KEY_MODES, type KeyRole, type KeyRoles, type TradeKeyMode } from '@shared/key-roles'
 import KillSwitch from '../components/KillSwitch'
 import { tr } from '@shared/i18n'
-import SectionCard from '../components/ui/SectionCard'
-import Segmented from '../components/ui/Segmented'
+import SectionCard from '../components/bausteine/SectionCard'
+import Segmented from '../components/bausteine/Segmented'
 import HomeIps from '../components/HomeIps'
 
 function CheckList({ checks, exchange }: { checks: KeyCheck[]; exchange: string }) {

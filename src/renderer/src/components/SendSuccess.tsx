@@ -5,7 +5,7 @@ import type { SendResult } from '@shared/ipc'
 import { exName } from '@shared/exchanges'
 import { tr } from '@shared/i18n'
 import { useMoney } from '../money'
-import Modal from './ui/Modal'
+import Modal from './bausteine/Modal'
 
 interface Props {
   result: SendResult

@@ -1,6 +1,6 @@
 import { Plus, Shield, ShieldOff, Trash2 } from 'lucide-react'
 import { appendZone, MAX_STEPS, MAX_ZONES, normalizeShares, zoneTrigger, type Ladder, type LadderZone, type Side } from '@shared/ladder'
-import Segmented from './ui/Segmented'
+import Segmented from './bausteine/Segmented'
 import ShareSlider from './ShareSlider'
 import PriceZoneSlider from './PriceZoneSlider'
 import { windowLabel } from './HistoryHints'

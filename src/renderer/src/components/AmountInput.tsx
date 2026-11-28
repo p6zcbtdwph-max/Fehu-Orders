@@ -5,7 +5,7 @@ import { shareOfHolding, type Holding } from '@shared/holdings'
 import { tr } from '@shared/i18n'
 import { num } from '../format'
 import { NumberField } from './NumberField'
-import Segmented from './ui/Segmented'
+import Segmented from './bausteine/Segmented'
 
 type Fmt = (n: number) => string
 
