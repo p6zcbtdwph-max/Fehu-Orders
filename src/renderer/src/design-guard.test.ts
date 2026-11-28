@@ -26,6 +26,27 @@ function hits(re: RegExp, only?: (path: string) => boolean): string[] {
 }
 const tsx = (p: string) => p.endsWith('.tsx')
 
+// Rohe Bedienelemente gibt es nur in den Bausteinen (03 Bausteine.md, Grundregel 2).
+// Ausnahme: Kommentar `@fehu-ausnahme: Grund` in derselben Zeile oder bis zu zwei Zeilen darüber.
+const BAUSTEINE = 'components/bausteine/'
+const ROH = /<(?:button|input|select|textarea)\b/
+const AUSNAHME = /@fehu-ausnahme:\s*\S/
+function roheElemente(): { ohne: string[]; mit: string[] } {
+  const ohne: string[] = []
+  const mit: string[] = []
+  for (const f of all) {
+    if (!tsx(f.path) || f.path.startsWith(BAUSTEINE)) continue
+    const lines = f.src.split('\n')
+    lines.forEach((line, i) => {
+      if (!ROH.test(line) || /^\s*(?:\/\/|\*|\/\*)/.test(line)) return
+      const stelle = `${f.path}:${i + 1}: ${line.trim().slice(0, 80)}`
+      if (lines.slice(Math.max(0, i - 2), i + 1).some((l) => AUSNAHME.test(l))) mit.push(stelle)
+      else ohne.push(stelle)
+    })
+  }
+  return { ohne, mit }
+}
+
 // Deutscher Text: erstes Argument von tr('…', '…') oder Text zwischen > und <
 function germanTexts(): string[] {
   return code.filter((f) => tsx(f.path)).flatMap((f) => {
@@ -55,6 +76,13 @@ describe('Fehu Design: harte Regeln', () => {
   it('Schatten nur sm, md, lg', () => {
     expect(hits(/\bshadow-(?:xl|2xl|inner|\[[^\]]+\])/g)).toEqual([])
   })
+  it('keine rohen <button>, <input>, <select>, <textarea> außerhalb der Bausteine (sonst Knopf, Feld, Auswahl …)', () => {
+    expect(roheElemente().ohne).toEqual([])
+  })
+  it('jede @fehu-ausnahme nennt einen Grund', () => {
+    // auf dem Quelltext mit Kommentaren, denn die Ausnahme steht ja in einem Kommentar
+    expect(all.flatMap((f) => (f.src.match(/@fehu-ausnahme(?!:\s*\S).*/g) ?? []).map((m) => `${f.path}: ${m}`))).toEqual([])
+  })
   it('Texte: keine verbotenen Wörter (04 Texte.md, Abschnitt 9)', () => {
     const bad = germanTexts().filter((t) =>
       /\b(?:Sie|Ihre[nmrs]?|Ihnen)\b|fehlgeschlagen|konnten? nicht|erfolgreich|Fehler aufgetreten|\bUps\b|\bLeider\b|\w\.\.\.(?![\w$])|\bz\.B\./.test(t)
@@ -68,8 +96,7 @@ describe('Fehu Design: Budget (darf nur sinken)', () => {
     hexWerte: hits(/(?<![\w&])#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b/g).length,
     inlineStyles: hits(/\bstyle=\{\{/g, tsx).length,
     beliebigeWerte: hits(/\b[a-z][\w-]*-\[[^\]\s]+\]/g).length,
-    roheKnoepfe: hits(/<button\b/g, tsx).length,
-    roheFelder: hits(/<(?:input|select|textarea)\b/g, tsx).length,
+    ausnahmenRoheElemente: roheElemente().mit.length,
     toLocaleInSeiten: hits(/\.toLocale(?:String|DateString|TimeString)\(/g, (p) => p !== 'format.ts').length,
   }
   for (const [name, ist] of Object.entries(zahlen)) {
